@@ -464,7 +464,7 @@
           </div>
           <div class="card">
             <div class="card-head"><h2>Volume Mensal Disputado</h2></div>
-            <div class="desc">Últimos 6 meses (R$ mil, dados de demonstração).</div>
+            <div class="desc">Últimos 6 meses (R$ mil).</div>
             <div class="chart-box"><canvas id="chartBar"></canvas></div>
           </div>
         </div>
@@ -594,7 +594,7 @@
       <section id="view-cruzamento" class="view">
         <div class="card">
           <div class="card-head"><h2>🔀 Cruzamento Inteligente (Mercado Livre)</h2><span class="tag">ML API</span></div>
-          <div class="desc">Selecione itens na planilha de <b>Orçamento</b> (checkboxes) e processe em lote (grupos de 20, 1s entre requisições). Frete usa o CEP do perfil da empresa.</div>
+          <div class="desc">Selecione itens na planilha de <b>Orçamento</b> (checkboxes) e processe em lote (grupos de 20, 1s entre requisições). Busca ML via <b>proxy /api/ml-proxy</b> (backend). Frete usa o CEP do perfil da empresa.</div>
           <div class="form-row">
             <div style="flex:2">
               <label class="fld">Item avulso (opcional — se nenhum checkbox estiver marcado)</label>
@@ -927,6 +927,48 @@
     });
   };
 
+  /* ------- Mercado Livre via proxy backend (nunca direto no browser) ------- */
+  utils.mlProxyBase = function(){
+    // Permite override: LICSYSTEM.config.mlProxyUrl = "https://xxx/api/ml-proxy"
+    if(LICSYSTEM.config && LICSYSTEM.config.mlProxyUrl) return String(LICSYSTEM.config.mlProxyUrl).replace(/\/$/,"");
+    return "/api/ml-proxy";
+  };
+
+  utils.mlProxy = function(params){
+    var qs = Object.keys(params || {}).map(function(k){
+      return encodeURIComponent(k) + "=" + encodeURIComponent(params[k] == null ? "" : params[k]);
+    }).join("&");
+    var url = utils.mlProxyBase() + (qs ? ("?" + qs) : "");
+    return fetch(url, {
+      method: "GET",
+      headers: {
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+      }
+    }).then(function(r){
+      return r.json().then(function(j){
+        if(!r.ok){
+          var msg = (j && (j.message || j.error)) || ("HTTP " + r.status);
+          var err = new Error(msg);
+          err.status = r.status;
+          err.body = j;
+          throw err;
+        }
+        return j;
+      }, function(){
+        throw new Error("HTTP " + r.status + " (resposta inválida do proxy)");
+      });
+    });
+  };
+
+  utils.mlSearch = function(q, limit){
+    return utils.mlProxy({ action: "search", q: q, limit: limit || 5 });
+  };
+
+  utils.mlShipping = function(itemId, cep){
+    return utils.mlProxy({ action: "shipping", itemId: itemId, cep: cep || "" });
+  };
+
   // build EXACT path: licitacoes/${YYYY}/${MM}/${DD}-${HHh}/resultados_cruzamento
   utils.buildFirebasePath = function(d){
     d = d || new Date();
@@ -943,17 +985,21 @@
   };
 
   /* ============================ STATE ============================ */
+  LICSYSTEM.config = LICSYSTEM.config || {
+    mlProxyUrl: "/api/ml-proxy" // Vercel serverless — não chamar api.mercadolibre.com no browser
+  };
+
   LICSYSTEM.state = {
     orcItems: [],
     aprovadosCruzamento: [],
     pncpAlerts: [],
     lastBdi: null,
     dashboardMetrics: {
-      volumeDisputado: 1250000,
-      ganhos: 12,
-      perdidos: 7,
-      emAnalise: 5,
-      volumeMensal: [80,95,70,110,130,90]
+      volumeDisputado: 0,
+      ganhos: 0,
+      perdidos: 0,
+      emAnalise: 0,
+      volumeMensal: [0,0,0,0,0,0]
     },
     captacaoLines: [],
     empresaPerfil: null
@@ -1535,11 +1581,11 @@
 
     fetchFrete: function(itemId, cep){
       if(!cep) return Promise.resolve({ cost:0, note:"CEP do perfil não informado" });
-      var shipUrl = "https://api.mercadolibre.com/items/"+itemId+"/shipping_options?zip_code="+cep;
-      return fetch(shipUrl).then(function(r){
-        if(!r.ok) throw new Error("HTTP "+r.status);
-        return r.json();
-      }).then(function(sj){
+      // Sempre via proxy backend (evita 403/CORS no browser)
+      return utils.mlShipping(itemId, cep).then(function(sj){
+        if(typeof sj.cost === "number"){
+          return { cost: sj.cost, note: sj.note || "" };
+        }
         var opts = (sj && sj.options) || [];
         var cost = 0, found = false;
         opts.forEach(function(o){
@@ -1547,9 +1593,9 @@
             if(!found || o.cost < cost){ cost = o.cost; found = true; }
           }
         });
-        return { cost: found ? cost : 0, note: found ? "" : "Frete não retornado" };
-      }).catch(function(){
-        return { cost:0, note:"Falha ao consultar frete" };
+        return { cost: found ? cost : 0, note: found ? "" : (sj.note || "Frete não retornado") };
+      }).catch(function(err){
+        return { cost:0, note:"Falha ao consultar frete via proxy" + (err && err.message ? " ("+err.message+")" : "") };
       });
     },
 
@@ -1569,13 +1615,20 @@
       var query = (utils.sanitizar(termo) + " " + embalagem).trim();
       if(!query) return Promise.resolve(null);
 
-      var mlUrl = "https://api.mercadolibre.com/sites/MLB/search?q="+encodeURIComponent(query)+"&limit=5";
-      return fetch(mlUrl).then(function(r){
-        if(!r.ok) throw new Error("HTTP "+r.status);
-        return r.json();
-      }).then(function(j){
-        var results = ((j && j.results) || []).filter(function(it){ return it.available_quantity !== 0; });
-        if(!results.length) return { skipped:true, itemGoverno:termo, motivo:"Sem produto disponível no ML" };
+      // Busca SOMENTE pelo proxy (/api/ml-proxy) — nunca direto no Mercado Livre
+      return utils.mlSearch(query, 5).then(function(j){
+        var results = ((j && j.results) || []).filter(function(it){
+          return it.available_quantity !== 0;
+        });
+        if(!results.length){
+          var motivo = "Sem produto disponível no ML";
+          if(j && j.upstream_status === 403){
+            motivo = "API ML bloqueada (403) e fallback sem resultados. Redeploy com /api/ml-proxy.";
+          } else if(j && j.warning){
+            motivo = j.warning;
+          }
+          return { skipped:true, itemGoverno:termo, motivo:motivo };
+        }
 
         results.forEach(function(it){ it.__sim = utils.similaridade(termo, it.title); });
         results.sort(function(a,b){ return b.__sim - a.__sim; });
@@ -1609,10 +1662,17 @@
             status: status,
             link: best.permalink || "",
             cepUsado: cep,
+            mlSource: (j && j.source) || "proxy",
             processadoEm: new Date().toISOString()
           };
           return { record:record, cls:cls, statusLabel:statusLabel, freteNote:fr.note };
         });
+      }).catch(function(err){
+        var msg = (err && err.message) ? err.message : String(err);
+        if(/failed to fetch|NetworkError|Load failed/i.test(msg)){
+          msg = "Proxy /api/ml-proxy indisponível. Faça deploy na Vercel com a pasta api/.";
+        }
+        throw new Error(msg);
       });
     },
 
