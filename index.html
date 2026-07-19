@@ -3,71 +3,81 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>FH CONTROL — Sistema Licitação</title>
+<title>LICSYSTEM — Sistema Licitação</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <style>
   :root{
-    --fh-navy:#152642;
-    --fh-navy-2:#1d3357;
-    --fh-navy-3:#24406b;
-    --fh-gold:#c9a227;
-    --fh-gold-soft:#e2c14f;
-    --fh-bg:#f4f6fa;
-    --fh-card:#ffffff;
-    --fh-text:#1c2733;
-    --fh-muted:#6b7788;
-    --fh-line:#e3e8f0;
-    --fh-green:#1e9e5a;
-    --fh-green-bg:#e6f6ee;
-    --fh-yellow:#c9911f;
-    --fh-yellow-bg:#fdf4dd;
-    --fh-red:#d23b3b;
-    --fh-red-bg:#fbe7e7;
+    --ls-navy:#152642;
+    --ls-navy-2:#1d3357;
+    --ls-navy-3:#24406b;
+    --ls-gold:#c9a227;
+    --ls-gold-soft:#e2c14f;
+    --ls-bg:#f4f6fa;
+    --ls-card:#ffffff;
+    --ls-text:#1c2733;
+    --ls-muted:#6b7788;
+    --ls-line:#e3e8f0;
+    --ls-green:#1e9e5a;
+    --ls-green-bg:#e6f6ee;
+    --ls-yellow:#c9911f;
+    --ls-yellow-bg:#fdf4dd;
+    --ls-red:#d23b3b;
+    --ls-red-bg:#fbe7e7;
     --shadow:0 6px 20px rgba(21,38,66,.08);
     --shadow-lg:0 12px 34px rgba(21,38,66,.16);
   }
   *{box-sizing:border-box}
-  html,body{margin:0;padding:0}
+  html,body{margin:0;padding:0;width:100%;max-width:100%;overflow-x:hidden}
   body{
     font-family:'Montserrat',system-ui,Arial,sans-serif;
-    background:var(--fh-bg);
-    color:var(--fh-text);
+    background:var(--ls-bg);
+    color:var(--ls-text);
     font-size:14px;
     -webkit-font-smoothing:antialiased;
   }
   /* ---------------- Layout ---------------- */
-  #app{display:flex;min-height:100vh}
+  #app{display:flex;min-height:100vh;width:100%;max-width:100%;overflow-x:hidden}
   #sidebar{
-    width:268px;min-width:268px;
-    background:linear-gradient(180deg,var(--fh-navy) 0%,var(--fh-navy-2) 100%);
+    width:268px;max-width:100%;flex-shrink:0;
+    background:linear-gradient(180deg,var(--ls-navy) 0%,var(--ls-navy-2) 100%);
     color:#fff;display:flex;flex-direction:column;
-    position:sticky;top:0;height:100vh;
+    position:sticky;top:0;height:100vh;z-index:40;
+    transition:transform .28s ease;
   }
   .brand{padding:22px 22px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
   .brand .logo{
-    display:flex;align-items:center;gap:12px;
+    display:flex;align-items:center;gap:12px;width:100%;
   }
   .brand .mark{
-    width:44px;height:44px;border-radius:12px;
-    background:linear-gradient(135deg,var(--fh-gold),var(--fh-gold-soft));
+    width:44px;height:44px;flex-shrink:0;border-radius:12px;
+    background:linear-gradient(135deg,var(--ls-gold),var(--ls-gold-soft));
     display:flex;align-items:center;justify-content:center;
-    font-weight:800;color:var(--fh-navy);font-size:18px;letter-spacing:.5px;
+    font-weight:800;color:var(--ls-navy);font-size:18px;letter-spacing:.5px;
     box-shadow:0 4px 12px rgba(201,162,39,.4);
   }
+  .brand .txt{min-width:0;flex:1}
   .brand .txt b{display:block;font-size:16px;font-weight:800;letter-spacing:.4px}
-  .brand .txt span{display:block;font-size:11px;color:var(--fh-gold-soft);letter-spacing:2px;text-transform:uppercase}
-  #nav{padding:14px 12px;display:flex;flex-direction:column;gap:4px;overflow-y:auto;flex:1}
+  .brand .txt span{display:block;font-size:11px;color:var(--ls-gold-soft);letter-spacing:2px;text-transform:uppercase}
+  .sidebar-close{
+    display:none;align-items:center;justify-content:center;
+    width:36px;height:36px;flex-shrink:0;margin-left:auto;
+    border:0;border-radius:10px;cursor:pointer;
+    background:rgba(255,255,255,.08);color:#fff;
+    font-size:20px;line-height:1;font-family:inherit;
+  }
+  .sidebar-close:hover{background:rgba(255,255,255,.14)}
+  #nav{padding:14px 12px;display:flex;flex-direction:column;gap:4px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch}
   #nav button{
     display:flex;align-items:center;gap:12px;
-    width:100%;text-align:left;border:0;cursor:pointer;
+    width:100%;max-width:100%;text-align:left;border:0;cursor:pointer;
     background:transparent;color:#cdd6e4;
     padding:11px 14px;border-radius:10px;
     font-family:inherit;font-size:13.5px;font-weight:600;
     transition:background .15s,color .15s;
   }
-  #nav button .ico{width:20px;text-align:center;font-size:15px;opacity:.9}
+  #nav button .ico{width:20px;flex-shrink:0;text-align:center;font-size:15px;opacity:.9}
   #nav button:hover{background:rgba(255,255,255,.06);color:#fff}
   #nav button.active{
     background:linear-gradient(90deg,rgba(201,162,39,.22),rgba(201,162,39,.05));
@@ -75,162 +85,265 @@
   }
   #nav button.active::before{
     content:"";position:absolute;left:0;top:8px;bottom:8px;width:4px;
-    border-radius:0 4px 4px 0;background:var(--fh-gold);
+    border-radius:0 4px 4px 0;background:var(--ls-gold);
   }
   .side-foot{padding:14px 18px;border-top:1px solid rgba(255,255,255,.08);font-size:11px;color:#8ea0bb}
-  #main{flex:1;min-width:0;display:flex;flex-direction:column}
-  .topbar{
-    display:flex;align-items:center;justify-content:space-between;
-    padding:16px 26px;background:var(--fh-card);border-bottom:1px solid var(--fh-line);
-    position:sticky;top:0;z-index:20;
+  #sidebar-overlay{
+    display:none;position:fixed;inset:0;z-index:35;
+    background:rgba(21,38,66,.45);backdrop-filter:blur(2px);
+    opacity:0;transition:opacity .28s ease;pointer-events:none;
   }
-  .topbar h1{font-size:18px;margin:0;font-weight:700;color:var(--fh-navy)}
-  .topbar .sub{font-size:12px;color:var(--fh-muted);margin-top:2px}
-  .top-actions{display:flex;align-items:center;gap:16px}
-  .bell{position:relative;cursor:pointer;font-size:20px;color:var(--fh-navy)}
+  #sidebar-overlay.show{opacity:1;pointer-events:auto}
+  #main{flex:1;min-width:0;width:100%;max-width:100%;display:flex;flex-direction:column}
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:16px 26px;background:var(--ls-card);border-bottom:1px solid var(--ls-line);
+    position:sticky;top:0;z-index:20;width:100%;max-width:100%;
+  }
+  .topbar-left{display:flex;align-items:center;gap:12px;min-width:0;flex:1}
+  .topbar-titles{min-width:0}
+  .topbar h1{font-size:18px;margin:0;font-weight:700;color:var(--ls-navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .topbar .sub{font-size:12px;color:var(--ls-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .menu-toggle{
+    display:none;align-items:center;justify-content:center;
+    width:42px;height:42px;flex-shrink:0;
+    border:1px solid var(--ls-line);border-radius:12px;cursor:pointer;
+    background:#fff;color:var(--ls-navy);padding:0;
+    font-family:inherit;
+  }
+  .menu-toggle:hover{border-color:var(--ls-gold);background:#fafbfd}
+  .menu-toggle .burger{
+    display:flex;flex-direction:column;justify-content:center;gap:5px;width:18px;
+  }
+  .menu-toggle .burger span{
+    display:block;height:2px;width:100%;border-radius:2px;
+    background:var(--ls-navy);transition:transform .2s,opacity .2s;
+  }
+  body.sidebar-open .menu-toggle .burger span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+  body.sidebar-open .menu-toggle .burger span:nth-child(2){opacity:0}
+  body.sidebar-open .menu-toggle .burger span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+  .top-actions{display:flex;align-items:center;gap:16px;flex-shrink:0}
+  .top-user{text-align:right}
+  .bell{position:relative;cursor:pointer;font-size:20px;color:var(--ls-navy)}
   .bell .badge{
     position:absolute;top:-8px;right:-10px;min-width:18px;height:18px;padding:0 4px;
-    background:var(--fh-red);color:#fff;border-radius:9px;font-size:11px;font-weight:700;
+    background:var(--ls-red);color:#fff;border-radius:9px;font-size:11px;font-weight:700;
     display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(210,59,59,.5);
   }
   .bell .badge.zero{display:none}
-  .content{padding:26px;max-width:1400px;width:100%;margin:0 auto}
-  .view{display:none;animation:fade .25s ease}
+  .content{padding:26px;max-width:1400px;width:100%;margin:0 auto;box-sizing:border-box}
+  .view{display:none;animation:fade .25s ease;width:100%;max-width:100%}
   .view.active{display:block}
   @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
   /* ---------------- Cards ---------------- */
   .card{
-    background:var(--fh-card);border:1px solid var(--fh-line);border-radius:16px;
+    background:var(--ls-card);border:1px solid var(--ls-line);border-radius:16px;
     box-shadow:var(--shadow);padding:20px;margin-bottom:20px;
+    width:100%;max-width:100%;box-sizing:border-box;
   }
-  .card h2{margin:0 0 4px;font-size:16px;color:var(--fh-navy);font-weight:700}
-  .card .desc{color:var(--fh-muted);font-size:12.5px;margin-bottom:16px}
+  .card h2{margin:0 0 4px;font-size:16px;color:var(--ls-navy);font-weight:700}
+  .card .desc{color:var(--ls-muted);font-size:12.5px;margin-bottom:16px}
   .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
   .card-head h2{margin:0}
-  .grid{display:grid;gap:18px}
-  .grid.kpi{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
-  .grid.two{grid-template-columns:1fr 1fr}
-  @media(max-width:980px){.grid.two{grid-template-columns:1fr}}
+  .grid{display:grid;gap:18px;width:100%;max-width:100%}
+  .grid.kpi{grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))}
+  .grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
   .kpi-card{
-    background:linear-gradient(135deg,var(--fh-navy),var(--fh-navy-3));
+    background:linear-gradient(135deg,var(--ls-navy),var(--ls-navy-3));
     color:#fff;border-radius:16px;padding:18px 20px;position:relative;overflow:hidden;
-    box-shadow:var(--shadow);
+    box-shadow:var(--shadow);width:100%;max-width:100%;box-sizing:border-box;
   }
   .kpi-card::after{
     content:"";position:absolute;right:-30px;top:-30px;width:120px;height:120px;
     background:radial-gradient(circle,rgba(201,162,39,.35),transparent 70%);
   }
-  .kpi-card .k-label{font-size:11.5px;letter-spacing:1px;text-transform:uppercase;color:var(--fh-gold-soft);font-weight:600}
-  .kpi-card .k-value{font-size:26px;font-weight:800;margin-top:6px}
+  .kpi-card .k-label{font-size:11.5px;letter-spacing:1px;text-transform:uppercase;color:var(--ls-gold-soft);font-weight:600}
+  .kpi-card .k-value{font-size:26px;font-weight:800;margin-top:6px;word-break:break-word}
   .kpi-card .k-sub{font-size:11px;color:#b9c6db;margin-top:4px}
-  .kpi-card.alt{background:linear-gradient(135deg,#fff,#f7f9fc);color:var(--fh-navy);border:1px solid var(--fh-line)}
-  .kpi-card.alt .k-label{color:var(--fh-gold)}
-  .kpi-card.alt .k-sub{color:var(--fh-muted)}
+  .kpi-card.alt{background:linear-gradient(135deg,#fff,#f7f9fc);color:var(--ls-navy);border:1px solid var(--ls-line)}
+  .kpi-card.alt .k-label{color:var(--ls-gold)}
+  .kpi-card.alt .k-sub{color:var(--ls-muted)}
   /* ---------------- Forms ---------------- */
-  label.fld{display:block;font-size:12px;font-weight:600;color:var(--fh-navy);margin-bottom:5px}
-  input[type=text],input[type=number],input[type=date],select,textarea{
-    width:100%;padding:9px 12px;border:1px solid var(--fh-line);border-radius:10px;
-    font-family:inherit;font-size:13px;background:#fff;color:var(--fh-text);outline:none;
-    transition:border .15s,box-shadow .15s;
+  label.fld{display:block;font-size:12px;font-weight:600;color:var(--ls-navy);margin-bottom:5px}
+  input[type=text],input[type=number],input[type=date],select,textarea,input[type=file]{
+    width:100%;max-width:100%;padding:9px 12px;border:1px solid var(--ls-line);border-radius:10px;
+    font-family:inherit;font-size:13px;background:#fff;color:var(--ls-text);outline:none;
+    transition:border .15s,box-shadow .15s;box-sizing:border-box;
   }
-  input:focus,select:focus,textarea:focus{border-color:var(--fh-gold);box-shadow:0 0 0 3px rgba(201,162,39,.15)}
+  input:focus,select:focus,textarea:focus{border-color:var(--ls-gold);box-shadow:0 0 0 3px rgba(201,162,39,.15)}
   textarea{resize:vertical;min-height:80px}
-  .form-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
-  .form-row > div{flex:1;min-width:140px}
+  .form-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px;width:100%;max-width:100%}
+  .form-row > div{flex:1 1 140px;min-width:0;max-width:100%}
   .btn{
     display:inline-flex;align-items:center;gap:8px;justify-content:center;
     border:0;cursor:pointer;font-family:inherit;font-weight:600;font-size:13px;
     padding:10px 16px;border-radius:10px;transition:transform .1s,box-shadow .15s,background .15s;
+    max-width:100%;
   }
   .btn:active{transform:translateY(1px)}
-  .btn-primary{background:var(--fh-navy);color:#fff}
-  .btn-primary:hover{background:var(--fh-navy-3)}
-  .btn-gold{background:linear-gradient(135deg,var(--fh-gold),var(--fh-gold-soft));color:var(--fh-navy)}
+  .btn-primary{background:var(--ls-navy);color:#fff}
+  .btn-primary:hover{background:var(--ls-navy-3)}
+  .btn-gold{background:linear-gradient(135deg,var(--ls-gold),var(--ls-gold-soft));color:var(--ls-navy)}
   .btn-gold:hover{box-shadow:0 6px 16px rgba(201,162,39,.4)}
-  .btn-green{background:var(--fh-green);color:#fff}
+  .btn-green{background:var(--ls-green);color:#fff}
   .btn-green:hover{background:#17864b}
-  .btn-ghost{background:#fff;color:var(--fh-navy);border:1px solid var(--fh-line)}
-  .btn-ghost:hover{border-color:var(--fh-gold)}
+  .btn-ghost{background:#fff;color:var(--ls-navy);border:1px solid var(--ls-line)}
+  .btn-ghost:hover{border-color:var(--ls-gold)}
   .btn-sm{padding:6px 10px;font-size:12px;border-radius:8px}
-  .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0;width:100%;max-width:100%}
   /* ---------------- Tables ---------------- */
-  .tbl-wrap{overflow-x:auto;border:1px solid var(--fh-line);border-radius:12px}
-  table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:640px}
+  .tbl-wrap{
+    display:block;width:100%;max-width:100%;
+    overflow-x:auto;-webkit-overflow-scrolling:touch;
+    border:1px solid var(--ls-line);border-radius:12px;
+    overscroll-behavior-x:contain;
+  }
+  .tbl-wrap table{width:100%;min-width:640px;border-collapse:collapse;font-size:12.5px}
   thead th{
-    background:var(--fh-navy);color:#fff;text-align:left;padding:10px 12px;
+    background:var(--ls-navy);color:#fff;text-align:left;padding:10px 12px;
     font-weight:600;font-size:11.5px;letter-spacing:.4px;white-space:nowrap;
   }
-  tbody td{padding:9px 12px;border-bottom:1px solid var(--fh-line);vertical-align:middle}
+  tbody td{padding:9px 12px;border-bottom:1px solid var(--ls-line);vertical-align:middle}
   tbody tr:nth-child(even){background:#fafbfd}
   tbody tr:hover{background:#f3f6fb}
-  td input{padding:6px 8px;font-size:12px}
-  .risk-row{border-left:3px solid var(--fh-red)!important}
-  .risk-cell{border:1.5px solid var(--fh-red)!important;border-radius:6px}
-  .risk-flag{color:var(--fh-red);font-weight:700;margin-right:4px;cursor:help}
+  td input{padding:6px 8px;font-size:12px;width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+  .risk-row{border-left:3px solid var(--ls-red)!important}
+  .risk-cell{border:1.5px solid var(--ls-red)!important;border-radius:6px}
+  .risk-flag{color:var(--ls-red);font-weight:700;margin-right:4px;cursor:help}
   /* ---------------- Badges / pills ---------------- */
   .badge-status{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
-  .b-green{background:var(--fh-green-bg);color:var(--fh-green)}
-  .b-yellow{background:var(--fh-yellow-bg);color:var(--fh-yellow)}
-  .b-red{background:var(--fh-red-bg);color:var(--fh-red)}
-  .pill-group{display:inline-flex;background:#eef1f6;border-radius:10px;padding:3px;gap:2px}
-  .pill-group label{cursor:pointer;padding:7px 14px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--fh-muted)}
+  .b-green{background:var(--ls-green-bg);color:var(--ls-green)}
+  .b-yellow{background:var(--ls-yellow-bg);color:var(--ls-yellow)}
+  .b-red{background:var(--ls-red-bg);color:var(--ls-red)}
+  .pill-group{display:inline-flex;flex-wrap:wrap;background:#eef1f6;border-radius:10px;padding:3px;gap:2px;max-width:100%}
+  .pill-group label{cursor:pointer;padding:7px 14px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--ls-muted)}
   .pill-group input{display:none}
-  .pill-group input:checked + span{color:var(--fh-navy)}
-  .pill-group label:has(input:checked){background:#fff;box-shadow:var(--shadow);color:var(--fh-navy)}
+  .pill-group input:checked + span{color:var(--ls-navy)}
+  .pill-group label:has(input:checked){background:#fff;box-shadow:var(--shadow);color:var(--ls-navy)}
   /* ---------------- Alerts ---------------- */
-  .alert{display:none;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:600;margin-bottom:14px}
+  .alert{display:none;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:600;margin-bottom:14px;word-break:break-word}
   .alert.show{display:block}
   .alert-info{background:#e8f0fe;color:#1a4fa0;border:1px solid #c5d8fb}
-  .alert-warn{background:var(--fh-yellow-bg);color:#8a6410;border:1px solid #f0dca0}
-  .alert-error{background:var(--fh-red-bg);color:#a12626;border:1px solid #f2c4c4}
-  .alert-ok{background:var(--fh-green-bg);color:#136c3d;border:1px solid #b6e3ca}
+  .alert-warn{background:var(--ls-yellow-bg);color:#8a6410;border:1px solid #f0dca0}
+  .alert-error{background:var(--ls-red-bg);color:#a12626;border:1px solid #f2c4c4}
+  .alert-ok{background:var(--ls-green-bg);color:#136c3d;border:1px solid #b6e3ca}
   /* ---------------- Dropzone ---------------- */
   .dropzone{
-    border:2px dashed var(--fh-line);border-radius:14px;padding:26px;text-align:center;
-    color:var(--fh-muted);background:#fbfcfe;cursor:pointer;transition:border .15s,background .15s;
+    border:2px dashed var(--ls-line);border-radius:14px;padding:26px;text-align:center;
+    color:var(--ls-muted);background:#fbfcfe;cursor:pointer;transition:border .15s,background .15s;
+    width:100%;max-width:100%;box-sizing:border-box;
   }
-  .dropzone.drag{border-color:var(--fh-gold);background:var(--fh-yellow-bg);color:var(--fh-navy)}
+  .dropzone.drag{border-color:var(--ls-gold);background:var(--ls-yellow-bg);color:var(--ls-navy)}
   .dropzone .big{font-size:30px;display:block;margin-bottom:8px}
   /* ---------------- Cruzamento result ---------------- */
-  .result-item{border:1px solid var(--fh-line);border-radius:14px;padding:16px;margin-bottom:12px;background:#fff}
-  .result-item.r-green{border-left:5px solid var(--fh-green)}
-  .result-item.r-yellow{border-left:5px solid var(--fh-yellow)}
-  .result-item.r-red{border-left:5px solid var(--fh-red);opacity:.85}
+  .result-item{border:1px solid var(--ls-line);border-radius:14px;padding:16px;margin-bottom:12px;background:#fff;width:100%;max-width:100%;box-sizing:border-box}
+  .result-item.r-green{border-left:5px solid var(--ls-green)}
+  .result-item.r-yellow{border-left:5px solid var(--ls-yellow)}
+  .result-item.r-red{border-left:5px solid var(--ls-red);opacity:.85}
   .result-item .ri-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start}
-  .result-item .ri-title{font-weight:700;color:var(--fh-navy);font-size:14px}
-  .result-item .ri-sub{font-size:12px;color:var(--fh-muted);margin-top:2px}
-  .result-item .ri-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:12px}
-  .ri-metric{background:#f7f9fc;border-radius:10px;padding:8px 10px}
-  .ri-metric .m-l{font-size:10.5px;color:var(--fh-muted);text-transform:uppercase;letter-spacing:.5px}
-  .ri-metric .m-v{font-size:14px;font-weight:700;color:var(--fh-navy)}
+  .result-item .ri-title{font-weight:700;color:var(--ls-navy);font-size:14px;word-break:break-word}
+  .result-item .ri-sub{font-size:12px;color:var(--ls-muted);margin-top:2px;word-break:break-word}
+  .result-item .ri-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,130px),1fr));gap:10px;margin-top:12px}
+  .ri-metric{background:#f7f9fc;border-radius:10px;padding:8px 10px;min-width:0}
+  .ri-metric .m-l{font-size:10.5px;color:var(--ls-muted);text-transform:uppercase;letter-spacing:.5px}
+  .ri-metric .m-v{font-size:14px;font-weight:700;color:var(--ls-navy);word-break:break-word}
   .sim-ring{font-size:22px;font-weight:800}
-  .muted{color:var(--fh-muted)}
-  .chart-box{position:relative;height:280px}
-  .checklist-item{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--fh-line);flex-wrap:wrap}
+  .muted{color:var(--ls-muted)}
+  .chart-box{position:relative;height:280px;width:100%;max-width:100%}
+  .checklist-item{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--ls-line);flex-wrap:wrap;width:100%}
   .checklist-item:last-child{border-bottom:0}
-  .checklist-item .ci-name{flex:1;min-width:160px;font-weight:600;color:var(--fh-navy)}
-  .checklist-item input[type=date]{width:180px}
-  .placeholder-ico{font-size:40px;margin-bottom:10px;color:var(--fh-gold)}
+  .checklist-item .ci-name{flex:1 1 160px;min-width:0;font-weight:600;color:var(--ls-navy)}
+  .checklist-item input[type=date]{width:100%;max-width:180px}
+  .placeholder-ico{font-size:40px;margin-bottom:10px;color:var(--ls-gold)}
   .spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
   @keyframes spin{to{transform:rotate(360deg)}}
-  .tag{display:inline-block;background:var(--fh-navy);color:#fff;font-size:10.5px;padding:2px 8px;border-radius:6px;font-weight:600;margin-left:6px}
-  .link{color:var(--fh-navy-3);text-decoration:none;font-weight:600}
+  .tag{display:inline-block;background:var(--ls-navy);color:#fff;font-size:10.5px;padding:2px 8px;border-radius:6px;font-weight:600;margin-left:6px}
+  .link{color:var(--ls-navy-3);text-decoration:none;font-weight:600}
   .link:hover{text-decoration:underline}
-  .hr{height:1px;background:var(--fh-line);margin:16px 0;border:0}
-  .small{font-size:11.5px}
+  .hr{height:1px;background:var(--ls-line);margin:16px 0;border:0}
+  .progress-wrap{
+    width:100%;max-width:100%;height:12px;border-radius:999px;background:#e8edf5;
+    overflow:hidden;margin:10px 0 6px;border:1px solid var(--ls-line);
+  }
+  #progress-bar{
+    height:100%;width:0%;border-radius:999px;
+    background:linear-gradient(90deg,var(--ls-navy),var(--ls-gold));
+    transition:width .35s ease;
+  }
+  #progressLabel{font-size:12px;color:var(--ls-muted);font-weight:600}
+
+  /* ---------------- Responsive ≤980px ---------------- */
+  @media (max-width:980px){
+    .grid.two{grid-template-columns:1fr}
+  }
+
+  /* ---------------- Mobile ≤768px ---------------- */
+  @media (max-width:768px){
+    #app{flex-direction:column}
+    #sidebar{
+      position:fixed;left:0;top:0;bottom:0;
+      width:min(288px,86vw);max-width:86vw;
+      height:100dvh;height:100vh;
+      transform:translateX(-105%);
+      box-shadow:var(--shadow-lg);
+    }
+    body.sidebar-open #sidebar{transform:translateX(0)}
+    body.sidebar-open{overflow:hidden}
+    #sidebar-overlay{display:block}
+    .sidebar-close{display:flex}
+    .brand .logo{gap:10px}
+    .menu-toggle{display:inline-flex}
+    .topbar{padding:12px 14px}
+    .topbar h1{font-size:16px}
+    .topbar .sub{font-size:11px}
+    .top-user{display:none}
+    .top-actions{gap:10px}
+    .content{padding:14px;width:100%;max-width:100%}
+    .card{padding:14px;border-radius:14px;margin-bottom:14px}
+    .card h2{font-size:15px}
+    .grid{gap:12px}
+    .grid.kpi{grid-template-columns:1fr}
+    .kpi-card{padding:14px 16px}
+    .kpi-card .k-value{font-size:22px}
+    .form-row{flex-direction:column;gap:10px}
+    .form-row > div{flex:1 1 auto;width:100%;max-width:100%!important;min-width:0}
+    .btn-row .btn{flex:1 1 auto}
+    .btn{min-height:42px}
+    .tbl-wrap{margin:0 -2px;border-radius:10px}
+    .tbl-wrap table{min-width:560px;font-size:12px}
+    .chart-box{height:220px}
+    .checklist-item{flex-direction:column;align-items:stretch;gap:8px}
+    .checklist-item input[type=date]{max-width:100%}
+    .pill-group{width:100%}
+    .pill-group label{flex:1 1 auto;text-align:center}
+    .dropzone{padding:18px 14px}
+    .result-item .ri-grid{grid-template-columns:1fr 1fr}
+    .side-foot{font-size:10px}
+  }
+
+  /* ---------------- Small phones ≤480px ---------------- */
+  @media (max-width:480px){
+    .content{padding:10px}
+    .topbar{padding:10px 12px}
+    .kpi-card .k-value{font-size:20px}
+    .result-item .ri-grid{grid-template-columns:1fr}
+    .btn-row .btn{width:100%}
+    .tbl-wrap table{min-width:480px}
+  }
 </style>
 </head>
 <body>
 <div id="app">
   <!-- ============ SIDEBAR ============ -->
-  <aside id="sidebar">
+  <aside id="sidebar" aria-label="Menu principal">
     <div class="brand">
       <div class="logo">
-        <div class="mark">FH</div>
+        <div class="mark">LS</div>
         <div class="txt">
-          <b>FH CONTROL</b>
+          <b>LICSYSTEM</b>
           <span>Licitação</span>
         </div>
+        <button type="button" class="sidebar-close" id="sidebarClose" aria-label="Fechar menu">&times;</button>
       </div>
     </div>
     <nav id="nav">
@@ -243,14 +356,30 @@
       <button data-view="arp"><span class="ico">📄</span> Atas de Registro</button>
       <button data-view="disputa"><span class="ico">⚔️</span> Sala de Disputa</button>
       <button data-view="catalogo"><span class="ico">📚</span> Catálogo</button>
-      <button data-view="config"><span class="ico">⚙️</span> Configurações</button>
+      <button data-view="ferramentas"><span class="ico">🛠️</span> Ferramentas</button>
     </nav>
-    <div class="side-foot">FH Construções &copy; Sistema Licitação<br/>v1.0 — frontend SPA</div>
+    <div class="side-foot">LICSYSTEM &copy; Sistema Licitação<br/>v1.0 — frontend SPA</div>
   </aside>
+  <div id="sidebar-overlay" aria-hidden="true"></div>
 
   <!-- Isolated nav script RIGHT AFTER #nav — works without any CDN -->
   <script>
   (function(){
+    var MQ = window.matchMedia("(max-width: 768px)");
+
+    function setSidebar(open){
+      document.body.classList.toggle("sidebar-open", !!open);
+      var overlay = document.getElementById("sidebar-overlay");
+      var toggle = document.getElementById("menuToggle");
+      if(overlay){
+        overlay.classList.toggle("show", !!open);
+        overlay.setAttribute("aria-hidden", open ? "false" : "true");
+      }
+      if(toggle) toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+    function closeSidebar(){ setSidebar(false); }
+    function toggleSidebar(){ setSidebar(!document.body.classList.contains("sidebar-open")); }
+
     function activate(view){
       var btns=document.querySelectorAll('#nav button');
       for(var i=0;i<btns.length;i++){
@@ -261,11 +390,13 @@
         views[j].classList.toggle('active', views[j].id===('view-'+view));
       }
       var titleEl=document.getElementById('topTitle');
-      var map={dashboard:'Dashboard',captacao:'Captação de Editais',orcamento:'Orçamento',cruzamento:'Cruzamento Inteligente (ML)',cofre:'Cofre de Documentos',concorrencia:'Análise de Concorrência',arp:'Atas de Registro de Preço',disputa:'Sala de Disputa',catalogo:'Catálogo',config:'Configurações'};
-      if(titleEl) titleEl.textContent = map[view]||'FH Control';
+      var map={dashboard:'Dashboard',captacao:'Captação de Editais',orcamento:'Orçamento',cruzamento:'Cruzamento Inteligente (ML)',cofre:'Cofre de Documentos',concorrencia:'Análise de Concorrência',arp:'Atas de Registro de Preço',disputa:'Sala de Disputa',catalogo:'Catálogo',ferramentas:'Ferramentas'};
+      if(titleEl) titleEl.textContent = map[view]||'LICSYSTEM';
       // notify app modules (guarded — nav never depends on this)
-      try{ if(window.FH && FH.onViewChange) FH.onViewChange(view); }catch(e){}
+      try{ if(window.LICSYSTEM && LICSYSTEM.onViewChange) LICSYSTEM.onViewChange(view); }catch(e){}
       try{ window.scrollTo(0,0); }catch(e){}
+      // close drawer after navigation on mobile
+      if(MQ.matches) closeSidebar();
     }
     var nav=document.getElementById('nav');
     nav.addEventListener('click', function(ev){
@@ -273,23 +404,48 @@
       if(!b) return;
       activate(b.getAttribute('data-view'));
     });
-    window.__fhActivateView=activate; // exposed for app boot
+
+    function wireMobileNav(){
+      var toggle = document.getElementById("menuToggle");
+      var closeBtn = document.getElementById("sidebarClose");
+      var overlay = document.getElementById("sidebar-overlay");
+      if(toggle) toggle.addEventListener("click", toggleSidebar);
+      if(closeBtn) closeBtn.addEventListener("click", closeSidebar);
+      if(overlay) overlay.addEventListener("click", closeSidebar);
+      document.addEventListener("keydown", function(e){
+        if(e.key === "Escape") closeSidebar();
+      });
+      function onMq(){ if(!MQ.matches) closeSidebar(); }
+      if(MQ.addEventListener) MQ.addEventListener("change", onMq);
+      else if(MQ.addListener) MQ.addListener(onMq);
+    }
+    if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", wireMobileNav);
+    else wireMobileNav();
+
+    window.__lsActivateView=activate;
+    window.__lsCloseSidebar=closeSidebar;
+    window.__lsToggleSidebar=toggleSidebar;
   })();
   </script>
 
   <!-- ============ MAIN ============ -->
   <div id="main">
     <div class="topbar">
-      <div>
-        <h1 id="topTitle">Dashboard</h1>
-        <div class="sub">FH Construções — Inteligência em Licitações</div>
+      <div class="topbar-left">
+        <button type="button" class="menu-toggle" id="menuToggle" aria-label="Abrir menu" aria-controls="sidebar" aria-expanded="false">
+          <span class="burger" aria-hidden="true"><span></span><span></span><span></span></span>
+        </button>
+        <div class="topbar-titles">
+          <h1 id="topTitle">Dashboard</h1>
+          <div class="sub">LICSYSTEM — Inteligência em Licitações</div>
+        </div>
       </div>
       <div class="top-actions">
         <div class="bell" id="bell" title="Alertas PNCP">
           🔔<span class="badge zero" id="bellBadge">0</span>
         </div>
-        <div style="text-align:right">
-          <div style="font-weight:700;color:var(--fh-navy);font-size:13px">FH Construções</div>
+        <div class="top-user">
+          <div style="font-weight:700;color:var(--ls-navy);font-size:13px">LICSYSTEM</div>
           <div class="small muted">Setor de Licitações</div>
         </div>
       </div>
@@ -409,6 +565,7 @@
             <table id="orcTable">
               <thead>
                 <tr>
+                  <th style="width:36px"><input type="checkbox" id="orcCheckAll" title="Selecionar todos" /></th>
                   <th style="width:40px">#</th>
                   <th>Produto / Descrição</th>
                   <th style="width:80px">Qtd</th>
@@ -423,8 +580,8 @@
               <tbody id="orcBody"></tbody>
               <tfoot>
                 <tr>
-                  <td colspan="5" style="text-align:right;font-weight:700;color:var(--fh-navy)">TOTAL GERAL</td>
-                  <td id="orcTotalGeral" style="font-weight:800;color:var(--fh-navy)">R$ 0,00</td>
+                  <td colspan="6" style="text-align:right;font-weight:700;color:var(--ls-navy)">TOTAL GERAL</td>
+                  <td id="orcTotalGeral" style="font-weight:800;color:var(--ls-navy)">R$ 0,00</td>
                   <td colspan="3"></td>
                 </tr>
               </tfoot>
@@ -437,10 +594,10 @@
       <section id="view-cruzamento" class="view">
         <div class="card">
           <div class="card-head"><h2>🔀 Cruzamento Inteligente (Mercado Livre)</h2><span class="tag">ML API</span></div>
-          <div class="desc">Compare itens do edital com produtos reais do Mercado Livre, calcule frete, custo e preço de venda.</div>
+          <div class="desc">Selecione itens na planilha de <b>Orçamento</b> (checkboxes) e processe em lote (grupos de 20, 1s entre requisições). Frete usa o CEP do perfil da empresa.</div>
           <div class="form-row">
             <div style="flex:2">
-              <label class="fld">Item do governo (descrição do edital)</label>
+              <label class="fld">Item avulso (opcional — se nenhum checkbox estiver marcado)</label>
               <textarea id="cruzItem" placeholder="ex.: Furadeira de impacto 650W com maleta e brocas"></textarea>
             </div>
             <div style="flex:1;min-width:200px">
@@ -450,18 +607,25 @@
                 <label><input type="radio" name="embalagem" value="kit"><span>Kit</span></label>
                 <label><input type="radio" name="embalagem" value="jogo"><span>Jogo</span></label>
               </div>
-              <label class="fld">CEP destino (frete)</label>
-              <input type="text" id="cruzCep" placeholder="80010-000" />
+              <label class="fld">CEP destino (frete) — prioriza perfil</label>
+              <input type="text" id="cruzCep" placeholder="Do perfil da empresa ou digite aqui" />
             </div>
           </div>
           <div class="form-row">
             <div><label class="fld">Margem %</label><input type="number" id="cruzMargem" value="0" step="0.1" /></div>
             <div><label class="fld">Imposto %</label><input type="number" id="cruzImposto" value="0" step="0.1" /></div>
             <div><label class="fld">Custo Operacional %</label><input type="number" id="cruzCustoOp" value="0" step="0.1" /></div>
-            <div style="display:flex;align-items:flex-end;min-width:220px">
-              <button class="btn btn-gold" id="btnCruzar" style="width:100%">⚙️ Processar Cruzamento (ML)</button>
+            <div><label class="fld">Desconto Fornecedor (R$)</label><input type="number" id="cruzDesconto" value="0" step="0.01" min="0" /></div>
+          </div>
+          <div class="form-row">
+            <div style="display:flex;align-items:flex-end;min-width:220px;flex:1">
+              <button class="btn btn-gold" id="btnCruzar" style="width:100%">⚙️ Processar Lote (ML)</button>
             </div>
           </div>
+          <div class="progress-wrap" aria-hidden="true">
+            <div id="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+          </div>
+          <div id="progressLabel">Aguardando processamento…</div>
           <div id="cruzMode" class="alert alert-info"></div>
           <div id="cruzStatus" class="alert"></div>
         </div>
@@ -521,33 +685,66 @@
         <div class="card" style="text-align:center;padding:44px">
           <div class="placeholder-ico">📚</div>
           <h2>Catálogo de Produtos</h2>
-          <div class="desc">Base de produtos padronizados da FH com preços de referência. Em desenvolvimento.</div>
-        </div>
-      </section>
-      <section id="view-config" class="view">
-        <div class="card">
-          <div class="card-head"><h2>⚙️ Configurações</h2></div>
-          <div class="desc">Credenciais do Firebase Realtime Database. Deixe em branco para operar em <b>modo teste</b> (somente local).</div>
-          <div class="form-row">
-            <div><label class="fld">apiKey</label><input type="text" id="fbApiKey" placeholder="" /></div>
-            <div><label class="fld">authDomain</label><input type="text" id="fbAuthDomain" placeholder="" /></div>
-          </div>
-          <div class="form-row">
-            <div><label class="fld">databaseURL</label><input type="text" id="fbDatabaseURL" placeholder="https://xxx.firebaseio.com" /></div>
-            <div><label class="fld">projectId</label><input type="text" id="fbProjectId" placeholder="" /></div>
-          </div>
-          <div class="form-row">
-            <div><label class="fld">storageBucket</label><input type="text" id="fbStorageBucket" placeholder="" /></div>
-            <div><label class="fld">messagingSenderId</label><input type="text" id="fbMessagingSenderId" placeholder="" /></div>
-          </div>
-          <div class="form-row">
-            <div><label class="fld">appId</label><input type="text" id="fbAppId" placeholder="" /></div>
-            <div style="display:flex;align-items:flex-end"><button class="btn btn-primary" id="btnSalvarFb" style="width:100%">💾 Salvar credenciais</button></div>
-          </div>
-          <div id="fbStatus" class="alert"></div>
+          <div class="desc">Base de produtos padronizados do LICSYSTEM com preços de referência. Em desenvolvimento.</div>
         </div>
       </section>
 
+      <!-- ===================== FERRAMENTAS ===================== -->
+      <section id="view-ferramentas" class="view">
+        <div class="card">
+          <div class="card-head">
+            <h2>🛠️ Perfil da Empresa</h2>
+            <button class="btn btn-primary" id="btnSalvarPerfil">💾 Salvar perfil</button>
+          </div>
+          <div class="desc">Dados usados no cabeçalho dos PDFs. Persistidos em <b>empresa_perfil</b> no Firebase.</div>
+          <div id="ferramentasStatus" class="alert"></div>
+          <div class="form-row">
+            <div style="flex:2">
+              <label class="fld">Nome</label>
+              <input type="text" id="empNome" placeholder="Razão social / nome fantasia" />
+            </div>
+            <div>
+              <label class="fld">CNPJ</label>
+              <input type="text" id="empCnpj" placeholder="00.000.000/0000-00" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div style="flex:2">
+              <label class="fld">Endereço</label>
+              <input type="text" id="empEndereco" placeholder="Rua, número, bairro, cidade/UF" />
+            </div>
+            <div>
+              <label class="fld">Telefone</label>
+              <input type="text" id="empTelefone" placeholder="(00) 00000-0000" />
+            </div>
+            <div>
+              <label class="fld">CEP (frete / cruzamento)</label>
+              <input type="text" id="empCep" placeholder="00000-000" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label class="fld">Logo (PNG/JPG — convertido para Base64)</label>
+              <input type="file" id="empLogo" accept="image/png,image/jpeg,image/webp,image/gif" />
+              <div class="small muted" style="margin-top:6px">Máx. recomendado ~500 KB para PDFs leves.</div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:center;min-height:80px">
+              <img id="empLogoPreview" alt="Prévia do logo" style="display:none;max-height:72px;max-width:180px;object-fit:contain;border:1px solid var(--ls-line);border-radius:10px;padding:6px;background:#fff" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>📦 Backup Firebase</h2></div>
+          <div class="desc">Exporte o nó <b>licitacoes/</b> ou importe um JSON na raiz do Realtime Database.</div>
+          <div id="backupStatus" class="alert"></div>
+          <div class="btn-row">
+            <button class="btn btn-gold" id="btnExportBackup">⬇️ Exportar backup (licitacoes/)</button>
+            <button class="btn btn-ghost" id="btnImportBackup">⬆️ Importar backup (raiz)</button>
+            <input type="file" id="backupFile" accept="application/json,.json" style="display:none" />
+          </div>
+        </div>
+      </section>
     </div>
   </div>
 </div>
@@ -559,10 +756,10 @@
 (function(){
   "use strict";
 
-  var FH = window.FH = {};
+  var LICSYSTEM = window.LICSYSTEM = {};
 
   /* ============================ UTILS ============================ */
-  var utils = FH.utils = {};
+  var utils = LICSYSTEM.utils = {};
 
   utils.escapeHtml = function(s){
     var str = String(s == null ? "" : s);
@@ -577,10 +774,16 @@
   };
 
   var PACK_JUNK = ["unidade","unid","und","un","kit","jogo","conjunto","cx","caixa","pct","pacote","pc","peca","pecas","par","pares","embalagem","cartela","fardo","rolo","frasco","galao","balde","saco","lata","display"];
+  const BLACKLIST = ["Edital","Pregão","Secretaria","Objeto","Vigência"];
 
+  // Retorna "" se a linha contiver termo da BLACKLIST (descarta); senão, texto limpo p/ match
   utils.sanitizar = function(s){
-    var t = utils.fold(String(s == null ? "" : s)).toLowerCase();
-    t = t.replace(/[^a-z0-9\s]/g," ");
+    var raw = String(s == null ? "" : s);
+    var folded = utils.fold(raw).toLowerCase();
+    for(var b=0;b<BLACKLIST.length;b++){
+      if(folded.indexOf(utils.fold(BLACKLIST[b]).toLowerCase()) !== -1) return "";
+    }
+    var t = folded.replace(/[^a-z0-9\s]/g," ");
     var words = t.split(/\s+/).filter(function(w){
       if(!w) return false;
       if(PACK_JUNK.indexOf(w) !== -1) return false;
@@ -667,20 +870,23 @@
     return utils.loadScript("https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js");
   };
 
-  /* ------- Firebase (load only when credentials filled OR on save) ------- */
+  /* ------- Firebase (produção — config fixa, sem localStorage) ------- */
+  var DEFAULT_FIREBASE_CONFIG = {
+    apiKey: "AIzaSyDY_qPCSGQn_ZG7OmxUNJ9j6EWv8_9eGjU",
+    authDomain: "fhlicitacoes-382b6.firebaseapp.com",
+    databaseURL: "https://fhlicitacoes-382b6-default-rtdb.firebaseio.com",
+    projectId: "fhlicitacoes-382b6",
+    storageBucket: "fhlicitacoes-382b6.firebasestorage.app",
+    messagingSenderId: "563712824331",
+    appId: "1:563712824331:web:db18753af1229ad389a30e"
+  };
+
   utils.getFirebaseConfig = function(){
-    // Blank credentials — user fills in Config view (persisted to localStorage)
-    var stored = null;
-    try{ stored = JSON.parse(localStorage.getItem("sistema_licitacao_firebase") || "null"); }catch(e){}
-    var cfg = stored || {
-      apiKey:"", authDomain:"", databaseURL:"", projectId:"",
-      storageBucket:"", messagingSenderId:"", appId:""
-    };
-    return cfg;
+    return DEFAULT_FIREBASE_CONFIG;
   };
 
   utils.hasFirebaseConfig = function(){
-    var c = utils.getFirebaseConfig();
+    var c = DEFAULT_FIREBASE_CONFIG;
     return !!(c && c.databaseURL && c.apiKey);
   };
 
@@ -692,7 +898,7 @@
       .then(function(){ return utils.loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"); })
       .then(function(){
         if(!window.firebase.apps.length){
-          window.firebase.initializeApp(utils.getFirebaseConfig());
+          window.firebase.initializeApp(DEFAULT_FIREBASE_CONFIG);
         }
         return window.firebase;
       })
@@ -703,6 +909,21 @@
   utils.firebasePush = function(path, obj){
     return utils.ensureFirebase().then(function(fb){
       return fb.database().ref(path).push(obj);
+    });
+  };
+
+  utils.firebaseSet = function(path, obj){
+    return utils.ensureFirebase().then(function(fb){
+      var ref = (path === "/" || path === "") ? fb.database().ref() : fb.database().ref(path);
+      return ref.set(obj);
+    });
+  };
+
+  utils.firebaseGet = function(path){
+    return utils.ensureFirebase().then(function(fb){
+      return fb.database().ref(path).once("value").then(function(snap){
+        return snap.val();
+      });
     });
   };
 
@@ -722,7 +943,7 @@
   };
 
   /* ============================ STATE ============================ */
-  FH.state = {
+  LICSYSTEM.state = {
     orcItems: [],
     aprovadosCruzamento: [],
     pncpAlerts: [],
@@ -734,11 +955,12 @@
       emAnalise: 5,
       volumeMensal: [80,95,70,110,130,90]
     },
-    captacaoLines: []
+    captacaoLines: [],
+    empresaPerfil: null
   };
 
-  var ORC_KEY = "sistema_licitacao_orcamento_v1";
-  var COFRE_KEY = "sistema_licitacao_cofre_v1";
+  var ORC_KEY = "licsystem_orcamento_v1";
+  var COFRE_KEY = "licsystem_cofre_v1";
 
   /* risk dictionary */
   var PALAVRAS_RISCO = ["instalação","instalacao","amostra","garantia","visita técnica","visita tecnica","treinamento","montagem","mão de obra","mao de obra","serviços","servicos"];
@@ -761,24 +983,24 @@
   function hideAlert(id){ var a=el(id); if(a) a.className="alert"; }
 
   /* ============================ BELL / PNCP badge ============================ */
-  FH.updateBell = function(){
+  LICSYSTEM.updateBell = function(){
     var badge = el("bellBadge");
     if(!badge) return;
-    var n = FH.state.pncpAlerts.length;
+    var n = LICSYSTEM.state.pncpAlerts.length;
     badge.textContent = String(n);
     badge.classList.toggle("zero", n === 0);
   };
 
   /* ============================ DASHBOARD ============================ */
-  FH.dashboard = {
+  LICSYSTEM.dashboard = {
     _charts:{},
     renderKpis:function(){
-      var m = FH.state.dashboardMetrics;
+      var m = LICSYSTEM.state.dashboardMetrics;
       var grid = el("kpiGrid");
       if(!grid) return;
       grid.innerHTML =
         kpi("Volume Financeiro Disputado", utils.formatBrl(m.volumeDisputado), "Acumulado no período", false) +
-        kpi("Pregões Ganhos", m.ganhos, "Homologados a favor da FH", true) +
+        kpi("Pregões Ganhos", m.ganhos, "Homologados a favor do LICSYSTEM", true) +
         kpi("Pregões Perdidos", m.perdidos, "Não vencidos", true) +
         kpi("Em Análise", m.emAnalise, "Aguardando decisão", true);
       function kpi(label,val,sub,alt){
@@ -790,11 +1012,11 @@
     },
     initCharts:function(){
       utils.ensureChart().then(function(){
-        var m = FH.state.dashboardMetrics;
+        var m = LICSYSTEM.state.dashboardMetrics;
         var dEl = el("chartDoughnut"), bEl = el("chartBar");
         if(dEl){
-          if(FH.dashboard._charts.d) FH.dashboard._charts.d.destroy();
-          FH.dashboard._charts.d = new Chart(dEl.getContext("2d"),{
+          if(LICSYSTEM.dashboard._charts.d) LICSYSTEM.dashboard._charts.d.destroy();
+          LICSYSTEM.dashboard._charts.d = new Chart(dEl.getContext("2d"),{
             type:"doughnut",
             data:{ labels:["Ganhos","Perdidos","Em Análise"],
               datasets:[{ data:[m.ganhos,m.perdidos,m.emAnalise],
@@ -804,9 +1026,9 @@
           });
         }
         if(bEl){
-          if(FH.dashboard._charts.b) FH.dashboard._charts.b.destroy();
+          if(LICSYSTEM.dashboard._charts.b) LICSYSTEM.dashboard._charts.b.destroy();
           var labels = lastMonths(6);
-          FH.dashboard._charts.b = new Chart(bEl.getContext("2d"),{
+          LICSYSTEM.dashboard._charts.b = new Chart(bEl.getContext("2d"),{
             type:"bar",
             data:{ labels:labels,
               datasets:[{ label:"R$ mil", data:m.volumeMensal,
@@ -827,11 +1049,11 @@
     renderPncp:function(){
       var box = el("dashPncpList");
       if(!box) return;
-      var arr = FH.state.pncpAlerts;
+      var arr = LICSYSTEM.state.pncpAlerts;
       if(!arr.length){ box.innerHTML='<span class="muted">Nenhuma oportunidade capturada ainda. Use o Radar PNCP em <b>Captação</b>.</span>'; return; }
       var html='<div style="display:flex;flex-direction:column;gap:8px">';
       arr.slice(0,10).forEach(function(o){
-        html+='<div style="padding:10px 12px;border:1px solid var(--fh-line);border-radius:10px">'+
+        html+='<div style="padding:10px 12px;border:1px solid var(--ls-line);border-radius:10px">'+
           '<b>'+utils.escapeHtml(o.orgao||"Órgão")+'</b> <span class="badge-status b-yellow">'+utils.escapeHtml(o.uf||"")+'</span><br/>'+
           '<span class="small muted">'+utils.escapeHtml((o.objeto||"").slice(0,180))+'</span></div>';
       });
@@ -844,7 +1066,9 @@
   /* ============================ CAPTAÇÃO ============================ */
   var UF_LIST = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
 
-  FH.captacao = {
+  LICSYSTEM.captacao = {
+    BLACKLIST: BLACKLIST,
+
     initUf:function(){
       var sel = el("pncpUf");
       if(!sel || sel.options.length) return;
@@ -853,36 +1077,41 @@
       sel.innerHTML = html;
     },
 
-    // Split edital items WITHOUT lookbehind. Patterns like "1234) -" and "UN/UND" planilha.
+    // Separa cada item do PDF pelo padrão: início de linha + número + . ) ou -
     splitEdital:function(text){
-      var lines = [];
-      var raw = String(text||"").split(/\r?\n/);
-      var buffer = "";
-      // item start pattern: number followed by ) or . or - (no lookbehind)
-      var itemStart = /(^|\s)(\d{1,5})\s*[\)\.\-]\s+/;
-      // unit markers on planilha lines
-      var unitRe = /\b(UN|UND|UNID|UNIDADE|PC|PÇ|CX|CAIXA|PCT|KIT|JOGO|CJ|PAR|M|M2|M3|KG|LT|L)\b/i;
-      for(var i=0;i<raw.length;i++){
-        var ln = raw[i].replace(/\s+/g," ").trim();
-        if(!ln) continue;
-        if(itemStart.test(ln) || unitRe.test(ln)){
-          if(buffer) lines.push(buffer.trim());
-          buffer = ln;
-        } else {
-          // continuation
-          if(buffer) buffer += " " + ln;
-          else buffer = ln;
-        }
-        // guard against runaway buffers
-        if(buffer.length > 400){ lines.push(buffer.trim()); buffer=""; }
+      var src = String(text || "").replace(/\r\n?/g, "\n");
+      var re = /(^|\n)\s*(\d{1,5})[\.\)\-]\s+/g;
+      var matches = [];
+      var m;
+      while((m = re.exec(src)) !== null){
+        matches.push({ index: m.index, len: m[0].length, num: m[2] });
       }
-      if(buffer) lines.push(buffer.trim());
-      // dedupe + minimal length
-      var seen={}, out=[];
-      lines.forEach(function(l){
+
+      var chunks = [];
+      if(!matches.length){
+        src.split("\n").forEach(function(ln){
+          ln = ln.replace(/\s+/g, " ").trim();
+          if(ln) chunks.push(ln);
+        });
+      } else {
+        for(var i=0;i<matches.length;i++){
+          var start = matches[i].index;
+          if(src.charAt(start) === "\n") start++;
+          var end = (i + 1 < matches.length) ? matches[i + 1].index : src.length;
+          var chunk = src.slice(start, end).replace(/\s+/g, " ").trim();
+          if(chunk) chunks.push(chunk);
+        }
+      }
+
+      var seen = {}, out = [];
+      chunks.forEach(function(l){
         if(l.length < 4) return;
-        var k=l.toLowerCase();
-        if(seen[k]) return; seen[k]=1; out.push(l);
+        // BLACKLIST via sanitizar — descarta cabeçalhos/rodapés do edital
+        if(!utils.sanitizar(l)) return;
+        var k = l.toLowerCase();
+        if(seen[k]) return;
+        seen[k] = 1;
+        out.push(l);
       });
       return out;
     },
@@ -912,10 +1141,10 @@
             }
             chain.then(function(){
               var full = pages.join("\n");
-              var items = FH.captacao.splitEdital(full);
-              FH.state.captacaoLines = items;
-              FH.captacao.render(items);
-              showAlert("pdfStatus","ok","Texto extraído: "+items.length+" itens/linhas identificados. Use o filtro por palavra-chave se necessário.");
+              var items = LICSYSTEM.captacao.splitEdital(full);
+              LICSYSTEM.state.captacaoLines = items;
+              LICSYSTEM.captacao.render(items);
+              showAlert("pdfStatus","ok","Texto extraído: "+items.length+" item(ns) individualizados. Use o filtro por palavra-chave se necessário.");
             });
           }).catch(function(err){
             showAlert("pdfStatus","error","Erro ao ler PDF: "+utils.escapeHtml(err.message));
@@ -927,13 +1156,17 @@
       });
     },
 
+    // Uma <tr> por item, com checkbox individual
     render:function(lines, filterAll){
       var kw = (el("pdfKeywords").value||"").split(",").map(function(s){return utils.fold(s).toLowerCase().trim();}).filter(Boolean);
       var body = el("captacaoBody");
-      var data = lines || FH.state.captacaoLines;
-      var filtered = data;
+      var data = lines || LICSYSTEM.state.captacaoLines || [];
+      var filtered = data.filter(function(l){
+        // revalida BLACKLIST (itens já salvos / importados)
+        return !!utils.sanitizar(l);
+      });
       if(kw.length && !filterAll){
-        filtered = data.filter(function(l){
+        filtered = filtered.filter(function(l){
           var t = utils.fold(l).toLowerCase();
           return kw.some(function(k){ return t.indexOf(k) !== -1; });
         });
@@ -946,14 +1179,16 @@
       filtered.forEach(function(l,idx){
         var risco = utils.riscoMatch(l);
         var flag = risco.length ? '<span class="risk-flag" title="Risco: '+utils.escapeHtml(risco.join(", "))+'">⚠</span>' : "";
-        html+='<tr class="'+(risco.length?'risk-row':'')+'">'+
-          '<td><input type="checkbox" class="capChk" data-line="'+utils.escapeHtml(l)+'"></td>'+
+        html+='<tr class="'+(risco.length?'risk-row':'')+'" data-item-idx="'+idx+'">'+
+          '<td><input type="checkbox" class="capChk" data-line="'+utils.escapeHtml(l)+'" aria-label="Selecionar item '+(idx+1)+'"></td>'+
           '<td>'+(idx+1)+'</td>'+
           '<td>'+flag+utils.escapeHtml(l)+'</td>'+
-          '<td><button class="btn btn-ghost btn-sm capGoogle" data-q="'+utils.escapeHtml(l)+'">🔎 Google</button></td>'+
+          '<td><button type="button" class="btn btn-ghost btn-sm capGoogle" data-q="'+utils.escapeHtml(l)+'">🔎 Google</button></td>'+
           '</tr>';
       });
       body.innerHTML = html;
+      var all = el("capCheckAll");
+      if(all) all.checked = false;
     },
 
     exportarPdf:function(){
@@ -963,18 +1198,19 @@
       utils.ensureJsPdf().then(function(){
         var jsPDF = window.jspdf.jsPDF;
         var doc = new jsPDF({orientation:"portrait"});
-        fhPdfHeader(doc,"Itens Selecionados do Edital");
-        var rows=[];
-        checks.forEach(function(c,i){ rows.push([i+1, c.getAttribute("data-line")]); });
-        doc.autoTable({
-          startY:38, head:[["#","Item / Descrição"]], body:rows,
-          styles:{fontSize:9,cellPadding:3},
-          headStyles:{fillColor:[21,38,66],textColor:255},
-          columnStyles:{0:{cellWidth:14}},
-          alternateRowStyles:{fillColor:[248,250,253]}
+        return licsystemPdfHeader(doc,"Itens Selecionados do Edital").then(function(startY){
+          var rows=[];
+          checks.forEach(function(c,i){ rows.push([i+1, c.getAttribute("data-line")]); });
+          doc.autoTable({
+            startY:startY, head:[["#","Item / Descrição"]], body:rows,
+            styles:{fontSize:9,cellPadding:3},
+            headStyles:{fillColor:[21,38,66],textColor:255},
+            columnStyles:{0:{cellWidth:14}},
+            alternateRowStyles:{fillColor:[248,250,253]}
+          });
+          doc.save("edital-itens-selecionados.pdf");
+          showAlert("pdfStatus","ok","PDF gerado com "+rows.length+" itens.");
         });
-        doc.save("edital-itens-selecionados.pdf");
-        showAlert("pdfStatus","ok","PDF gerado com "+rows.length+" itens.");
       }).catch(function(err){ showAlert("pdfStatus","error","Falha ao gerar PDF: "+utils.escapeHtml(err.message)); });
     },
 
@@ -994,12 +1230,12 @@
       var checks = document.querySelectorAll(".capChk:checked");
       var lines;
       if(checks.length){ lines=[]; checks.forEach(function(c){ lines.push(c.getAttribute("data-line")); }); }
-      else lines = FH.state.captacaoLines.slice();
+      else lines = LICSYSTEM.state.captacaoLines.slice();
       if(!lines.length){ showAlert("pdfStatus","warn","Nada para enviar. Extraia um edital primeiro."); return; }
       // chunks of 120
-      FH.orcamento.addFromLines(lines, 120);
+      LICSYSTEM.orcamento.addFromLines(lines, 120);
       showAlert("pdfStatus","ok",lines.length+" linha(s) enviadas ao Orçamento.");
-      if(window.__fhActivateView) window.__fhActivateView("orcamento");
+      if(window.__lsActivateView) window.__lsActivateView("orcamento");
     },
 
     /* ---------- Radar PNCP ---------- */
@@ -1018,11 +1254,11 @@
       fetch(url1).then(function(r){
         if(!r.ok) throw new Error("HTTP "+r.status);
         return r.json();
-      }).then(function(j){ FH.captacao._handlePncp(j, kw, uf); })
+      }).then(function(j){ LICSYSTEM.captacao._handlePncp(j, kw, uf); })
       .catch(function(){
         // fallback
         fetch(url2).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
-          .then(function(j){ FH.captacao._handlePncp(j, kw, uf); })
+          .then(function(j){ LICSYSTEM.captacao._handlePncp(j, kw, uf); })
           .catch(function(err){
             el("pncpResults").innerHTML="";
             showAlert("pncpAlert","error","Não foi possível consultar o PNCP ("+utils.escapeHtml(err.message)+"). Se você abriu via <b>file://</b>, o navegador pode bloquear a requisição (CORS). Tente abrir por um servidor local (ex.: <code>python -m http.server</code>).");
@@ -1046,14 +1282,14 @@
       }
       // register alerts + bell
       matches.forEach(function(o){
-        FH.state.pncpAlerts.push({
+        LICSYSTEM.state.pncpAlerts.push({
           orgao:(o.orgaoEntidade && o.orgaoEntidade.razaoSocial) || o.nomeOrgao || o.orgao || "Órgão público",
           uf:(o.unidadeOrgao && o.unidadeOrgao.ufSigla) || o.uf || uf || "",
           objeto:o.objetoCompra || o.objeto || o.objetoContratacao || ""
         });
       });
-      FH.updateBell();
-      FH.dashboard.renderPncp();
+      LICSYSTEM.updateBell();
+      LICSYSTEM.dashboard.renderPncp();
       showAlert("pncpAlert","ok","🎯 "+matches.length+" oportunidade(s) PNCP encontradas! Alertas adicionados ao sino.");
       var html='<div style="display:flex;flex-direction:column;gap:10px">';
       matches.forEach(function(o){
@@ -1074,18 +1310,18 @@
   };
 
   /* ============================ ORÇAMENTO ============================ */
-  FH.orcamento = {
+  LICSYSTEM.orcamento = {
     load:function(){
       try{
         var saved = JSON.parse(localStorage.getItem(ORC_KEY) || "null");
-        if(saved && Array.isArray(saved)) FH.state.orcItems = saved;
+        if(saved && Array.isArray(saved)) LICSYSTEM.state.orcItems = saved;
       }catch(e){}
-      if(!FH.state.orcItems.length){
-        FH.state.orcItems = [ {produto:"",qtd:1,vunit:0,pct:0,link:""} ];
+      if(!LICSYSTEM.state.orcItems.length){
+        LICSYSTEM.state.orcItems = [ {produto:"",qtd:1,vunit:0,pct:0,link:""} ];
       }
     },
     save:function(){
-      try{ localStorage.setItem(ORC_KEY, JSON.stringify(FH.state.orcItems)); }catch(e){}
+      try{ localStorage.setItem(ORC_KEY, JSON.stringify(LICSYSTEM.state.orcItems)); }catch(e){}
     },
     calcTotal:function(it){
       var q=Number(it.qtd)||0, v=Number(it.vunit)||0, p=Number(it.pct)||0;
@@ -1095,49 +1331,54 @@
       var body = el("orcBody");
       var html="";
       var geral=0;
-      FH.state.orcItems.forEach(function(it,i){
-        var total = FH.orcamento.calcTotal(it);
+      LICSYSTEM.state.orcItems.forEach(function(it,i){
+        var total = LICSYSTEM.orcamento.calcTotal(it);
         geral += total;
         var risco = utils.riscoMatch(it.produto);
         var flag = risco.length ? '<span class="risk-flag" title="Risco: '+utils.escapeHtml(risco.join(", "))+'">⚠</span>' : "";
-        html+='<tr class="'+(risco.length?'risk-row':'')+'">'+
+        html+='<tr class="'+(risco.length?'risk-row':'')+'" data-item-idx="'+i+'">'+
+          '<td><input type="checkbox" class="orcChk" data-i="'+i+'" aria-label="Selecionar item '+(i+1)+'"></td>'+
           '<td>'+(i+1)+'</td>'+
           '<td class="'+(risco.length?'risk-cell':'')+'">'+flag+'<input type="text" data-i="'+i+'" data-f="produto" value="'+utils.escapeHtml(it.produto)+'" placeholder="Descrição"></td>'+
           '<td><input type="number" data-i="'+i+'" data-f="qtd" value="'+utils.escapeHtml(it.qtd)+'" step="1" min="0"></td>'+
           '<td><input type="number" data-i="'+i+'" data-f="vunit" value="'+utils.escapeHtml(it.vunit)+'" step="0.01" min="0"></td>'+
           '<td><input type="number" data-i="'+i+'" data-f="pct" value="'+utils.escapeHtml(it.pct)+'" step="0.1"></td>'+
-          '<td style="font-weight:700;color:var(--fh-navy)">'+utils.formatBrl(total)+'</td>'+
+          '<td style="font-weight:700;color:var(--ls-navy)">'+utils.formatBrl(total)+'</td>'+
           '<td><input type="text" data-i="'+i+'" data-f="link" value="'+utils.escapeHtml(it.link||"")+'" placeholder="URL"></td>'+
           '<td><div class="btn-row" style="margin:0">'+
-            '<button class="btn btn-ghost btn-sm orcGoogle" data-i="'+i+'">G</button>'+
-            '<button class="btn btn-ghost btn-sm orcMl" data-i="'+i+'">ML</button></div></td>'+
-          '<td><button class="btn btn-ghost btn-sm orcDel" data-i="'+i+'">✕</button></td>'+
+            '<button type="button" class="btn btn-ghost btn-sm orcGoogle" data-i="'+i+'">G</button>'+
+            '<button type="button" class="btn btn-ghost btn-sm orcMl" data-i="'+i+'">ML</button></div></td>'+
+          '<td><button type="button" class="btn btn-ghost btn-sm orcDel" data-i="'+i+'">✕</button></td>'+
           '</tr>';
       });
       body.innerHTML = html;
       el("orcTotalGeral").textContent = utils.formatBrl(geral);
-      FH.orcamento.save();
+      var all = el("orcCheckAll");
+      if(all) all.checked = false;
+      LICSYSTEM.orcamento.save();
     },
     addLinha:function(){
-      FH.state.orcItems.push({produto:"",qtd:1,vunit:0,pct:0,link:""});
-      FH.orcamento.render();
+      LICSYSTEM.state.orcItems.push({produto:"",qtd:1,vunit:0,pct:0,link:""});
+      LICSYSTEM.orcamento.render();
     },
     addFromLines:function(lines, chunk){
       chunk = chunk || 120;
       var slice = lines.slice(0, chunk);
       slice.forEach(function(l){
-        FH.state.orcItems.push({produto:String(l),qtd:1,vunit:0,pct:0,link:""});
+        var desc = String(l).trim();
+        if(!desc || !utils.sanitizar(desc)) return;
+        LICSYSTEM.state.orcItems.push({produto:desc, qtd:1, vunit:0, pct:0, link:"", selected:false});
       });
       // remove initial empty row if present
-      FH.state.orcItems = FH.state.orcItems.filter(function(it,idx){
+      LICSYSTEM.state.orcItems = LICSYSTEM.state.orcItems.filter(function(it,idx){
         return !(idx===0 && !it.produto && !Number(it.vunit));
       });
-      FH.orcamento.render();
+      LICSYSTEM.orcamento.render();
     },
     limpar:function(){
       if(!confirm("Limpar toda a planilha de orçamento?")) return;
-      FH.state.orcItems = [ {produto:"",qtd:1,vunit:0,pct:0,link:""} ];
-      FH.orcamento.render();
+      LICSYSTEM.state.orcItems = [ {produto:"",qtd:1,vunit:0,pct:0,link:""} ];
+      LICSYSTEM.orcamento.render();
     },
 
     handleFile:function(file){
@@ -1150,14 +1391,14 @@
             var wb = XLSX.read(new Uint8Array(reader.result), {type:"array"});
             var ws = wb.Sheets[wb.SheetNames[0]];
             var rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:""});
-            FH.orcamento._mapRows(rows);
+            LICSYSTEM.orcamento._mapRows(rows);
           }catch(err){ showAlertOrc("Erro ao ler arquivo: "+utils.escapeHtml(err.message),"error"); }
         };
         reader.readAsArrayBuffer(file);
       }).catch(function(err){ showAlertOrc("Falha ao carregar SheetJS: "+utils.escapeHtml(err.message),"error"); });
       function showAlertOrc(msg,type){
         var d=el("orcDrop"); d.innerHTML='<span class="big">📊</span>'+msg;
-        setTimeout(function(){ FH.orcamento._restoreDrop(); }, type==="info"?60000:4000);
+        setTimeout(function(){ LICSYSTEM.orcamento._restoreDrop(); }, type==="info"?60000:4000);
       }
     },
     _restoreDrop:function(){
@@ -1165,7 +1406,7 @@
       wireOrcFileInput();
     },
     _mapRows:function(rows){
-      if(!rows || !rows.length){ FH.orcamento._restoreDrop(); return; }
+      if(!rows || !rows.length){ LICSYSTEM.orcamento._restoreDrop(); return; }
       // find header row heuristically
       var header = rows[0].map(function(c){ return utils.fold(String(c)).toLowerCase().trim(); });
       var colDesc=-1, colQtd=-1, colVal=-1;
@@ -1181,17 +1422,20 @@
         var row = rows[r];
         var desc = String(row[colDesc]!=null?row[colDesc]:"").trim();
         if(!desc) continue;
+        // mesma BLACKLIST da captação — descarta cabeçalhos/metadados
+        if(!utils.sanitizar(desc)) continue;
         var qtd = colQtd>=0 ? parseNum(row[colQtd]) : 1;
         var val = colVal>=0 ? parseNum(row[colVal]) : 0;
-        FH.state.orcItems.push({produto:desc, qtd:qtd||1, vunit:val||0, pct:0, link:""});
+        // cada linha Excel = um item individual (checkbox no render)
+        LICSYSTEM.state.orcItems.push({produto:desc, qtd:qtd||1, vunit:val||0, pct:0, link:"", selected:false});
         added++;
         if(added>=1000) break;
       }
-      FH.state.orcItems = FH.state.orcItems.filter(function(it,idx){
+      LICSYSTEM.state.orcItems = LICSYSTEM.state.orcItems.filter(function(it,idx){
         return !(idx===0 && !it.produto && !Number(it.vunit));
       });
-      FH.orcamento.render();
-      FH.orcamento._restoreDrop();
+      LICSYSTEM.orcamento.render();
+      LICSYSTEM.orcamento._restoreDrop();
       function parseNum(v){
         if(v==null) return 0;
         var s=String(v).replace(/[^0-9,.-]/g,"").replace(/\.(?=\d{3}(\D|$))/g,"").replace(",",".");
@@ -1200,129 +1444,270 @@
     },
 
     gerarProposta:function(){
-      if(!FH.state.orcItems.length){ alert("Planilha vazia."); return; }
+      if(!LICSYSTEM.state.orcItems.length){ alert("Planilha vazia."); return; }
       utils.ensureJsPdf().then(function(){
         var jsPDF = window.jspdf.jsPDF;
         var doc = new jsPDF({orientation:"landscape"});
-        fhPdfHeader(doc,"Proposta Comercial", true);
-        var y=40;
-        if(FH.state.lastBdi){
-          doc.setFontSize(9); doc.setTextColor(90);
-          doc.text("BDI aplicado (último cruzamento): Margem "+FH.state.lastBdi.margem+"% | Imposto "+FH.state.lastBdi.imposto+"% | Custo Op. "+FH.state.lastBdi.custoOperacional+"%", 14, y);
-          y+=6;
-        }
-        var rows=[], geral=0;
-        FH.state.orcItems.forEach(function(it,i){
-          if(!it.produto) return;
-          var total=FH.orcamento.calcTotal(it); geral+=total;
-          rows.push([i+1, it.produto, it.qtd, utils.formatBrl(it.vunit), it.pct+"%", utils.formatBrl(total)]);
+        return licsystemPdfHeader(doc,"Proposta Comercial", true).then(function(startY){
+          var y = startY;
+          if(LICSYSTEM.state.lastBdi){
+            doc.setFontSize(9); doc.setTextColor(90);
+            doc.text("BDI aplicado (último cruzamento): Margem "+LICSYSTEM.state.lastBdi.margem+"% | Imposto "+LICSYSTEM.state.lastBdi.imposto+"% | Custo Op. "+LICSYSTEM.state.lastBdi.custoOperacional+"%", 14, y);
+            y+=6;
+          }
+          var rows=[], geral=0;
+          LICSYSTEM.state.orcItems.forEach(function(it,i){
+            if(!it.produto) return;
+            var total=LICSYSTEM.orcamento.calcTotal(it); geral+=total;
+            rows.push([i+1, it.produto, it.qtd, utils.formatBrl(it.vunit), it.pct+"%", utils.formatBrl(total)]);
+          });
+          doc.autoTable({
+            startY:y+2,
+            head:[["#","Descrição","Qtd","V. Unit","Margem","Total"]],
+            body:rows,
+            foot:[["","","","","TOTAL GERAL", utils.formatBrl(geral)]],
+            styles:{fontSize:9,cellPadding:3},
+            headStyles:{fillColor:[21,38,66],textColor:255},
+            footStyles:{fillColor:[201,162,39],textColor:[21,38,66],fontStyle:"bold"},
+            alternateRowStyles:{fillColor:[248,250,253]}
+          });
+          doc.save("proposta-comercial-licsystem.pdf");
         });
-        doc.autoTable({
-          startY:y+2,
-          head:[["#","Descrição","Qtd","V. Unit","Margem","Total"]],
-          body:rows,
-          foot:[["","","","","TOTAL GERAL", utils.formatBrl(geral)]],
-          styles:{fontSize:9,cellPadding:3},
-          headStyles:{fillColor:[21,38,66],textColor:255},
-          footStyles:{fillColor:[201,162,39],textColor:[21,38,66],fontStyle:"bold"},
-          alternateRowStyles:{fillColor:[248,250,253]}
-        });
-        doc.save("proposta-comercial-fh.pdf");
       }).catch(function(err){ alert("Falha ao gerar PDF: "+err.message); });
     },
 
     onEdit:function(i,f,val){
-      var it=FH.state.orcItems[i]; if(!it) return;
+      var it=LICSYSTEM.state.orcItems[i]; if(!it) return;
       if(f==="produto"||f==="link") it[f]=val;
       else it[f]=Number(val)||0;
       // update row total + geral without full rerender for perf
-      FH.orcamento.render();
+      LICSYSTEM.orcamento.render();
     }
   };
 
   /* ============================ CRUZAMENTO ============================ */
-  FH.cruzamento = {
-    processar:function(){
-      var termo = (el("cruzItem").value||"").trim();
-      if(!termo){ showAlert("cruzStatus","warn","Informe o item do governo."); return; }
+  LICSYSTEM.cruzamento = {
+    BATCH_SIZE: 20,
+    REQUEST_DELAY_MS: 1000,
+    _busy: false,
+
+    sleep: function(ms){
+      return new Promise(function(resolve){ setTimeout(resolve, ms); });
+    },
+
+    setProgress: function(done, total, label){
+      var bar = el("progress-bar");
+      var lab = el("progressLabel");
+      var pct = total > 0 ? Math.round((done / total) * 100) : 0;
+      if(bar){
+        bar.style.width = pct + "%";
+        bar.setAttribute("aria-valuenow", String(pct));
+      }
+      if(lab) lab.textContent = label || (done + " / " + total + " itens (" + pct + "%)");
+    },
+
+    getSelectedItens: function(){
+      var selected = [];
+      document.querySelectorAll(".orcChk:checked").forEach(function(c){
+        var i = Number(c.getAttribute("data-i"));
+        var it = LICSYSTEM.state.orcItems[i];
+        if(it && String(it.produto||"").trim()){
+          selected.push({ fonte:"orcamento", index:i, descricao:String(it.produto).trim() });
+        }
+      });
+      if(!selected.length){
+        var avulso = (el("cruzItem").value || "").trim();
+        if(avulso) selected.push({ fonte:"avulso", index:-1, descricao:avulso });
+      }
+      return selected;
+    },
+
+    resolveCep: function(){
+      return LICSYSTEM.ferramentas.getPerfil().then(function(perfil){
+        var cepPerfil = String((perfil && perfil.cep) || "").replace(/\D/g,"");
+        var cepInput = (el("cruzCep").value || "").replace(/\D/g,"");
+        if(cepPerfil && el("cruzCep") && !cepInput) el("cruzCep").value = cepPerfil;
+        return cepPerfil || cepInput || "";
+      }).catch(function(){
+        return (el("cruzCep").value || "").replace(/\D/g,"");
+      });
+    },
+
+    fetchFrete: function(itemId, cep){
+      if(!cep) return Promise.resolve({ cost:0, note:"CEP do perfil não informado" });
+      var shipUrl = "https://api.mercadolibre.com/items/"+itemId+"/shipping_options?zip_code="+cep;
+      return fetch(shipUrl).then(function(r){
+        if(!r.ok) throw new Error("HTTP "+r.status);
+        return r.json();
+      }).then(function(sj){
+        var opts = (sj && sj.options) || [];
+        var cost = 0, found = false;
+        opts.forEach(function(o){
+          if(typeof o.cost === "number"){
+            if(!found || o.cost < cost){ cost = o.cost; found = true; }
+          }
+        });
+        return { cost: found ? cost : 0, note: found ? "" : "Frete não retornado" };
+      }).catch(function(){
+        return { cost:0, note:"Falha ao consultar frete" };
+      });
+    },
+
+    calcValorFinal: function(precoMl, frete, desconto, margem, imposto, custoOp){
+      var base = (Number(precoMl)||0) + (Number(frete)||0) - (Number(desconto)||0);
+      if(base < 0) base = 0;
+      return base * (1 + ((Number(margem)||0) + (Number(imposto)||0) + (Number(custoOp)||0)) / 100);
+    },
+
+    processarItem: function(termo, opts){
+      var embalagem = opts.embalagem;
+      var cep = opts.cep;
+      var margem = opts.margem;
+      var imposto = opts.imposto;
+      var custoOp = opts.custoOp;
+      var desconto = opts.desconto;
+      var query = (utils.sanitizar(termo) + " " + embalagem).trim();
+      if(!query) return Promise.resolve(null);
+
+      var mlUrl = "https://api.mercadolibre.com/sites/MLB/search?q="+encodeURIComponent(query)+"&limit=5";
+      return fetch(mlUrl).then(function(r){
+        if(!r.ok) throw new Error("HTTP "+r.status);
+        return r.json();
+      }).then(function(j){
+        var results = ((j && j.results) || []).filter(function(it){ return it.available_quantity !== 0; });
+        if(!results.length) return { skipped:true, itemGoverno:termo, motivo:"Sem produto disponível no ML" };
+
+        results.forEach(function(it){ it.__sim = utils.similaridade(termo, it.title); });
+        results.sort(function(a,b){ return b.__sim - a.__sim; });
+        var best = results[0];
+
+        return LICSYSTEM.cruzamento.fetchFrete(best.id, cep).then(function(fr){
+          var precoMl = Number(best.price)||0;
+          var frete = Number(fr.cost)||0;
+          var custoReal = Math.max(0, precoMl + frete - desconto);
+          var precoVenda = LICSYSTEM.cruzamento.calcValorFinal(precoMl, frete, desconto, margem, imposto, custoOp);
+          var sim = best.__sim;
+          var status, cls, statusLabel;
+          if(sim>=80){ status="Match Automático"; cls="r-green"; statusLabel="b-green"; }
+          else if(sim>=60){ status="Revisão Manual"; cls="r-yellow"; statusLabel="b-yellow"; }
+          else { status="Descartado"; cls="r-red"; statusLabel="b-red"; }
+
+          var record = {
+            itemGoverno: termo,
+            produtoML: best.title,
+            idML: best.id,
+            custoProduto: precoMl,
+            frete: frete,
+            descontoFornecedor: desconto,
+            custoReal: custoReal,
+            precoVenda: precoVenda,
+            margem: margem,
+            imposto: imposto,
+            custoOperacional: custoOp,
+            embalagem: embalagem,
+            similaridade: sim,
+            status: status,
+            link: best.permalink || "",
+            cepUsado: cep,
+            processadoEm: new Date().toISOString()
+          };
+          return { record:record, cls:cls, statusLabel:statusLabel, freteNote:fr.note };
+        });
+      });
+    },
+
+    processar: function(){
+      if(LICSYSTEM.cruzamento._busy){
+        showAlert("cruzStatus","warn","Já existe um lote em andamento.");
+        return;
+      }
+
+      var itens = LICSYSTEM.cruzamento.getSelectedItens();
+      if(!itens.length){
+        showAlert("cruzStatus","warn","Selecione itens no Orçamento (checkbox) ou informe um item avulso.");
+        return;
+      }
+
       var embalagem = (document.querySelector('input[name=embalagem]:checked')||{}).value || "unidade";
-      var cep = (el("cruzCep").value||"").replace(/\D/g,"");
       var margem = Number(el("cruzMargem").value)||0;
       var imposto = Number(el("cruzImposto").value)||0;
       var custoOp = Number(el("cruzCustoOp").value)||0;
-      FH.state.lastBdi = {margem:margem, imposto:imposto, custoOperacional:custoOp};
+      var desconto = Number((el("cruzDesconto") && el("cruzDesconto").value) || 0) || 0;
+      LICSYSTEM.state.lastBdi = { margem:margem, imposto:imposto, custoOperacional:custoOp, descontoFornecedor:desconto };
 
-      // firebase mode message
       if(utils.hasFirebaseConfig()){
-        showAlert("cruzMode","info","Firebase configurado — resultados aprovados serão gravados no Realtime Database.");
+        showAlert("cruzMode","info","Lote ML — resultados aprovados serão gravados no Realtime Database. CEP do perfil será usado no frete.");
       } else {
-        showAlert("cruzMode","warn","⚙️ <b>Modo teste</b>: credenciais do Firebase em branco. Resultados exibidos apenas localmente (preencha em Configurações para persistir).");
+        hideAlert("cruzMode");
       }
 
-      var query = (utils.sanitizar(termo) + " " + embalagem).trim();
-      showAlert("cruzStatus","info",'<span class="spinner"></span> Consultando Mercado Livre…');
-      el("cruzResults").innerHTML="";
+      var btn = el("btnCruzar");
+      if(btn){ btn.disabled = true; btn.textContent = "⏳ Processando…"; }
+      LICSYSTEM.cruzamento._busy = true;
+      el("cruzResults").innerHTML = "";
+      LICSYSTEM.cruzamento.setProgress(0, itens.length, "Preparando lote de "+itens.length+" item(ns)…");
+      showAlert("cruzStatus","info",'<span class="spinner"></span> Processando lote (grupos de '+LICSYSTEM.cruzamento.BATCH_SIZE+', delay '+ (LICSYSTEM.cruzamento.REQUEST_DELAY_MS/1000) +'s)…');
 
-      var mlUrl = "https://api.mercadolibre.com/sites/MLB/search?q="+encodeURIComponent(query)+"&limit=5";
-      fetch(mlUrl).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
-        .then(function(j){
-          var results = (j && j.results) || [];
-          // discard available_quantity === 0 (undefined = ok)
-          results = results.filter(function(it){ return it.available_quantity !== 0; });
-          if(!results.length){
-            showAlert("cruzStatus","warn","Nenhum produto disponível encontrado no ML para o termo.");
-            return;
-          }
-          // similarity for each; pick best
-          results.forEach(function(it){ it.__sim = utils.similaridade(termo, it.title); });
-          results.sort(function(a,b){ return b.__sim - a.__sim; });
-          var best = results[0];
+      LICSYSTEM.cruzamento.resolveCep().then(function(cep){
+        var opts = { embalagem:embalagem, cep:cep, margem:margem, imposto:imposto, custoOp:custoOp, desconto:desconto };
+        var done = 0;
+        var total = itens.length;
+        var ok = 0, fail = 0;
 
-          // frete
-          var fretePromise = Promise.resolve({cost:0, note:"CEP não informado"});
-          if(cep){
-            var shipUrl = "https://api.mercadolibre.com/items/"+best.id+"/shipping_options?zip_code="+cep;
-            fretePromise = fetch(shipUrl).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
-              .then(function(sj){
-                var opts = (sj && sj.options) || [];
-                var cost = 0, found=false;
-                opts.forEach(function(o){
-                  if(typeof o.cost === "number"){ if(!found || o.cost<cost){ cost=o.cost; found=true; } }
-                });
-                return {cost: found?cost:0, note: found?"":"Frete não retornado"};
-              }).catch(function(){ return {cost:0, note:"Falha ao consultar frete"}; });
+        function runBatch(start){
+          if(start >= total){
+            LICSYSTEM.cruzamento._busy = false;
+            if(btn){ btn.disabled = false; btn.textContent = "⚙️ Processar Lote (ML)"; }
+            LICSYSTEM.cruzamento.setProgress(total, total, "Concluído: "+ok+" ok · "+fail+" falha(s)/sem match");
+            showAlert("cruzStatus","ok","✅ Lote finalizado — "+ok+" processado(s), "+fail+" sem resultado/erro.");
+            return Promise.resolve();
           }
 
-          fretePromise.then(function(fr){
-            var precoProduto = Number(best.price)||0;
-            var frete = Number(fr.cost)||0;
-            var custoReal = precoProduto + frete;
-            // BDI additive — ONLY from inputs
-            var precoVenda = custoReal * (1 + (margem+imposto+custoOp)/100);
-            var sim = best.__sim;
-            var status, cls, statusLabel;
-            if(sim>=80){ status="Match Automático"; cls="r-green"; statusLabel="b-green"; }
-            else if(sim>=60){ status="Revisão Manual"; cls="r-yellow"; statusLabel="b-yellow"; }
-            else { status="Descartado"; cls="r-red"; statusLabel="b-red"; }
+          var end = Math.min(start + LICSYSTEM.cruzamento.BATCH_SIZE, total);
+          var chunk = itens.slice(start, end);
+          var seq = Promise.resolve();
 
-            var record = {
-              itemGoverno:termo, produtoML:best.title, idML:best.id,
-              custoProduto:precoProduto, frete:frete, custoReal:custoReal,
-              precoVenda:precoVenda, margem:margem, imposto:imposto,
-              custoOperacional:custoOp, embalagem:embalagem, similaridade:sim,
-              status:status, link:best.permalink||"", processadoEm:new Date().toISOString()
-            };
-
-            hideAlert("cruzStatus");
-            FH.cruzamento.renderResult(record, cls, statusLabel, fr.note);
-
-            // auto-approve if green
-            if(sim>=80){ FH.cruzamento.aprovar(record, true); }
+          chunk.forEach(function(item, idxInChunk){
+            seq = seq.then(function(){
+              var globalIdx = start + idxInChunk;
+              LICSYSTEM.cruzamento.setProgress(done, total, "Grupo "+(Math.floor(start/LICSYSTEM.cruzamento.BATCH_SIZE)+1)+" — item "+(globalIdx+1)+"/"+total+": "+item.descricao.slice(0,48));
+              return LICSYSTEM.cruzamento.processarItem(item.descricao, opts).then(function(out){
+                done++;
+                if(!out || out.skipped){
+                  fail++;
+                  if(out && out.skipped){
+                    el("cruzResults").insertAdjacentHTML("afterbegin",
+                      '<div class="result-item r-red"><div class="ri-title">'+utils.escapeHtml(out.itemGoverno)+'</div>'+
+                      '<div class="ri-sub">'+utils.escapeHtml(out.motivo||"Ignorado")+'</div></div>');
+                  }
+                } else {
+                  ok++;
+                  LICSYSTEM.cruzamento.renderResult(out.record, out.cls, out.statusLabel, out.freteNote);
+                  if(out.record.similaridade >= 80) LICSYSTEM.cruzamento.aprovar(out.record, true);
+                }
+                LICSYSTEM.cruzamento.setProgress(done, total);
+                // delay 1s entre cada requisição (exceto após o último do lote total)
+                if(globalIdx < total - 1) return LICSYSTEM.cruzamento.sleep(LICSYSTEM.cruzamento.REQUEST_DELAY_MS);
+              }).catch(function(err){
+                done++; fail++;
+                el("cruzResults").insertAdjacentHTML("afterbegin",
+                  '<div class="result-item r-red"><div class="ri-title">'+utils.escapeHtml(item.descricao)+'</div>'+
+                  '<div class="ri-sub">Erro: '+utils.escapeHtml(err.message||String(err))+'</div></div>');
+                LICSYSTEM.cruzamento.setProgress(done, total);
+                if(globalIdx < total - 1) return LICSYSTEM.cruzamento.sleep(LICSYSTEM.cruzamento.REQUEST_DELAY_MS);
+              });
+            });
           });
-        })
-        .catch(function(err){
-          showAlert("cruzStatus","error","Falha ao consultar Mercado Livre ("+utils.escapeHtml(err.message)+"). Se aberto via <b>file://</b>, o CORS pode bloquear — use um servidor local.");
-        });
+
+          return seq.then(function(){ return runBatch(end); });
+        }
+
+        return runBatch(0);
+      }).catch(function(err){
+        LICSYSTEM.cruzamento._busy = false;
+        if(btn){ btn.disabled = false; btn.textContent = "⚙️ Processar Lote (ML)"; }
+        showAlert("cruzStatus","error","Falha no motor de cruzamento: "+utils.escapeHtml(err.message||String(err)));
+      });
     },
 
     renderResult:function(rec, cls, statusLabel, freteNote){
@@ -1337,21 +1722,22 @@
           '<span class="badge-status '+statusLabel+'">'+utils.escapeHtml(rec.status)+'</span></div>'+
         '</div>'+
         '<div class="ri-grid">'+
-          metric("Custo Produto", utils.formatBrl(rec.custoProduto))+
+          metric("Preço ML", utils.formatBrl(rec.custoProduto))+
           metric("Frete", utils.formatBrl(rec.frete)+(freteNote?' <span class="small muted">('+utils.escapeHtml(freteNote)+')</span>':''))+
+          metric("Desconto Forn.", utils.formatBrl(rec.descontoFornecedor||0))+
           metric("Custo Real", utils.formatBrl(rec.custoReal))+
-          metric("Preço de Venda", utils.formatBrl(rec.precoVenda))+
+          metric("Valor Final", utils.formatBrl(rec.precoVenda))+
           metric("Embalagem", rec.embalagem)+
         '</div>'+
         '<div class="btn-row" style="margin-top:12px">'+
           (rec.link?'<a class="btn btn-ghost btn-sm" target="_blank" href="'+utils.escapeHtml(rec.link)+'">🔗 Ver Anúncio</a>':'')+
-          (showForce?'<button class="btn btn-green btn-sm cruzForce">✔ Forçar Aprovação</button>':'')+
+          (showForce?'<button type="button" class="btn btn-green btn-sm cruzForce">✔ Forçar Aprovação</button>':'')+
         '</div></div>';
       box.insertAdjacentHTML("afterbegin", html);
       if(showForce){
         var node = el(id).querySelector(".cruzForce");
         node.addEventListener("click", function(){
-          FH.cruzamento.aprovar(rec, false);
+          LICSYSTEM.cruzamento.aprovar(rec, false);
           node.textContent="✔ Aprovado";
           node.disabled=true;
           node.classList.remove("btn-green"); node.classList.add("btn-ghost");
@@ -1361,52 +1747,47 @@
     },
 
     aprovar:function(rec, auto){
-      // avoid duplicates by idML+itemGoverno
-      var exists = FH.state.aprovadosCruzamento.some(function(a){ return a.idML===rec.idML && a.itemGoverno===rec.itemGoverno; });
-      if(!exists){ FH.state.aprovadosCruzamento.push(rec); }
-      // persist to firebase if configured
+      var exists = LICSYSTEM.state.aprovadosCruzamento.some(function(a){ return a.idML===rec.idML && a.itemGoverno===rec.itemGoverno; });
+      if(!exists){ LICSYSTEM.state.aprovadosCruzamento.push(rec); }
       var path = utils.buildFirebasePath();
       if(utils.hasFirebaseConfig()){
         utils.firebasePush(path, rec).then(function(){
-          showAlert("cruzStatus","ok","✅ Resultado gravado no Firebase ("+path+").");
-        }).catch(function(err){
-          showAlert("cruzStatus","warn","Aprovado localmente. Firebase indisponível: "+utils.escapeHtml(err.message));
-        });
+          /* silencioso em lote — status geral no fim */
+        }).catch(function(){ /* silencioso */ });
       } else if(auto){
-        showAlert("cruzStatus","ok","✅ Match automático aprovado (modo teste — salvo apenas na sessão).");
-      } else {
-        showAlert("cruzStatus","ok","✅ Item aprovado manualmente (modo teste).");
+        /* modo local — silencioso em lote */
       }
     },
 
     gerarProposta:function(){
-      if(!FH.state.aprovadosCruzamento.length){ alert("Nenhum item aprovado no cruzamento ainda."); return; }
+      if(!LICSYSTEM.state.aprovadosCruzamento.length){ alert("Nenhum item aprovado no cruzamento ainda."); return; }
       utils.ensureJsPdf().then(function(){
         var jsPDF = window.jspdf.jsPDF;
         var doc = new jsPDF({orientation:"landscape"});
-        fhPdfHeader(doc,"Proposta Comercial — Cruzamento ML", true);
-        var y=40;
-        if(FH.state.lastBdi){
-          doc.setFontSize(9); doc.setTextColor(90);
-          doc.text("BDI: Margem "+FH.state.lastBdi.margem+"% | Imposto "+FH.state.lastBdi.imposto+"% | Custo Op. "+FH.state.lastBdi.custoOperacional+"%", 14, y);
-          y+=6;
-        }
-        var rows=[], geral=0;
-        FH.state.aprovadosCruzamento.forEach(function(a,i){
-          geral+=Number(a.precoVenda)||0;
-          rows.push([i+1, a.itemGoverno, a.produtoML, a.similaridade+"%", utils.formatBrl(a.custoReal), utils.formatBrl(a.precoVenda)]);
+        return licsystemPdfHeader(doc,"Proposta Comercial — Cruzamento ML", true).then(function(startY){
+          var y = startY;
+          if(LICSYSTEM.state.lastBdi){
+            doc.setFontSize(9); doc.setTextColor(90);
+            doc.text("BDI: Margem "+LICSYSTEM.state.lastBdi.margem+"% | Imposto "+LICSYSTEM.state.lastBdi.imposto+"% | Custo Op. "+LICSYSTEM.state.lastBdi.custoOperacional+"% | Desc. "+utils.formatBrl(LICSYSTEM.state.lastBdi.descontoFornecedor||0), 14, y);
+            y+=6;
+          }
+          var rows=[], geral=0;
+          LICSYSTEM.state.aprovadosCruzamento.forEach(function(a,i){
+            geral+=Number(a.precoVenda)||0;
+            rows.push([i+1, a.itemGoverno, a.produtoML, a.similaridade+"%", utils.formatBrl(a.custoReal), utils.formatBrl(a.precoVenda)]);
+          });
+          doc.autoTable({
+            startY:y+2,
+            head:[["#","Item Edital","Produto ML","Sim.","Custo Real","Valor Final"]],
+            body:rows,
+            foot:[["","","","","TOTAL", utils.formatBrl(geral)]],
+            styles:{fontSize:8.5,cellPadding:3},
+            headStyles:{fillColor:[21,38,66],textColor:255},
+            footStyles:{fillColor:[201,162,39],textColor:[21,38,66],fontStyle:"bold"},
+            alternateRowStyles:{fillColor:[248,250,253]}
+          });
+          doc.save("proposta-cruzamento-licsystem.pdf");
         });
-        doc.autoTable({
-          startY:y+2,
-          head:[["#","Item Edital","Produto ML","Sim.","Custo Real","Preço Venda"]],
-          body:rows,
-          foot:[["","","","","TOTAL", utils.formatBrl(geral)]],
-          styles:{fontSize:8.5,cellPadding:3},
-          headStyles:{fillColor:[21,38,66],textColor:255},
-          footStyles:{fillColor:[201,162,39],textColor:[21,38,66],fontStyle:"bold"},
-          alternateRowStyles:{fillColor:[248,250,253]}
-        });
-        doc.save("proposta-cruzamento-fh.pdf");
       }).catch(function(err){ alert("Falha ao gerar PDF: "+err.message); });
     }
   };
@@ -1422,10 +1803,10 @@
     {key:"balanco", label:"Balanço Patrimonial"},
     {key:"contratoSocial", label:"Contrato Social"}
   ];
-  FH.cofre = {
+  LICSYSTEM.cofre = {
     data:{},
     load:function(){
-      try{ FH.cofre.data = JSON.parse(localStorage.getItem(COFRE_KEY) || "{}") || {}; }catch(e){ FH.cofre.data={}; }
+      try{ LICSYSTEM.cofre.data = JSON.parse(localStorage.getItem(COFRE_KEY) || "{}") || {}; }catch(e){ LICSYSTEM.cofre.data={}; }
     },
     statusOf:function(dateStr){
       if(!dateStr) return {cls:"b-red", txt:"Sem data"};
@@ -1440,8 +1821,8 @@
       var box = el("cofreList");
       var html="";
       COFRE_DOCS.forEach(function(doc){
-        var val = FH.cofre.data[doc.key] || "";
-        var st = FH.cofre.statusOf(val);
+        var val = LICSYSTEM.cofre.data[doc.key] || "";
+        var st = LICSYSTEM.cofre.statusOf(val);
         html+='<div class="checklist-item">'+
           '<div class="ci-name">'+utils.escapeHtml(doc.label)+'</div>'+
           '<input type="date" data-key="'+doc.key+'" value="'+utils.escapeHtml(val)+'">'+
@@ -1451,19 +1832,19 @@
       box.innerHTML = html;
       box.querySelectorAll('input[type=date]').forEach(function(inp){
         inp.addEventListener("change", function(){
-          FH.cofre.data[inp.getAttribute("data-key")] = inp.value;
-          FH.cofre.render();
+          LICSYSTEM.cofre.data[inp.getAttribute("data-key")] = inp.value;
+          LICSYSTEM.cofre.render();
         });
       });
     },
     save:function(){
-      try{ localStorage.setItem(COFRE_KEY, JSON.stringify(FH.cofre.data)); showAlertTmp("Documentos salvos."); }catch(e){}
+      try{ localStorage.setItem(COFRE_KEY, JSON.stringify(LICSYSTEM.cofre.data)); showAlertTmp("Documentos salvos."); }catch(e){}
       function showAlertTmp(){ /* subtle feedback */ }
     }
   };
 
   /* ============================ CONCORRÊNCIA ============================ */
-  FH.concorrencia = {
+  LICSYSTEM.concorrencia = {
     buscar:function(){
       var raw = (el("cnpjInput").value||"").replace(/\D/g,"");
       if(raw.length !== 14){ showAlert("cnpjStatus","warn","Informe um CNPJ válido (14 dígitos)."); return; }
@@ -1477,7 +1858,7 @@
         hideAlert("cnpjStatus");
         var sit = (j.descricao_situacao_cadastral||"").toUpperCase();
         var sitCls = sit.indexOf("ATIVA")!==-1 ? "b-green" : (sit.indexOf("BAIXADA")!==-1||sit.indexOf("INAPTA")!==-1||sit.indexOf("SUSPENSA")!==-1 ? "b-red":"b-yellow");
-        var html='<div class="card" style="margin:0;box-shadow:none;border-color:var(--fh-line)">'+
+        var html='<div class="card" style="margin:0;box-shadow:none;border-color:var(--ls-line)">'+
           '<h2 style="margin-bottom:12px">'+utils.escapeHtml(j.razao_social||j.nome_fantasia||"—")+'</h2>'+
           '<div class="ri-grid">'+
             m("Situação Cadastral", '<span class="badge-status '+sitCls+'">'+utils.escapeHtml(j.descricao_situacao_cadastral||"—")+'</span>')+
@@ -1497,23 +1878,248 @@
   };
 
   /* ============================ PDF HEADER HELPER ============================ */
-  function fhPdfHeader(doc, subtitle, landscape){
-    var w = doc.internal.pageSize.getWidth();
-    doc.setFillColor(21,38,66);
-    doc.rect(0,0,w,24,"F");
-    doc.setFillColor(201,162,39);
-    doc.rect(0,24,w,2,"F");
-    doc.setTextColor(255,255,255);
-    doc.setFont("helvetica","bold"); doc.setFontSize(16);
-    doc.text("FH CONSTRUÇÕES", 14, 12);
-    doc.setFontSize(9); doc.setFont("helvetica","normal");
-    doc.setTextColor(201,162,39);
-    doc.text("Sistema Licitação", 14, 19);
-    doc.setTextColor(21,38,66); doc.setFontSize(13); doc.setFont("helvetica","bold");
-    doc.text(subtitle||"", 14, 34);
-    doc.setFontSize(8); doc.setFont("helvetica","normal"); doc.setTextColor(120);
-    doc.text("Emitido em "+new Date().toLocaleString("pt-BR"), w-14, 12, {align:"right"});
+  // Returns Promise<number> — startY for content after header (fetches empresa_perfil from Firebase)
+  function licsystemPdfHeader(doc, subtitle, landscape){
+    return LICSYSTEM.ferramentas.getPerfil().then(function(perfil){
+      var w = doc.internal.pageSize.getWidth();
+      var nome = (perfil && perfil.nome) ? String(perfil.nome) : "LICSYSTEM";
+      var cnpj = (perfil && perfil.cnpj) ? String(perfil.cnpj) : "";
+      var telefone = (perfil && perfil.telefone) ? String(perfil.telefone) : "";
+      var endereco = (perfil && perfil.endereco) ? String(perfil.endereco) : "";
+      var logo = (perfil && perfil.logoBase64) ? String(perfil.logoBase64) : "";
+      var hasExtra = !!(cnpj || telefone || endereco);
+      var headerH = hasExtra ? 34 : 26;
+
+      doc.setFillColor(21,38,66);
+      doc.rect(0,0,w,headerH,"F");
+      doc.setFillColor(201,162,39);
+      doc.rect(0,headerH,w,2,"F");
+
+      var textX = 14;
+      if(logo && logo.indexOf("data:image") === 0){
+        try{
+          var fmt = "JPEG";
+          if(/data:image\/png/i.test(logo)) fmt = "PNG";
+          else if(/data:image\/webp/i.test(logo)) fmt = "WEBP";
+          else if(/data:image\/gif/i.test(logo)) fmt = "GIF";
+          var logoH = hasExtra ? 22 : 16;
+          var logoW = logoH * 1.4;
+          doc.addImage(logo, fmt, 10, (headerH - logoH) / 2, logoW, logoH);
+          textX = 14 + logoW + 4;
+        }catch(e){ /* logo inválido — segue sem imagem */ }
+      }
+
+      doc.setTextColor(255,255,255);
+      doc.setFont("helvetica","bold"); doc.setFontSize(13);
+      doc.text(nome, textX, hasExtra ? 11 : 12);
+      doc.setFont("helvetica","normal"); doc.setFontSize(7.5);
+      doc.setTextColor(201,162,39);
+      if(hasExtra){
+        var line2 = [cnpj ? "CNPJ "+cnpj : "", telefone ? "Tel. "+telefone : ""].filter(Boolean).join("  ·  ");
+        if(line2) doc.text(line2, textX, 18);
+        if(endereco){
+          var end = endereco.length > 90 ? endereco.slice(0,87)+"…" : endereco;
+          doc.setTextColor(185,198,219);
+          doc.text(end, textX, 25);
+        }
+      } else {
+        doc.text("LICSYSTEM", textX, 19);
+      }
+
+      doc.setFontSize(8); doc.setTextColor(185,198,219);
+      doc.text("Emitido em "+new Date().toLocaleString("pt-BR"), w-14, hasExtra ? 11 : 12, {align:"right"});
+
+      var titleY = headerH + 10;
+      doc.setTextColor(21,38,66); doc.setFontSize(13); doc.setFont("helvetica","bold");
+      doc.text(subtitle||"", 14, titleY);
+      return titleY + 6;
+    });
   }
+
+  /* ============================ FERRAMENTAS ============================ */
+  LICSYSTEM.ferramentas = {
+    _logoPending: null,
+
+    fileToBase64: function(file){
+      return new Promise(function(resolve, reject){
+        if(!file){ resolve(""); return; }
+        if(file.size > 1.5 * 1024 * 1024){
+          reject(new Error("Logo muito grande (máx. 1,5 MB)."));
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function(){ resolve(String(reader.result || "")); };
+        reader.onerror = function(){ reject(new Error("Falha ao ler o arquivo de logo.")); };
+        reader.readAsDataURL(file);
+      });
+    },
+
+    getPerfil: function(force){
+      if(!force && LICSYSTEM.state.empresaPerfil) return Promise.resolve(LICSYSTEM.state.empresaPerfil);
+      return utils.firebaseGet("empresa_perfil").then(function(val){
+        LICSYSTEM.state.empresaPerfil = val || {
+          nome: "LICSYSTEM",
+          cnpj: "",
+          endereco: "",
+          telefone: "",
+          cep: "",
+          logoBase64: ""
+        };
+        return LICSYSTEM.state.empresaPerfil;
+      }).catch(function(){
+        if(!LICSYSTEM.state.empresaPerfil){
+          LICSYSTEM.state.empresaPerfil = {
+            nome: "LICSYSTEM",
+            cnpj: "",
+            endereco: "",
+            telefone: "",
+            cep: "",
+            logoBase64: ""
+          };
+        }
+        return LICSYSTEM.state.empresaPerfil;
+      });
+    },
+
+    salvarPerfil: function(dados){
+      var payload = {
+        nome: String((dados && dados.nome) || "").trim(),
+        cnpj: String((dados && dados.cnpj) || "").trim(),
+        endereco: String((dados && dados.endereco) || "").trim(),
+        telefone: String((dados && dados.telefone) || "").trim(),
+        cep: String((dados && dados.cep) || "").replace(/\D/g,"").trim(),
+        logoBase64: String((dados && dados.logoBase64) || ""),
+        atualizadoEm: new Date().toISOString()
+      };
+      return utils.firebaseSet("empresa_perfil", payload).then(function(){
+        LICSYSTEM.state.empresaPerfil = payload;
+        return payload;
+      });
+    },
+
+    fillForm: function(perfil){
+      perfil = perfil || {};
+      if(el("empNome")) el("empNome").value = perfil.nome || "";
+      if(el("empCnpj")) el("empCnpj").value = perfil.cnpj || "";
+      if(el("empEndereco")) el("empEndereco").value = perfil.endereco || "";
+      if(el("empTelefone")) el("empTelefone").value = perfil.telefone || "";
+      if(el("empCep")) el("empCep").value = perfil.cep || "";
+      var prev = el("empLogoPreview");
+      if(prev){
+        if(perfil.logoBase64){
+          prev.src = perfil.logoBase64;
+          prev.style.display = "block";
+        } else {
+          prev.removeAttribute("src");
+          prev.style.display = "none";
+        }
+      }
+      LICSYSTEM.ferramentas._logoPending = perfil.logoBase64 || null;
+    },
+
+    carregarView: function(){
+      showAlert("ferramentasStatus","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Carregando perfil…');
+      LICSYSTEM.ferramentas.getPerfil(true).then(function(perfil){
+        LICSYSTEM.ferramentas.fillForm(perfil);
+        hideAlert("ferramentasStatus");
+      }).catch(function(err){
+        showAlert("ferramentasStatus","error","Não foi possível carregar o perfil: "+utils.escapeHtml(err.message));
+      });
+    },
+
+    onSalvarClick: function(){
+      var file = el("empLogo") && el("empLogo").files && el("empLogo").files[0];
+      showAlert("ferramentasStatus","info",'<span class="spinner"></span> Salvando perfil…');
+      var basePromise = file
+        ? LICSYSTEM.ferramentas.fileToBase64(file)
+        : Promise.resolve(LICSYSTEM.ferramentas._logoPending || (LICSYSTEM.state.empresaPerfil && LICSYSTEM.state.empresaPerfil.logoBase64) || "");
+
+      basePromise.then(function(logoBase64){
+        return LICSYSTEM.ferramentas.salvarPerfil({
+          nome: el("empNome").value,
+          cnpj: el("empCnpj").value,
+          endereco: el("empEndereco").value,
+          telefone: el("empTelefone").value,
+          cep: el("empCep") ? el("empCep").value : "",
+          logoBase64: logoBase64
+        });
+      }).then(function(){
+        showAlert("ferramentasStatus","ok","✅ Perfil salvo em empresa_perfil.");
+        if(el("empLogo")) el("empLogo").value = "";
+      }).catch(function(err){
+        showAlert("ferramentasStatus","error","Falha ao salvar: "+utils.escapeHtml(err.message));
+      });
+    },
+
+    onLogoChange: function(){
+      var file = el("empLogo") && el("empLogo").files && el("empLogo").files[0];
+      if(!file) return;
+      LICSYSTEM.ferramentas.fileToBase64(file).then(function(b64){
+        LICSYSTEM.ferramentas._logoPending = b64;
+        var prev = el("empLogoPreview");
+        if(prev){ prev.src = b64; prev.style.display = "block"; }
+      }).catch(function(err){
+        showAlert("ferramentasStatus","warn",utils.escapeHtml(err.message));
+      });
+    },
+
+    exportarBackup: function(){
+      showAlert("backupStatus","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Exportando licitacoes/…');
+      utils.firebaseGet("licitacoes").then(function(data){
+        var payload = {
+          exportadoEm: new Date().toISOString(),
+          origem: "licitacoes",
+          licitacoes: data || {}
+        };
+        var blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = "backup-licsystem-"+utils.ymd()+".json";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
+        showAlert("backupStatus","ok","✅ Backup baixado (nó licitacoes/).");
+      }).catch(function(err){
+        showAlert("backupStatus","error","Falha ao exportar: "+utils.escapeHtml(err.message));
+      });
+    },
+
+    importarBackup: function(file){
+      if(!file){ showAlert("backupStatus","warn","Selecione um arquivo JSON."); return; }
+      if(!confirm("Importar backup na raiz do Firebase?\nIsso pode sobrescrever dados existentes na raiz do Realtime Database.")) return;
+      showAlert("backupStatus","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Importando…');
+      var reader = new FileReader();
+      reader.onload = function(){
+        try{
+          var parsed = JSON.parse(String(reader.result || ""));
+          // Aceita export LICSYSTEM ({licitacoes:...}) ou JSON já no formato da raiz
+          var rootPayload = parsed;
+          if(parsed && parsed.origem === "licitacoes" && parsed.licitacoes !== undefined){
+            rootPayload = { licitacoes: parsed.licitacoes };
+            if(LICSYSTEM.state.empresaPerfil) rootPayload.empresa_perfil = LICSYSTEM.state.empresaPerfil;
+          }
+          utils.firebaseSet("/", rootPayload).then(function(){
+            showAlert("backupStatus","ok","✅ Backup importado na raiz do Firebase.");
+          }).catch(function(err){
+            showAlert("backupStatus","error","Falha no firebaseSet: "+utils.escapeHtml(err.message));
+          });
+        }catch(err){
+          showAlert("backupStatus","error","JSON inválido: "+utils.escapeHtml(err.message));
+        }
+      };
+      reader.onerror = function(){
+        showAlert("backupStatus","error","Não foi possível ler o arquivo.");
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  // API pública LICSYSTEM
+  LICSYSTEM.exportarBackup = function(){ return LICSYSTEM.ferramentas.exportarBackup(); };
+  LICSYSTEM.importarBackup = function(file){ return LICSYSTEM.ferramentas.importarBackup(file); };
+  LICSYSTEM.licsystemPdfHeader = licsystemPdfHeader;
 
   /* ============================ EVENT WIRING ============================ */
   function wireOrcFileInput(){
@@ -1521,12 +2127,12 @@
     var input = el("orcFile");
     if(!drop || !input) return;
     drop.onclick = function(){ input.click(); };
-    input.onchange = function(){ if(input.files[0]) FH.orcamento.handleFile(input.files[0]); };
+    input.onchange = function(){ if(input.files[0]) LICSYSTEM.orcamento.handleFile(input.files[0]); };
     drop.ondragover = function(e){ e.preventDefault(); drop.classList.add("drag"); };
     drop.ondragleave = function(){ drop.classList.remove("drag"); };
     drop.ondrop = function(e){
       e.preventDefault(); drop.classList.remove("drag");
-      if(e.dataTransfer.files && e.dataTransfer.files[0]) FH.orcamento.handleFile(e.dataTransfer.files[0]);
+      if(e.dataTransfer.files && e.dataTransfer.files[0]) LICSYSTEM.orcamento.handleFile(e.dataTransfer.files[0]);
     };
   }
   window.wireOrcFileInput = wireOrcFileInput;
@@ -1537,12 +2143,12 @@
       if(n) n.addEventListener(evt, fn);
     }
     // Captação
-    on("btnExtrair","click", FH.captacao.extrair);
-    on("btnMostrarTudo","click", function(){ FH.captacao.render(null, true); });
-    on("btnExportCaptacao","click", FH.captacao.exportarPdf);
-    on("btnGoogleSel","click", FH.captacao.googleSelecionados);
-    on("btnParaOrcamento","click", FH.captacao.paraOrcamento);
-    on("btnPncp","click", FH.captacao.buscarPncp);
+    on("btnExtrair","click", LICSYSTEM.captacao.extrair);
+    on("btnMostrarTudo","click", function(){ LICSYSTEM.captacao.render(null, true); });
+    on("btnExportCaptacao","click", LICSYSTEM.captacao.exportarPdf);
+    on("btnGoogleSel","click", LICSYSTEM.captacao.googleSelecionados);
+    on("btnParaOrcamento","click", LICSYSTEM.captacao.paraOrcamento);
+    on("btnPncp","click", LICSYSTEM.captacao.buscarPncp);
     on("capCheckAll","change", function(){
       var onChk = this.checked;
       document.querySelectorAll(".capChk").forEach(function(c){ c.checked = onChk; });
@@ -1560,97 +2166,208 @@
     });
 
     // Orçamento
-    on("btnAddLinha","click", FH.orcamento.addLinha);
-    on("btnLimparOrc","click", FH.orcamento.limpar);
-    on("btnPropostaOrc","click", FH.orcamento.gerarProposta);
+    on("btnAddLinha","click", LICSYSTEM.orcamento.addLinha);
+    on("btnLimparOrc","click", LICSYSTEM.orcamento.limpar);
+    on("btnPropostaOrc","click", LICSYSTEM.orcamento.gerarProposta);
+    on("orcCheckAll","change", function(){
+      var onChk = this.checked;
+      document.querySelectorAll(".orcChk").forEach(function(c){ c.checked = onChk; });
+    });
     on("orcBody","input", function(e){
       var inp = e.target.closest("input[data-i]");
       if(!inp) return;
-      FH.orcamento.onEdit(Number(inp.getAttribute("data-i")), inp.getAttribute("data-f"), inp.value);
+      LICSYSTEM.orcamento.onEdit(Number(inp.getAttribute("data-i")), inp.getAttribute("data-f"), inp.value);
     });
     on("orcBody","click", function(e){
       var del = e.target.closest(".orcDel");
-      if(del){ var i=Number(del.getAttribute("data-i")); FH.state.orcItems.splice(i,1); if(!FH.state.orcItems.length) FH.state.orcItems.push({produto:"",qtd:1,vunit:0,pct:0,link:""}); FH.orcamento.render(); return; }
+      if(del){ var i=Number(del.getAttribute("data-i")); LICSYSTEM.state.orcItems.splice(i,1); if(!LICSYSTEM.state.orcItems.length) LICSYSTEM.state.orcItems.push({produto:"",qtd:1,vunit:0,pct:0,link:""}); LICSYSTEM.orcamento.render(); return; }
       var g = e.target.closest(".orcGoogle");
-      if(g){ var it=FH.state.orcItems[Number(g.getAttribute("data-i"))]; if(it&&it.produto) window.open("https://www.google.com/search?q="+encodeURIComponent(it.produto),"_blank"); return; }
+      if(g){ var it=LICSYSTEM.state.orcItems[Number(g.getAttribute("data-i"))]; if(it&&it.produto) window.open("https://www.google.com/search?q="+encodeURIComponent(it.produto),"_blank"); return; }
       var ml = e.target.closest(".orcMl");
-      if(ml){ var it2=FH.state.orcItems[Number(ml.getAttribute("data-i"))]; if(it2&&it2.produto) window.open("https://lista.mercadolivre.com.br/"+encodeURIComponent(it2.produto),"_blank"); return; }
+      if(ml){ var it2=LICSYSTEM.state.orcItems[Number(ml.getAttribute("data-i"))]; if(it2&&it2.produto) window.open("https://lista.mercadolivre.com.br/"+encodeURIComponent(it2.produto),"_blank"); return; }
     });
     wireOrcFileInput();
 
     // Cruzamento
-    on("btnCruzar","click", FH.cruzamento.processar);
-    on("btnPropostaCruz","click", FH.cruzamento.gerarProposta);
+    on("btnCruzar","click", LICSYSTEM.cruzamento.processar);
+    on("btnPropostaCruz","click", LICSYSTEM.cruzamento.gerarProposta);
 
     // Cofre
-    on("btnSalvarCofre","click", FH.cofre.save);
+    on("btnSalvarCofre","click", LICSYSTEM.cofre.save);
 
     // Concorrência
-    on("btnCnpj","click", FH.concorrencia.buscar);
-    on("cnpjInput","keydown", function(e){ if(e.key==="Enter") FH.concorrencia.buscar(); });
+    on("btnCnpj","click", LICSYSTEM.concorrencia.buscar);
+    on("cnpjInput","keydown", function(e){ if(e.key==="Enter") LICSYSTEM.concorrencia.buscar(); });
 
-    // Config / Firebase
-    on("btnSalvarFb","click", saveFirebaseConfig);
-    loadFirebaseIntoForm();
+    // Ferramentas
+    on("btnSalvarPerfil","click", LICSYSTEM.ferramentas.onSalvarClick);
+    on("empLogo","change", LICSYSTEM.ferramentas.onLogoChange);
+    on("btnExportBackup","click", LICSYSTEM.ferramentas.exportarBackup);
+    on("btnImportBackup","click", function(){ var f=el("backupFile"); if(f) f.click(); });
+    on("backupFile","change", function(){
+      if(this.files && this.files[0]) LICSYSTEM.ferramentas.importarBackup(this.files[0]);
+      this.value = "";
+    });
 
     // Bell
     on("bell","click", function(){
-      if(window.__fhActivateView) window.__fhActivateView("captacao");
+      if(window.__lsActivateView) window.__lsActivateView("captacao");
     });
-  }
-
-  function loadFirebaseIntoForm(){
-    var c = utils.getFirebaseConfig();
-    ["apiKey","authDomain","databaseURL","projectId","storageBucket","messagingSenderId","appId"].forEach(function(k){
-      var inp = el("fb"+k.charAt(0).toUpperCase()+k.slice(1));
-      if(inp) inp.value = c[k]||"";
-    });
-  }
-  function saveFirebaseConfig(){
-    var c={};
-    ["apiKey","authDomain","databaseURL","projectId","storageBucket","messagingSenderId","appId"].forEach(function(k){
-      var inp = el("fb"+k.charAt(0).toUpperCase()+k.slice(1));
-      c[k] = inp ? inp.value.trim() : "";
-    });
-    try{ localStorage.setItem("sistema_licitacao_firebase", JSON.stringify(c)); }catch(e){}
-    if(c.databaseURL && c.apiKey){
-      showAlert("fbStatus","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Testando conexão com Firebase…');
-      utils.ensureFirebase().then(function(){
-        showAlert("fbStatus","ok","✅ Firebase inicializado com sucesso.");
-      }).catch(function(err){
-        showAlert("fbStatus","error","Credenciais salvas, mas houve erro ao conectar: "+utils.escapeHtml(err.message));
-      });
-    } else {
-      showAlert("fbStatus","warn","Credenciais salvas em branco/incompletas — sistema opera em modo teste (local).");
-    }
   }
 
   /* ============================ VIEW CHANGE HOOK ============================ */
-  FH.onViewChange = function(view){
-    if(view==="dashboard") FH.dashboard.render();
-    if(view==="orcamento") FH.orcamento.render();
-    if(view==="cofre") FH.cofre.render();
+  var VIEW_TITLES = {
+    dashboard:'Dashboard',
+    captacao:'Captação de Editais',
+    orcamento:'Orçamento',
+    cruzamento:'Cruzamento Inteligente (ML)',
+    cofre:'Cofre de Documentos',
+    concorrencia:'Análise de Concorrência',
+    arp:'Atas de Registro de Preço',
+    disputa:'Sala de Disputa',
+    catalogo:'Catálogo',
+    ferramentas:'Ferramentas'
+  };
+  LICSYSTEM.VIEW_TITLES = VIEW_TITLES;
+
+  LICSYSTEM.onViewChange = function(view){
+    LICSYSTEM.state.currentView = view || "dashboard";
+    if(view==="dashboard") LICSYSTEM.dashboard.render();
+    if(view==="orcamento") LICSYSTEM.orcamento.render();
+    if(view==="cofre") LICSYSTEM.cofre.render();
+    if(view==="ferramentas") LICSYSTEM.ferramentas.carregarView();
+    if(view==="cruzamento"){
+      LICSYSTEM.cruzamento.resolveCep().catch(function(){});
+    }
+    // Contexto da página atual → Voiceflow (após widget pronto)
+    try{
+      if(LICSYSTEM.voiceflow && LICSYSTEM.voiceflow.syncContext){
+        LICSYSTEM.voiceflow.syncContext(view);
+      }
+    }catch(e){}
   };
 
   /* ============================ BOOT ============================ */
   function boot(){
-    FH.captacao.initUf();
-    FH.orcamento.load();
-    FH.orcamento.render();
-    FH.cofre.load();
-    FH.cofre.render();
+    LICSYSTEM.captacao.initUf();
+    LICSYSTEM.orcamento.load();
+    LICSYSTEM.orcamento.render();
+    LICSYSTEM.cofre.load();
+    LICSYSTEM.cofre.render();
     wire();
-    FH.updateBell();
-    FH.dashboard.render();
-    // load Firebase only if credentials already present
-    if(utils.hasFirebaseConfig()){
-      utils.ensureFirebase().catch(function(){ /* silent — offline ok */ });
-    }
+    LICSYSTEM.updateBell();
+    LICSYSTEM.dashboard.render();
+    LICSYSTEM.state.currentView = "dashboard";
+    // Firebase: init silenciosa (sem showAlert) + cache do perfil
+    utils.ensureFirebase()
+      .then(function(){ return LICSYSTEM.ferramentas.getPerfil(true); })
+      .catch(function(){ /* silent — offline / config pendente */ })
+      .then(function(){
+        // Voiceflow só após o core do sistema (performance)
+        if(window.__licsystemInitVoiceflow) window.__licsystemInitVoiceflow();
+      });
   }
 
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
 
+})();
+</script>
+
+<!-- Voiceflow widget — carregado somente após boot() via __licsystemInitVoiceflow -->
+<script type="text/javascript">
+(function(){
+  var VF_PROJECT_ID = "6a5cf8b3de847e8e5630f8f1";
+  var VF_RUNTIME = "https://general-runtime.voiceflow.com";
+  var VF_VOICE = "https://runtime-api.voiceflow.com";
+  var VF_BUNDLE = "https://cdn.voiceflow.com/widget-next/bundle.mjs";
+  var scriptLoaded = false;
+  var bootRequested = false;
+
+  function pagePayload(view){
+    view = view || (window.LICSYSTEM && LICSYSTEM.state && LICSYSTEM.state.currentView) || "dashboard";
+    var titulo = (window.LICSYSTEM && LICSYSTEM.VIEW_TITLES && LICSYSTEM.VIEW_TITLES[view]) || view;
+    return {
+      pagina: view,
+      pagina_atual: view,
+      titulo: titulo,
+      sistema: "LICSYSTEM"
+    };
+  }
+
+  function buildConfig(view){
+    return {
+      verify: { projectID: VF_PROJECT_ID },
+      url: VF_RUNTIME,
+      voice: { url: VF_VOICE },
+      launch: {
+        event: {
+          type: "launch",
+          payload: pagePayload(view)
+        }
+      }
+    };
+  }
+
+  function ensureLICSYSTEMVoiceflow(){
+    if(!window.LICSYSTEM) window.LICSYSTEM = {};
+    var api = LICSYSTEM.voiceflow = LICSYSTEM.voiceflow || {};
+    api.ready = !!api.ready;
+    api.currentView = api.currentView || "dashboard";
+
+    api.loadChat = function(view){
+      api.currentView = view || api.currentView || "dashboard";
+      if(!(window.voiceflow && window.voiceflow.chat && typeof window.voiceflow.chat.load === "function")) return;
+      try{
+        window.voiceflow.chat.load(buildConfig(api.currentView));
+        api.ready = true;
+      }catch(e){}
+    };
+
+    api.syncContext = function(view){
+      api.currentView = view || api.currentView || "dashboard";
+      if(!api.ready) return;
+      // Reenvia contexto da página atual para a IA
+      api.loadChat(api.currentView);
+    };
+
+    return api;
+  }
+
+  function injectBundle(onReady){
+    if(scriptLoaded){
+      if(onReady) onReady();
+      return;
+    }
+    if(window.voiceflow && window.voiceflow.chat){
+      scriptLoaded = true;
+      if(onReady) onReady();
+      return;
+    }
+    var v = document.createElement("script");
+    var s = document.getElementsByTagName("script")[0];
+    v.onload = function(){
+      scriptLoaded = true;
+      if(onReady) onReady();
+    };
+    v.onerror = function(){ /* silencioso — IA opcional */ };
+    v.src = VF_BUNDLE;
+    v.type = "text/javascript";
+    s.parentNode.insertBefore(v, s);
+  }
+
+  window.__licsystemInitVoiceflow = function(){
+    bootRequested = true;
+    var api = ensureLICSYSTEMVoiceflow();
+    injectBundle(function(){
+      api.loadChat((LICSYSTEM.state && LICSYSTEM.state.currentView) || "dashboard");
+    });
+  };
+
+  // Se o boot já rodou antes deste script (race raro), inicia agora
+  if(window.LICSYSTEM && LICSYSTEM.state && bootRequested === false){
+    /* aguarda chamada explícita do boot */
+  }
 })();
 </script>
 </body>
