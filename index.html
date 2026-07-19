@@ -942,19 +942,19 @@
     return fetch(url, {
       method: "GET",
       headers: {
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        "Accept": "application/json"
       }
     }).then(function(r){
       return r.json().then(function(j){
-        if(!r.ok){
-          var msg = (j && (j.message || j.error)) || ("HTTP " + r.status);
+        // Proxy pode responder 200 com results=[] + warning — não tratar como hard fail
+        if(!r.ok && !(j && Array.isArray(j.results))){
+          var msg = (j && (j.message || j.error || j.warning)) || ("HTTP " + r.status);
           var err = new Error(msg);
           err.status = r.status;
           err.body = j;
           throw err;
         }
-        return j;
+        return j || { results: [] };
       }, function(){
         throw new Error("HTTP " + r.status + " (resposta inválida do proxy)");
       });
@@ -1621,11 +1621,9 @@
           return it.available_quantity !== 0;
         });
         if(!results.length){
-          var motivo = "Sem produto disponível no ML";
-          if(j && j.upstream_status === 403){
-            motivo = "API ML bloqueada (403) e fallback sem resultados. Redeploy com /api/ml-proxy.";
-          } else if(j && j.warning){
-            motivo = j.warning;
+          var motivo = (j && j.warning) || (j && j.message) || "Sem produto disponível no ML";
+          if(j && j.upstream_status === 403 && !(j.results && j.results.length)){
+            motivo = j.warning || "API ML bloqueada (403). Aguarde o novo deploy do proxy (fallback DuckDuckGo).";
           }
           return { skipped:true, itemGoverno:termo, motivo:motivo };
         }
