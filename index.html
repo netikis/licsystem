@@ -1096,8 +1096,10 @@
     return utils.mlProxy({ action: "search", q: q, limit: limit || 5 });
   };
 
-  utils.mlShipping = function(itemId, cep){
-    return utils.mlProxy({ action: "shipping", itemId: itemId, cep: cep || "" });
+  utils.mlShipping = function(itemId, cep, permalink){
+    var p = { action: "shipping", itemId: itemId || "", cep: cep || "" };
+    if(permalink) p.permalink = permalink;
+    return utils.mlProxy(p);
   };
 
   // build EXACT path: licitacoes/${YYYY}/${MM}/${DD}-${HHh}/resultados_cruzamento
@@ -1793,12 +1795,12 @@
       });
     },
 
-    fetchFrete: function(itemId, cep){
+    fetchFrete: function(itemId, cep, permalink){
       if(!cep) return Promise.resolve({ cost:0, note:"CEP do perfil não informado" });
-      // Sempre via proxy backend (evita 403/CORS no browser)
-      return utils.mlShipping(itemId, cep).then(function(sj){
-        if(typeof sj.cost === "number"){
-          return { cost: sj.cost, note: sj.note || "" };
+      // Sempre via proxy backend (evita 403/CORS no browser). permalink resolve ID real do anúncio.
+      return utils.mlShipping(itemId, cep, permalink).then(function(sj){
+        if(sj && typeof sj.cost === "number" && (sj.cost > 0 || (sj.options && sj.options.length) || /grátis|gratis|R\$\s*0/i.test(sj.note||""))){
+          return { cost: sj.cost, note: sj.note || "", itemId: sj.itemId || itemId };
         }
         var opts = (sj && sj.options) || [];
         var cost = 0, found = false;
@@ -1807,7 +1809,7 @@
             if(!found || o.cost < cost){ cost = o.cost; found = true; }
           }
         });
-        return { cost: found ? cost : 0, note: found ? "" : (sj.note || "Frete não retornado") };
+        return { cost: found ? cost : (Number(sj && sj.cost) || 0), note: found ? (sj.note || "") : (sj.note || "Frete não retornado"), itemId: (sj && sj.itemId) || itemId };
       }).catch(function(err){
         return { cost:0, note:"Falha ao consultar frete via proxy" + (err && err.message ? " ("+err.message+")" : "") };
       });
@@ -1846,7 +1848,7 @@
         results.sort(function(a,b){ return b.__sim - a.__sim; });
         var best = results[0];
 
-        return LICSYSTEM.cruzamento.fetchFrete(best.id, cep).then(function(fr){
+        return LICSYSTEM.cruzamento.fetchFrete(best.id, cep, best.permalink || "").then(function(fr){
           var precoMl = Number(best.price)||0;
           var frete = Number(fr.cost)||0;
           var custoReal = Math.max(0, precoMl + frete - desconto);
@@ -1857,10 +1859,16 @@
           else if(sim>=60){ status="Revisão Manual"; cls="r-yellow"; statusLabel="b-yellow"; }
           else { status="Descartado"; cls="r-red"; statusLabel="b-red"; }
 
+          var idMl = (fr && fr.itemId) || best.id;
+          var precoNote = "";
+          if(!(precoMl > 0)){
+            precoNote = "Preço não retornado pelo proxy — abra o anúncio e informe manualmente.";
+          }
+
           var record = {
             itemGoverno: termo,
             produtoML: best.title,
-            idML: best.id,
+            idML: idMl,
             custoProduto: precoMl,
             frete: frete,
             descontoFornecedor: desconto,
@@ -1877,7 +1885,8 @@
             mlSource: (j && j.source) || "proxy",
             processadoEm: new Date().toISOString()
           };
-          return { record:record, cls:cls, statusLabel:statusLabel, freteNote:fr.note };
+          var freteNote = [fr.note, precoNote].filter(Boolean).join(" · ");
+          return { record:record, cls:cls, statusLabel:statusLabel, freteNote:freteNote };
         });
       }).catch(function(err){
         var msg = (err && err.message) ? err.message : String(err);
