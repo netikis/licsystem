@@ -94,6 +94,55 @@
     opacity:0;transition:opacity .28s ease;pointer-events:none;
   }
   #sidebar-overlay.show{opacity:1;pointer-events:auto}
+  /* ---------- Auth gate ---------- */
+  body.auth-locked #app{visibility:hidden;pointer-events:none}
+  #authGate{
+    display:none;position:fixed;inset:0;z-index:9999;
+    align-items:center;justify-content:center;padding:24px;
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 10%, rgba(201,162,39,.22), transparent 55%),
+      radial-gradient(ellipse 70% 50% at 90% 80%, rgba(36,64,107,.45), transparent 50%),
+      linear-gradient(160deg, #0f1a2e 0%, var(--ls-navy) 45%, #1a2f4d 100%);
+  }
+  body.auth-locked #authGate{display:flex}
+  .auth-card{
+    width:100%;max-width:420px;background:#fff;border-radius:18px;
+    box-shadow:var(--shadow-lg);padding:32px 28px 26px;color:var(--ls-text);
+  }
+  .auth-brand{display:flex;align-items:center;gap:14px;margin-bottom:22px}
+  .auth-brand .mark{
+    width:48px;height:48px;border-radius:14px;flex-shrink:0;
+    background:linear-gradient(135deg,var(--ls-gold),var(--ls-gold-soft));
+    display:flex;align-items:center;justify-content:center;
+    font-weight:800;color:var(--ls-navy);font-size:18px;
+  }
+  .auth-brand b{display:block;font-size:18px;font-weight:800;color:var(--ls-navy)}
+  .auth-brand span{display:block;font-size:12px;color:var(--ls-muted);margin-top:2px}
+  .auth-card h2{margin:0 0 6px;font-size:20px;color:var(--ls-navy)}
+  .auth-card .auth-lead{margin:0 0 18px;font-size:13px;color:var(--ls-muted);line-height:1.45}
+  .auth-card label.fld{display:block;font-size:12px;font-weight:600;color:var(--ls-muted);margin:0 0 6px}
+  .auth-card input[type=email],
+  .auth-card input[type=password]{
+    width:100%;padding:11px 12px;border:1px solid var(--ls-line);border-radius:10px;
+    font-family:inherit;font-size:14px;margin-bottom:12px;background:#fff;
+  }
+  .auth-card input:focus{outline:0;border-color:var(--ls-gold);box-shadow:0 0 0 3px rgba(201,162,39,.15)}
+  .auth-actions{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+  .auth-actions .btn{width:100%;justify-content:center}
+  .auth-switch{margin-top:14px;text-align:center;font-size:13px;color:var(--ls-muted)}
+  .auth-switch button{
+    border:0;background:none;color:var(--ls-navy);font-weight:700;cursor:pointer;
+    font-family:inherit;font-size:13px;text-decoration:underline;padding:0;
+  }
+  .auth-hint{margin-top:14px;font-size:11px;color:var(--ls-muted);line-height:1.4}
+  #authAlert{margin-bottom:12px}
+  .top-user-row{display:flex;align-items:center;gap:10px}
+  .btn-logout{
+    border:1px solid var(--ls-line);background:#fff;color:var(--ls-navy);
+    border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;
+    font-family:inherit;cursor:pointer;
+  }
+  .btn-logout:hover{border-color:var(--ls-gold);background:#fffbeb}
   #main{flex:1;min-width:0;width:100%;max-width:100%;display:flex;flex-direction:column}
   .topbar{
     display:flex;align-items:center;justify-content:space-between;gap:12px;
@@ -332,7 +381,37 @@
   }
 </style>
 </head>
-<body>
+<body class="auth-locked">
+<!-- ============ LOGIN (bloqueia o app até autenticar) ============ -->
+<div id="authGate" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="mark">LS</div>
+      <div>
+        <b>LICSYSTEM</b>
+        <span>Acesso restrito</span>
+      </div>
+    </div>
+    <h2 id="authTitle">Entrar</h2>
+    <p class="auth-lead" id="authLead">Informe e-mail e senha para acessar o sistema.</p>
+    <div id="authAlert" class="alert"></div>
+    <form id="authForm" autocomplete="on">
+      <label class="fld" for="authEmail">E-mail</label>
+      <input type="email" id="authEmail" name="email" required placeholder="seu@email.com" autocomplete="username" />
+      <label class="fld" for="authPass">Senha</label>
+      <input type="password" id="authPass" name="password" required placeholder="••••••••" minlength="6" autocomplete="current-password" />
+      <div class="auth-actions">
+        <button type="submit" class="btn btn-gold" id="authSubmit">Entrar</button>
+      </div>
+    </form>
+    <p class="auth-hint">
+      Crie usuários em <b>Firebase Console → Authentication → Users → Add user</b>.
+      Ative o provedor <b>E-mail/senha</b>. Em Authorized domains, inclua <code>licsystem.vercel.app</code> e <code>localhost</code>.
+      Publique esta versão na Vercel. Regras do banco: arquivo <code>database.rules.json</code> (só quem está logado lê/grava).
+    </p>
+  </div>
+</div>
+
 <div id="app">
   <!-- ============ SIDEBAR ============ -->
   <aside id="sidebar" aria-label="Menu principal">
@@ -381,6 +460,7 @@
     function toggleSidebar(){ setSidebar(!document.body.classList.contains("sidebar-open")); }
 
     function activate(view){
+      if(document.body.classList.contains("auth-locked")) return;
       var btns=document.querySelectorAll('#nav button');
       for(var i=0;i<btns.length;i++){
         btns[i].classList.toggle('active', btns[i].getAttribute('data-view')===view);
@@ -444,9 +524,12 @@
         <div class="bell" id="bell" title="Alertas PNCP">
           🔔<span class="badge zero" id="bellBadge">0</span>
         </div>
-        <div class="top-user">
-          <div style="font-weight:700;color:var(--ls-navy);font-size:13px">LICSYSTEM</div>
-          <div class="small muted">Setor de Licitações</div>
+        <div class="top-user-row">
+          <div class="top-user">
+            <div style="font-weight:700;color:var(--ls-navy);font-size:13px" id="topUserName">LICSYSTEM</div>
+            <div class="small muted" id="topUserEmail">Setor de Licitações</div>
+          </div>
+          <button type="button" class="btn-logout" id="btnLogout" title="Sair" style="display:none">Sair</button>
         </div>
       </div>
     </div>
@@ -1026,6 +1109,7 @@
     if(!utils.hasFirebaseConfig()) return Promise.reject(new Error("firebase-config-vazio"));
     if(_fbInit) return _fbInit;
     _fbInit = utils.loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js")
+      .then(function(){ return utils.loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"); })
       .then(function(){ return utils.loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"); })
       .then(function(){
         if(!window.firebase.apps.length){
@@ -1141,6 +1225,7 @@
   };
 
   LICSYSTEM.state = {
+    authUser: null,
     orcItems: [],
     aprovadosCruzamento: [],
     pncpAlerts: [],
@@ -2572,8 +2657,139 @@
     }catch(e){}
   };
 
+  /* ============================ AUTH (Firebase) ============================ */
+  LICSYSTEM.auth = {
+    _booted: false,
+    _ready: false,
+
+    mapError: function(err){
+      var code = (err && err.code) || "";
+      var map = {
+        "auth/invalid-email": "E-mail inválido.",
+        "auth/user-disabled": "Usuário desativado.",
+        "auth/user-not-found": "Usuário não encontrado. Crie o usuário no Firebase Console.",
+        "auth/wrong-password": "Senha incorreta.",
+        "auth/invalid-credential": "E-mail ou senha incorretos.",
+        "auth/operation-not-allowed": "Ative o provedor E-mail/senha no Firebase Console → Authentication.",
+        "auth/too-many-requests": "Muitas tentativas. Aguarde e tente de novo.",
+        "auth/network-request-failed": "Falha de rede. Verifique a conexão.",
+        "auth/unauthorized-domain": "Domínio não autorizado. Em Authentication → Settings, adicione licsystem.vercel.app."
+      };
+      return map[code] || ((err && err.message) ? err.message : "Falha na autenticação.");
+    },
+
+    lock: function(){
+      document.body.classList.add("auth-locked");
+      var btn = el("btnLogout");
+      if(btn) btn.style.display = "none";
+    },
+
+    unlock: function(user){
+      document.body.classList.remove("auth-locked");
+      LICSYSTEM.state.authUser = user || null;
+      var email = (user && user.email) || "";
+      var name = email ? email.split("@")[0] : "LICSYSTEM";
+      if(el("topUserName")) el("topUserName").textContent = name;
+      if(el("topUserEmail")) el("topUserEmail").textContent = email || "Setor de Licitações";
+      var btn = el("btnLogout");
+      if(btn) btn.style.display = "";
+    },
+
+    requireAuth: function(){
+      return !!(LICSYSTEM.state.authUser && LICSYSTEM.state.authUser.uid);
+    },
+
+    login: function(email, pass){
+      return utils.ensureFirebase().then(function(fb){
+        return fb.auth().signInWithEmailAndPassword(email, pass);
+      });
+    },
+
+    logout: function(){
+      return utils.ensureFirebase().then(function(fb){
+        return fb.auth().signOut();
+      }).then(function(){
+        LICSYSTEM.state.authUser = null;
+        LICSYSTEM.auth.lock();
+        showAlert("authAlert","ok","Você saiu do sistema.");
+      }).catch(function(err){
+        showAlert("authAlert","error", utils.escapeHtml(LICSYSTEM.auth.mapError(err)));
+      });
+    },
+
+    onSubmit: function(ev){
+      if(ev) ev.preventDefault();
+      var email = ((el("authEmail") && el("authEmail").value) || "").trim();
+      var pass = (el("authPass") && el("authPass").value) || "";
+      if(!email || !pass){
+        showAlert("authAlert","warn","Preencha e-mail e senha.");
+        return;
+      }
+      if(pass.length < 6){
+        showAlert("authAlert","warn","A senha deve ter no mínimo 6 caracteres.");
+        return;
+      }
+      var btn = el("authSubmit");
+      if(btn){ btn.disabled = true; btn.textContent = "Aguarde…"; }
+      showAlert("authAlert","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Validando…');
+
+      LICSYSTEM.auth.login(email, pass).then(function(){
+        hideAlert("authAlert");
+        if(el("authPass")) el("authPass").value = "";
+      }).catch(function(err){
+        showAlert("authAlert","error", utils.escapeHtml(LICSYSTEM.auth.mapError(err)));
+      }).then(function(){
+        if(btn){ btn.disabled = false; btn.textContent = "Entrar"; }
+      });
+    },
+
+    wire: function(){
+      var form = el("authForm");
+      if(form) form.addEventListener("submit", LICSYSTEM.auth.onSubmit);
+      var out = el("btnLogout");
+      if(out) out.addEventListener("click", function(){
+        if(confirm("Sair do LICSYSTEM?")) LICSYSTEM.auth.logout();
+      });
+    },
+
+    start: function(onReady){
+      LICSYSTEM.auth.wire();
+      LICSYSTEM.auth.lock();
+
+      return utils.ensureFirebase().then(function(fb){
+        return new Promise(function(resolve){
+          var first = true;
+          fb.auth().onAuthStateChanged(function(user){
+            if(user){
+              LICSYSTEM.auth.unlock(user);
+              if(!LICSYSTEM.auth._booted){
+                LICSYSTEM.auth._booted = true;
+                if(typeof onReady === "function") onReady(user);
+              }
+            } else {
+              LICSYSTEM.state.authUser = null;
+              LICSYSTEM.auth.lock();
+            }
+            if(first){
+              first = false;
+              LICSYSTEM.auth._ready = true;
+              resolve(user || null);
+            }
+          });
+        });
+      }).catch(function(err){
+        LICSYSTEM.auth.lock();
+        showAlert("authAlert","error",
+          "Não foi possível carregar o Firebase Auth: "+utils.escapeHtml(err.message||String(err))+
+          "<br/><span class=\"small\">Confira a conexão e se o Authentication está ativo no projeto fhlicitacoes-382b6.</span>"
+        );
+        throw err;
+      });
+    }
+  };
+
   /* ============================ BOOT ============================ */
-  function boot(){
+  function bootApp(){
     LICSYSTEM.captacao.initUf();
     LICSYSTEM.orcamento.load();
     LICSYSTEM.orcamento.render();
@@ -2583,14 +2799,17 @@
     LICSYSTEM.updateBell();
     LICSYSTEM.dashboard.render();
     LICSYSTEM.state.currentView = "dashboard";
-    // Firebase: init silenciosa (sem showAlert) + cache do perfil
-    utils.ensureFirebase()
-      .then(function(){ return LICSYSTEM.ferramentas.getPerfil(true); })
-      .catch(function(){ /* silent — offline / config pendente */ })
-      .then(function(){
-        // Voiceflow só após o core do sistema (performance)
-        if(window.__licsystemInitVoiceflow) window.__licsystemInitVoiceflow();
-      });
+    LICSYSTEM.ferramentas.getPerfil(true).catch(function(){});
+    if(window.__licsystemInitVoiceflow) window.__licsystemInitVoiceflow();
+  }
+
+  function boot(){
+    LICSYSTEM.state.authUser = null;
+    LICSYSTEM.auth.start(function(){
+      bootApp();
+    }).catch(function(){
+      // permanece na tela de login
+    });
   }
 
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", boot);
