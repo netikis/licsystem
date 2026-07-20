@@ -1092,6 +1092,24 @@
     });
   };
 
+  /** Limpa termo do edital para busca ML (ex.: "12A 20mm x 9mm"). */
+  utils.mlQueryFromTermo = function(termo, embalagem){
+    var raw = String(termo == null ? "" : termo)
+      .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+      .replace(/(\d)A(\d)/gi, "$1 a $2")
+      .replace(/(\d)A\b/gi, "$1 a")
+      .replace(/\bx\b/gi, " ");
+    var s = utils.sanitizar(raw);
+    var emb = utils.sanitizar(embalagem || "");
+    // embalagem generica nao ajuda na busca
+    if(/^(unidade|unid|und|un|peca|pecas)$/i.test(emb)) emb = "";
+    var q = (s + (emb ? " " + emb : "")).replace(/\s+/g, " ").trim();
+    // evita query gigante de especificacao
+    var words = q.split(" ").filter(Boolean);
+    if(words.length > 8) words = words.slice(0, 8);
+    return words.join(" ");
+  };
+
   utils.mlSearch = function(q, limit){
     return utils.mlProxy({ action: "search", q: q, limit: limit || 5 });
   };
@@ -1828,7 +1846,7 @@
       var imposto = opts.imposto;
       var custoOp = opts.custoOp;
       var desconto = opts.desconto;
-      var query = (utils.sanitizar(termo) + " " + embalagem).trim();
+      var query = utils.mlQueryFromTermo(termo, embalagem);
       if(!query) return Promise.resolve(null);
 
       // Busca SOMENTE pelo proxy (/api/ml-proxy) — nunca direto no Mercado Livre
@@ -1836,64 +1854,90 @@
         var results = ((j && j.results) || []).filter(function(it){
           return it.available_quantity !== 0;
         });
+        // Se veio vazio, tenta so as 3 primeiras palavras (mais generico)
         if(!results.length){
-          var motivo = (j && j.warning) || (j && j.message) || "Sem produto disponível no ML";
-          if(j && j.upstream_status === 403 && !(j.results && j.results.length)){
-            motivo = j.warning || "API ML bloqueada (403). Aguarde o novo deploy do proxy (fallback DuckDuckGo).";
+          var shortQ = query.split(/\s+/).slice(0, 3).join(" ");
+          if(shortQ && shortQ !== query){
+            return utils.mlSearch(shortQ, 5).then(function(j2){
+              return LICSYSTEM.cruzamento._finishMlItem(termo, opts, j2 || j, shortQ);
+            });
           }
-          return { skipped:true, itemGoverno:termo, motivo:motivo };
         }
-
-        results.forEach(function(it){ it.__sim = utils.similaridade(termo, it.title); });
-        results.sort(function(a,b){ return b.__sim - a.__sim; });
-        var best = results[0];
-
-        return LICSYSTEM.cruzamento.fetchFrete(best.id, cep, best.permalink || "").then(function(fr){
-          var precoMl = Number(best.price)||0;
-          var frete = Number(fr.cost)||0;
-          var custoReal = Math.max(0, precoMl + frete - desconto);
-          var precoVenda = LICSYSTEM.cruzamento.calcValorFinal(precoMl, frete, desconto, margem, imposto, custoOp);
-          var sim = best.__sim;
-          var status, cls, statusLabel;
-          if(sim>=80){ status="Match Automático"; cls="r-green"; statusLabel="b-green"; }
-          else if(sim>=60){ status="Revisão Manual"; cls="r-yellow"; statusLabel="b-yellow"; }
-          else { status="Descartado"; cls="r-red"; statusLabel="b-red"; }
-
-          var idMl = (fr && fr.itemId) || best.id;
-          var precoNote = "";
-          if(!(precoMl > 0)){
-            precoNote = "Preço não retornado pelo proxy — abra o anúncio e informe manualmente.";
-          }
-
-          var record = {
-            itemGoverno: termo,
-            produtoML: best.title,
-            idML: idMl,
-            custoProduto: precoMl,
-            frete: frete,
-            descontoFornecedor: desconto,
-            custoReal: custoReal,
-            precoVenda: precoVenda,
-            margem: margem,
-            imposto: imposto,
-            custoOperacional: custoOp,
-            embalagem: embalagem,
-            similaridade: sim,
-            status: status,
-            link: best.permalink || "",
-            cepUsado: cep,
-            mlSource: (j && j.source) || "proxy",
-            processadoEm: new Date().toISOString()
-          };
-          var freteNote = [fr.note, precoNote].filter(Boolean).join(" · ");
-          return { record:record, cls:cls, statusLabel:statusLabel, freteNote:freteNote };
-        });
+        return LICSYSTEM.cruzamento._finishMlItem(termo, opts, j, query);
       }).catch(function(err){
         var msg = (err && err.message) ? err.message : String(err);
         if(/failed to fetch|NetworkError|Load failed/i.test(msg)){
-          msg = "Proxy /api/ml-proxy indisponível. Faça deploy na Vercel com a pasta api/.";
+          msg = "Proxy /api/ml-proxy indisponivel. Faca deploy na Vercel com a pasta api/.";
         }
         throw new Error(msg);
+      });
+    },
+
+    _finishMlItem: function(termo, opts, j, queryUsada){
+      var embalagem = opts.embalagem;
+      var cep = opts.cep;
+      var margem = opts.margem;
+      var imposto = opts.imposto;
+      var custoOp = opts.custoOp;
+      var desconto = opts.desconto;
+      var results = ((j && j.results) || []).filter(function(it){
+        return it.available_quantity !== 0;
+      });
+      if(!results.length){
+        var motivo = "Sem produto no ML para \"" + (queryUsada || termo) + "\".";
+        if(j && j.upstream_status === 403){
+          motivo += " API oficial bloqueada — e necessario redeploy do proxy (pasta api/) na Vercel.";
+        } else if(j && j.warning){
+          motivo += " " + j.warning;
+        }
+        return { skipped:true, itemGoverno:termo, motivo:motivo };
+      }
+
+      results.forEach(function(it){ it.__sim = utils.similaridade(termo, it.title); });
+      results.sort(function(a,b){ return b.__sim - a.__sim; });
+      var best = results[0];
+
+      return LICSYSTEM.cruzamento.fetchFrete(best.id, cep, best.permalink || "").then(function(fr){
+        var precoMl = Number(best.price)||0;
+        var frete = Number(fr.cost)||0;
+        var custoReal = Math.max(0, precoMl + frete - desconto);
+        var precoVenda = LICSYSTEM.cruzamento.calcValorFinal(precoMl, frete, desconto, margem, imposto, custoOp);
+        var sim = best.__sim;
+        var status, cls, statusLabel;
+        if(sim>=80){ status="Match Automatico"; cls="r-green"; statusLabel="b-green"; }
+        else if(sim>=60){ status="Revisao Manual"; cls="r-yellow"; statusLabel="b-yellow"; }
+        else { status="Descartado"; cls="r-red"; statusLabel="b-red"; }
+
+        var idMl = (fr && fr.itemId) || best.id;
+        var notes = [];
+        if(fr && fr.note) notes.push(fr.note);
+        if(!(precoMl > 0)) notes.push("Preco nao retornado — informe manualmente.");
+        if(j && j.source === "public_index" && precoMl > 0){
+          /* silencioso: fallback ok com preco */
+        }
+
+        var record = {
+          itemGoverno: termo,
+          produtoML: best.title,
+          idML: idMl,
+          custoProduto: precoMl,
+          frete: frete,
+          descontoFornecedor: desconto,
+          custoReal: custoReal,
+          precoVenda: precoVenda,
+          margem: margem,
+          imposto: imposto,
+          custoOperacional: custoOp,
+          embalagem: embalagem,
+          similaridade: sim,
+          status: status,
+          link: best.permalink || "",
+          cepUsado: cep,
+          mlSource: (j && j.source) || "proxy",
+          queryUsada: queryUsada || "",
+          processadoEm: new Date().toISOString()
+        };
+        return { record:record, cls:cls, statusLabel:statusLabel, freteNote:notes.join(" · ") };
       });
     },
 
