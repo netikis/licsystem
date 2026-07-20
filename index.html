@@ -792,6 +792,137 @@
     return words.join(" ").replace(/\s+/g," ").trim();
   };
 
+  var RE_INICIO_SPEC_EDITAL = [
+    /^deve\s+(possuir|permitir|ser|apresentar|garantir|conter)/i,
+    /^apresenta(r?\s+)?(boa|alta|consist)/i,
+    /^sendo\s+indicado/i,
+    /^fixa(cao|ção)\s/i,
+    /^proporcionando/i,
+    /^garantindo/i,
+    /^firme\s+e\s+dur/i,
+    /^colagem\b/i,
+    /^coladas,\s/i,
+    /^uni[aã]o\s+por\s+contato/i,
+    /^ader[eê]ncia\s+imediata/i,
+    /^embalagem\s+contendo/i,
+    /^devidamente\s+lacrad/i,
+    /^consist[eê]ncia\s+homog/i,
+    /^f[aá]cil\s+aplica[cç][aã]o/i,
+    /^pincel,\s*esp[aá]tula/i,
+    /^e\s+boas?\s+/i,
+    /jun[cç][aã]o\s+das\s+pe[cç]as/i,
+    /cisalhamento/i,
+    /evapora[cç][aã]o\s+do\s+solvente/i,
+    /tempo\s+de\s+secagem/i,
+    /envelhecimento\s+natural/i,
+    /identifica[cç][aã]o\s+do\s+fabricante/i,
+    /resist[eê]ncia\s+final/i,
+    /resist[eê]ncia\s+ao\s+cisalhamento/i
+  ];
+
+  /** Trecho de descrição (sem qtd/UN) que parece parágrafo de especificação. */
+  utils.isTextoSpecEdital = function (texto) {
+    texto = String(texto == null ? "" : texto).replace(/\s+/g, " ").trim();
+    if (!texto || texto.length < 4) return false;
+
+    var i;
+    for (i = 0; i < RE_INICIO_SPEC_EDITAL.length; i++) {
+      if (RE_INICIO_SPEC_EDITAL[i].test(texto)) return true;
+    }
+
+    if (/^[a-záàâãéêíóôúç]/.test(texto.charAt(0)) && texto.length > 35) return true;
+    if (/^(e|ou|com|para|em|na|no|de|da|do|das|dos|ap[oó]s)\s+/i.test(texto) && texto.length > 25) {
+      return true;
+    }
+
+    return false;
+  };
+
+  /** Linha completa: sem formato planilha ou descrição = especificação. */
+  utils.isLinhaSpecEdital = function (line) {
+    var raw = String(line == null ? "" : line).replace(/\s+/g, " ").trim();
+    if (!raw || raw.length < 4) return true;
+
+    var temPlanilha = /^\d{1,3}(?:\.\d{3})*,\d{3}\s+(UN|UND|UNI|UNID)\s+/i.test(raw);
+    if (!temPlanilha) return true;
+
+    var m = raw.match(/^\d{1,3}(?:\.\d{3})*,\d{3}\s+(?:UN|UND|UNI|UNID)\s+(.+)$/i);
+    return utils.isTextoSpecEdital(m ? m[1] : raw);
+  };
+
+  /** Só linhas válidas de produto (qtd + UN + descrição, sem bloco de especificação). */
+  utils.isLinhaProdutoEdital = function (line) {
+    var fmt = utils.formatLinhaEdital(line);
+    if (!fmt) return false;
+    if (utils.isLinhaSpecEdital(fmt)) return false;
+    if (!/^\d{1,3}(?:\.\d{3})*,\d{3}\s+(UN|UND|UNI|UNID)\s+/i.test(fmt)) return false;
+    return true;
+  };
+
+  /**
+   * Descrição: mantém "Produto - Produto" curto; remove só bloco técnico longo após " - ".
+   */
+  utils.enxugarDescricaoEdital = function (desc) {
+    desc = String(desc || "").replace(/\s+/g, " ").trim();
+    if (!desc) return "";
+    var specHint =
+      /^(o\s+produto|indicado\s+para|destinado|caracter[ií]sticas|conformidade|normas?\s+t[eé]cnicas|deve\s+(ser|possuir|permitir|apresentar|garantir|conter)|fabricado|aproximadamente|comprimento|tratamento|ergon[oô]mico|isolante|resist[eê]ncia|garantir|submetido|fixa(cao|ção)|proporcionando|garantindo|apresenta|sendo\s+indicado|embalagem\s+contendo)/i;
+    var idx = desc.search(/\s+[-–]\s+/);
+    if (idx === -1) return desc;
+    var left = desc.slice(0, idx).trim();
+    var right = desc.slice(idx).replace(/^\s+[-–]\s+/, "").trim();
+    if (!right) return left;
+    if (specHint.test(right) || right.length > 85) return left;
+    var lf = utils.fold(left).toLowerCase();
+    var rf = utils.fold(right).toLowerCase();
+    if (rf.indexOf(lf.slice(0, Math.min(lf.length, 14))) === 0 || right.length <= left.length * 1.6) {
+      return desc.trim();
+    }
+    return left;
+  };
+
+  /**
+   * Formato planilha do edital: "100,000 UN Viga 5x15mt - Viga 5x15mt"
+   * (sem código do item nem preços unitário/total).
+   */
+  utils.formatLinhaEdital = function (raw) {
+    var s = String(raw == null ? "" : raw).replace(/\s+/g, " ").trim();
+    if (!s) return null;
+
+    var m = s.match(/^(\d{1,5})\s+(\d{1,3}(?:\.\d{3})*,\d{3})\s+(UN|UND|UNI|UNID)\s+(.+)$/i);
+    if (m) {
+      var desc = m[4]
+        .replace(/\s+\d{1,3}(?:\.\d{3})*,\d{2,4}\s+\d{1,3}(?:\.\d{3})*,\d{2}\s*$/, "")
+        .trim();
+      desc = utils.enxugarDescricaoEdital(desc);
+      if (desc.length < 2 || utils.isTextoSpecEdital(desc)) return null;
+      return m[2] + " " + m[3].toUpperCase() + " " + desc;
+    }
+
+    m = s.match(/^(\d{1,3}(?:\.\d{3})*,\d{3})\s+(UN|UND|UNI|UNID)\s+(.+)$/i);
+    if (m) {
+      var desc2 = m[3]
+        .replace(/\s+\d{1,3}(?:\.\d{3})*,\d{2,4}\s+\d{1,3}(?:\.\d{3})*,\d{2}\s*$/, "")
+        .trim();
+      desc2 = utils.enxugarDescricaoEdital(desc2);
+      if (desc2.length < 2 || utils.isTextoSpecEdital(desc2)) return null;
+      return m[1] + " " + m[2].toUpperCase() + " " + desc2;
+    }
+
+    return null;
+  };
+
+  /** Termo curto para busca (opcional): remove qtd/UN e pega trecho antes do " - ". */
+  utils.nomeProdutoEdital = function (line) {
+    var fmt = utils.formatLinhaEdital(line) || String(line || "").trim();
+    var m = fmt.match(/^\d{1,3}(?:\.\d{3})*,\d{3}\s+(?:UN|UND|UNI|UNID)\s+(.+)$/i);
+    if (m) {
+      var d = m[1].split(/\s+[-–]\s+/)[0].trim();
+      return d.toLowerCase();
+    }
+    return fmt.toLowerCase();
+  };
+
   utils.levenshtein = function(a,b){
     a = String(a||""); b = String(b||"");
     var m = a.length, n = b.length;
@@ -1123,41 +1254,98 @@
       sel.innerHTML = html;
     },
 
-    // Separa cada item do PDF pelo padrão: início de linha + número + . ) ou -
-    splitEdital:function(text){
-      var src = String(text || "").replace(/\r\n?/g, "\n");
-      var re = /(^|\n)\s*(\d{1,5})[\.\)\-]\s+/g;
-      var matches = [];
-      var m;
-      while((m = re.exec(src)) !== null){
-        matches.push({ index: m.index, len: m[0].length, num: m[2] });
+    // Planilha do edital: uma linha = "100,000 UN Viga 5x15mt - Viga 5x15mt"
+    splitEdital: function (text) {
+      function limparPagina(s) {
+        return String(s || "")
+          .replace(/\bP[aá]gina\s*:\s*\d+\s*\/\s*\d+/gi, "\n")
+          .replace(/\u00A0/g, " ")
+          .replace(/[\t ]+/g, " ")
+          .trim();
       }
 
-      var chunks = [];
-      if(!matches.length){
-        src.split("\n").forEach(function(ln){
-          ln = ln.replace(/\s+/g, " ").trim();
-          if(ln) chunks.push(ln);
+      function cortarPorIndices(chunk, starts) {
+        starts.sort(function (a, b) {
+          return a - b;
         });
-      } else {
-        for(var i=0;i<matches.length;i++){
-          var start = matches[i].index;
-          if(src.charAt(start) === "\n") start++;
-          var end = (i + 1 < matches.length) ? matches[i + 1].index : src.length;
-          var chunk = src.slice(start, end).replace(/\s+/g, " ").trim();
-          if(chunk) chunks.push(chunk);
+        var uniq = [];
+        for (var i = 0; i < starts.length; i++) {
+          if (i === 0 || starts[i] - uniq[uniq.length - 1] > 12) uniq.push(starts[i]);
         }
+        var out = [];
+        for (var j = 0; j < uniq.length; j++) {
+          var end = j + 1 < uniq.length ? uniq[j + 1] : chunk.length;
+          out.push(chunk.slice(uniq[j], end).trim());
+        }
+        return out;
       }
 
-      var seen = {}, out = [];
-      chunks.forEach(function(l){
-        if(l.length < 4) return;
-        // BLACKLIST via sanitizar — descarta cabeçalhos/rodapés do edital
-        if(!utils.sanitizar(l)) return;
-        var k = l.toLowerCase();
-        if(seen[k]) return;
+      /** Só quebra onde começa novo item: código + qtd + UN/UND */
+      function splitChunkPlanilha(chunk) {
+        chunk = limparPagina(chunk);
+        if (!chunk) return [];
+
+        var direto = utils.formatLinhaEdital(chunk);
+        if (direto && utils.isLinhaProdutoEdital(direto)) return [direto];
+
+        var starts = [];
+        var reStart = /(?:^|\s)(\d{3,5})\s+(\d{1,3}(?:\.\d{3})*,\d{3})\s+(UN|UND|UNI|UNID)\s+/gi;
+        var m;
+        while ((m = reStart.exec(chunk)) !== null) {
+          var pos = m.index;
+          if (m[0].charAt(0) === " " || m[0].charAt(0) === "\t") pos = m.index + 1;
+          starts.push(pos);
+        }
+
+        if (starts.length < 2) {
+          var reParen = /(?:^|\s)(\d{2,5})\s*[\)\.]\s*[-–]\s+/g;
+          while ((m = reParen.exec(chunk)) !== null) {
+            var p2 = m.index;
+            if (m[0].charAt(0) === " ") p2 = m.index + 1;
+            starts.push(p2);
+          }
+        }
+
+        if (starts.length < 2) {
+          if (starts.length === 1) {
+            var solo = chunk.slice(starts[0]).trim();
+            var fs = utils.formatLinhaEdital(solo);
+            if (fs && utils.isLinhaProdutoEdital(fs)) return [fs];
+          }
+          return [];
+        }
+
+        var partes = cortarPorIndices(chunk, starts);
+        var fmtParts = [];
+        for (var i = 0; i < partes.length; i++) {
+          var f = utils.formatLinhaEdital(partes[i]);
+          if (f && utils.isLinhaProdutoEdital(f)) fmtParts.push(f);
+        }
+        return fmtParts;
+      }
+
+      var t = limparPagina(text).replace(/\r\n?/g, "\n");
+      var rawLines = t.split(/\n+/);
+      var merged = [];
+      for (var r = 0; r < rawLines.length; r++) {
+        var ln = rawLines[r].trim();
+        if (!ln) continue;
+        var parts = splitChunkPlanilha(ln);
+        for (var p = 0; p < parts.length; p++) merged.push(parts[p]);
+      }
+
+      var seen = {};
+      var out = [];
+      merged.forEach(function (l) {
+        l = String(l || "").replace(/\s+/g, " ").trim();
+        var fmt = utils.formatLinhaEdital(l);
+        if (!fmt || !utils.isLinhaProdutoEdital(fmt)) return;
+        if (!utils.sanitizar(fmt)) return;
+        if (/^(P[aá]gina|Total|Subtotal|Valor|Prefeitura|Estado|Munic[ií]pio)\b/i.test(fmt)) return;
+        var k = fmt.toLowerCase();
+        if (seen[k]) return;
         seen[k] = 1;
-        out.push(l);
+        out.push(fmt);
       });
       return out;
     },
@@ -1178,8 +1366,32 @@
                 chain = chain.then(function(){
                   return pdf.getPage(pg).then(function(page){
                     return page.getTextContent().then(function(tc){
-                      var strs = tc.items.map(function(it){ return it.str; });
-                      pages.push(strs.join(" "));
+                      var items = (tc.items || []).slice();
+                      items.sort(function (a, b) {
+                        var ya = a.transform ? a.transform[5] : 0;
+                        var yb = b.transform ? b.transform[5] : 0;
+                        if (Math.abs(ya - yb) > 3) return yb - ya;
+                        var xa = a.transform ? a.transform[4] : 0;
+                        var xb = b.transform ? b.transform[4] : 0;
+                        return xa - xb;
+                      });
+                      var pageLines = [];
+                      var buf = [];
+                      var lastY = null;
+                      for (var ii = 0; ii < items.length; ii++) {
+                        var it = items[ii];
+                        var str = it.str || "";
+                        if (!str.trim()) continue;
+                        var y = it.transform ? it.transform[5] : 0;
+                        if (lastY !== null && Math.abs(y - lastY) > 3) {
+                          if (buf.length) pageLines.push(buf.join(" ").replace(/\s+/g, " ").trim());
+                          buf = [];
+                        }
+                        buf.push(str);
+                        lastY = y;
+                      }
+                      if (buf.length) pageLines.push(buf.join(" ").replace(/\s+/g, " ").trim());
+                      pages.push(pageLines.join("\n"));
                     });
                   });
                 });
@@ -1190,7 +1402,7 @@
               var items = LICSYSTEM.captacao.splitEdital(full);
               LICSYSTEM.state.captacaoLines = items;
               LICSYSTEM.captacao.render(items);
-              showAlert("pdfStatus","ok","Texto extraído: "+items.length+" item(ns) individualizados. Use o filtro por palavra-chave se necessário.");
+              showAlert("pdfStatus","ok","Texto extraído: "+items.length+" linha(s) no formato qtd + UN + descrição (ex.: 100,000 UN Viga 5x15mt - Viga 5x15mt).");
             });
           }).catch(function(err){
             showAlert("pdfStatus","error","Erro ao ler PDF: "+utils.escapeHtml(err.message));
@@ -1208,8 +1420,7 @@
       var body = el("captacaoBody");
       var data = lines || LICSYSTEM.state.captacaoLines || [];
       var filtered = data.filter(function(l){
-        // revalida BLACKLIST (itens já salvos / importados)
-        return !!utils.sanitizar(l);
+        return utils.isLinhaProdutoEdital(l);
       });
       if(kw.length && !filterAll){
         filtered = filtered.filter(function(l){
@@ -1223,13 +1434,15 @@
       }
       var html="";
       filtered.forEach(function(l,idx){
-        var risco = utils.riscoMatch(l);
+        if(!utils.isLinhaProdutoEdital(l)) return;
+        var linha = utils.formatLinhaEdital(l) || l;
+        var risco = utils.riscoMatch(linha);
         var flag = risco.length ? '<span class="risk-flag" title="Risco: '+utils.escapeHtml(risco.join(", "))+'">⚠</span>' : "";
         html+='<tr class="'+(risco.length?'risk-row':'')+'" data-item-idx="'+idx+'">'+
-          '<td><input type="checkbox" class="capChk" data-line="'+utils.escapeHtml(l)+'" aria-label="Selecionar item '+(idx+1)+'"></td>'+
+          '<td><input type="checkbox" class="capChk" data-line="'+utils.escapeHtml(linha)+'" aria-label="Selecionar item '+(idx+1)+'"></td>'+
           '<td>'+(idx+1)+'</td>'+
-          '<td>'+flag+utils.escapeHtml(l)+'</td>'+
-          '<td><button type="button" class="btn btn-ghost btn-sm capGoogle" data-q="'+utils.escapeHtml(l)+'">🔎 Google</button></td>'+
+          '<td>'+flag+utils.escapeHtml(linha)+'</td>'+
+          '<td><button type="button" class="btn btn-ghost btn-sm capGoogle" data-q="'+utils.escapeHtml(utils.nomeProdutoEdital(linha))+'">🔎 Google</button></td>'+
           '</tr>';
       });
       body.innerHTML = html;
@@ -1278,8 +1491,7 @@
       if(checks.length){ lines=[]; checks.forEach(function(c){ lines.push(c.getAttribute("data-line")); }); }
       else lines = LICSYSTEM.state.captacaoLines.slice();
       if(!lines.length){ showAlert("pdfStatus","warn","Nada para enviar. Extraia um edital primeiro."); return; }
-      // chunks of 120
-      LICSYSTEM.orcamento.addFromLines(lines, 120);
+      LICSYSTEM.orcamento.addFromLines(lines);
       showAlert("pdfStatus","ok",lines.length+" linha(s) enviadas ao Orçamento.");
       if(window.__lsActivateView) window.__lsActivateView("orcamento");
     },
@@ -1367,7 +1579,11 @@
       }
     },
     save:function(){
-      try{ localStorage.setItem(ORC_KEY, JSON.stringify(LICSYSTEM.state.orcItems)); }catch(e){}
+      try{
+        localStorage.setItem(ORC_KEY, JSON.stringify(LICSYSTEM.state.orcItems));
+      }catch(e){
+        console.warn("Orçamento: não foi possível salvar tudo no navegador (limite de armazenamento).", e);
+      }
     },
     calcTotal:function(it){
       var q=Number(it.qtd)||0, v=Number(it.vunit)||0, p=Number(it.pct)||0;
@@ -1407,10 +1623,8 @@
       LICSYSTEM.state.orcItems.push({produto:"",qtd:1,vunit:0,pct:0,link:""});
       LICSYSTEM.orcamento.render();
     },
-    addFromLines:function(lines, chunk){
-      chunk = chunk || 120;
-      var slice = lines.slice(0, chunk);
-      slice.forEach(function(l){
+    addFromLines:function(lines){
+      (lines || []).forEach(function(l){
         var desc = String(l).trim();
         if(!desc || !utils.sanitizar(desc)) return;
         LICSYSTEM.state.orcItems.push({produto:desc, qtd:1, vunit:0, pct:0, link:"", selected:false});
