@@ -340,6 +340,56 @@
     background:#e8f0fe;color:#1a4fa0;font-size:12px;font-weight:600;margin-bottom:12px;
   }
   .badge-edit-mode.show{display:inline-flex}
+  /* ---------- Histórico / Controle de Entregas ---------- */
+  .hist-kpi-grid{
+    display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:16px;
+  }
+  .hist-kpi{
+    background:var(--ls-card);border:1px solid var(--ls-line);border-radius:16px;
+    padding:16px 18px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+  }
+  .hist-kpi::before{
+    content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--ls-navy);
+  }
+  .hist-kpi .hk-label{
+    font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--ls-muted);
+  }
+  .hist-kpi .hk-value{
+    margin-top:8px;font-size:24px;font-weight:800;color:var(--ls-navy);word-break:break-word;line-height:1.15;
+  }
+  .hist-kpi .hk-sub{margin-top:4px;font-size:11px;color:var(--ls-muted)}
+  .hist-kpi.hk-custo::before{background:var(--ls-yellow)}
+  .hist-kpi.hk-lucro::before{background:var(--ls-green)}
+  .hist-kpi.hk-lucro .hk-value{color:var(--ls-green)}
+  .hist-kpi.hk-pend::before{background:var(--ls-red)}
+  .hist-filters{
+    display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;
+  }
+  .hist-filters .hf-search{flex:2 1 220px;min-width:0}
+  .hist-filters .hf-status{flex:0 1 220px;min-width:160px}
+  #histEntregasTable{min-width:980px}
+  #histEntregasTable td.hist-falta{font-weight:800;color:var(--ls-navy);text-align:center;white-space:nowrap}
+  #histEntregasTable td.hist-falta.zero{color:var(--ls-green);background:var(--ls-green-bg)}
+  #histEntregasTable tr.hist-done{background:#eefaf3!important}
+  #histEntregasTable tr.hist-done:hover{background:#e3f6eb!important}
+  #histEntregasTable input.hist-qtd,
+  #histEntregasTable input.hist-money{
+    max-width:110px;text-align:right;font-weight:600;
+  }
+  #histEntregasTable input.hist-qtd{max-width:88px;text-align:center}
+  .hist-check-wrap{display:flex;align-items:center;justify-content:center;gap:8px}
+  .hist-check{
+    width:22px;height:22px;accent-color:var(--ls-green);cursor:pointer;flex-shrink:0;
+  }
+  .hist-check-label{font-size:11px;font-weight:700;color:var(--ls-muted);white-space:nowrap}
+  tr.hist-done .hist-check-label{color:var(--ls-green)}
+  @media (max-width:1100px){
+    .hist-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  }
+  @media (max-width:640px){
+    .hist-kpi-grid{grid-template-columns:1fr}
+    .hist-kpi .hk-value{font-size:20px}
+  }
   .saldo-zero{background:#fbe7e7!important;color:#a12626}
   .saldo-zero td{color:#a12626;font-weight:600}
   .saldo-ok{font-weight:800;color:var(--ls-green)}
@@ -602,6 +652,7 @@
       <button data-view="cruzamento"><span class="ico">🔀</span> Cruzamento ML</button>
       <button data-view="cofre"><span class="ico">🔐</span> Cofre de Documentos</button>
       <button data-view="entregas"><span class="ico">🚚</span> Licitação</button>
+      <button data-view="histEntregas"><span class="ico">📦</span> Histórico Entregas</button>
       <button data-view="concorrencia"><span class="ico">🔎</span> Concorrência</button>
       <button data-view="catalogo"><span class="ico">📚</span> Catálogo</button>
       <button data-view="arp"><span class="ico">📄</span> Atas de Registro</button>
@@ -641,7 +692,7 @@
         views[j].classList.toggle('active', views[j].id===('view-'+view));
       }
       var titleEl=document.getElementById('topTitle');
-      var map={dashboard:'Dashboard',captacao:'Captação de Editais',orcamento:'Orçamento',cruzamento:'Cruzamento Inteligente (ML)',cofre:'Cofre de Documentos',entregas:'Licitação',concorrencia:'Análise de Concorrência',catalogo:'Catálogo Interno',arp:'Atas de Registro (ARP)',disputa:'Sala de Disputa',ferramentas:'Ferramentas'};
+      var map={dashboard:'Dashboard',captacao:'Captação de Editais',orcamento:'Orçamento',cruzamento:'Cruzamento Inteligente (ML)',cofre:'Cofre de Documentos',entregas:'Licitação',histEntregas:'Histórico e Controle de Entregas',concorrencia:'Análise de Concorrência',catalogo:'Catálogo Interno',arp:'Atas de Registro (ARP)',disputa:'Sala de Disputa',ferramentas:'Ferramentas'};
       if(titleEl) titleEl.textContent = map[view]||'LICSYSTEM';
       // notify app modules (guarded — nav never depends on this)
       try{ if(window.LICSYSTEM && LICSYSTEM.onViewChange) LICSYSTEM.onViewChange(view); }catch(e){}
@@ -929,6 +980,79 @@
           <div id="entregaAlert" class="alert"></div>
           <div id="entregaList" class="entrega-list">
             <div class="muted small" style="padding:18px;text-align:center">Nenhuma entrega registrada ainda.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== HISTÓRICO E CONTROLE DE ENTREGAS ===================== -->
+      <section id="view-histEntregas" class="view">
+        <div class="hist-kpi-grid" id="histKpiGrid" aria-label="Resumo financeiro das entregas">
+          <div class="hist-kpi hk-vendido">
+            <div class="hk-label">Total Vendido (R$)</div>
+            <div class="hk-value" id="histTotalVendido">R$ 0,00</div>
+            <div class="hk-sub">Σ Qtd entregue × venda un.</div>
+          </div>
+          <div class="hist-kpi hk-custo">
+            <div class="hk-label">Custo Total (R$)</div>
+            <div class="hk-value" id="histCustoTotal">R$ 0,00</div>
+            <div class="hk-sub">Σ Qtd entregue × custo un.</div>
+          </div>
+          <div class="hist-kpi hk-lucro">
+            <div class="hk-label">Lucro Bruto (R$)</div>
+            <div class="hk-value" id="histLucroBruto">R$ 0,00</div>
+            <div class="hk-sub">Vendido − Custo</div>
+          </div>
+          <div class="hist-kpi hk-pend">
+            <div class="hk-label">Entregas Pendentes</div>
+            <div class="hk-value" id="histPendentes">0</div>
+            <div class="hk-sub">Unidades ainda a entregar</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>📦 Histórico e Controle de Entregas</h2>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="btn btn-ghost btn-sm" id="btnHistSeed" title="Recarregar exemplos de demonstração">↺ Exemplos</button>
+              <button type="button" class="btn btn-gold btn-sm" id="btnHistAdd">+ Novo item</button>
+            </div>
+          </div>
+          <div class="desc">Baixa manual de quantidade entregue, saldo pendente e lucro em tempo real. Persistência local — preparado para Firestore.</div>
+          <div id="histEntregasAlert" class="alert"></div>
+
+          <div class="hist-filters">
+            <div class="hf-search">
+              <label class="fld" for="histBusca">Buscar por Licitação ou Empenho</label>
+              <input type="text" id="histBusca" placeholder="ex.: Pref. Ibaiti, 2026/001…" autocomplete="off" />
+            </div>
+            <div class="hf-status">
+              <label class="fld" for="histStatus">Filtrar por Status</label>
+              <select id="histStatus">
+                <option value="todos">Todos</option>
+                <option value="pendente">Pendente</option>
+                <option value="parcial">Parcialmente Entregue</option>
+                <option value="concluido">Concluído</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="tbl-wrap">
+            <table id="histEntregasTable">
+              <thead>
+                <tr>
+                  <th>Empenho / Licitação</th>
+                  <th>Produto</th>
+                  <th>Qtd Solicitada</th>
+                  <th>Qtd Entregue</th>
+                  <th>Falta Entregar</th>
+                  <th>Custo Un. (R$)</th>
+                  <th>Venda Un. (R$)</th>
+                  <th style="text-align:center">Status / Ação</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="histEntregasBody"></tbody>
+            </table>
           </div>
         </div>
       </section>
@@ -3336,6 +3460,34 @@
     // Entregas (offcanvas)
     LICSYSTEM.entregas.wire();
 
+    // Histórico e Controle de Entregas
+    on("histBusca","input", function(){ LICSYSTEM.histEntregas.aplicarFiltros(); });
+    on("histStatus","change", function(){ LICSYSTEM.histEntregas.aplicarFiltros(); });
+    on("btnHistAdd","click", function(){ LICSYSTEM.histEntregas.adicionarItem(); });
+    on("btnHistSeed","click", function(){ LICSYSTEM.histEntregas.carregarExemplos(true); });
+    on("histEntregasBody","input", function(e){
+      var inp = e.target.closest("input[data-hist-id]");
+      if(!inp) return;
+      var id = inp.getAttribute("data-hist-id");
+      var field = inp.getAttribute("data-hist-f");
+      if(field === "qtdEntregue"){
+        calcularFaltaEntregar(id, inp.value);
+      } else {
+        LICSYSTEM.histEntregas.onEdit(id, field, inp.value);
+      }
+    });
+    on("histEntregasBody","change", function(e){
+      var chk = e.target.closest("input.hist-check[data-hist-id]");
+      if(chk){
+        LICSYSTEM.histEntregas.toggleConcluido(chk.getAttribute("data-hist-id"), chk.checked);
+        return;
+      }
+    });
+    on("histEntregasBody","click", function(e){
+      var del = e.target.closest(".histDel");
+      if(del){ LICSYSTEM.histEntregas.remover(del.getAttribute("data-hist-id")); }
+    });
+
     // Catálogo Interno
     on("btnSalvarProduto","click", salvarProduto);
     on("btnCancelarEditCat","click", function(){ LICSYSTEM.catalogo.cancelEdit(); });
@@ -3407,6 +3559,7 @@
     cruzamento:'Cruzamento Inteligente (ML)',
     cofre:'Cofre de Documentos',
     entregas:'Licitação',
+    histEntregas:'Histórico e Controle de Entregas',
     concorrencia:'Análise de Concorrência',
     catalogo:'Catálogo Interno',
     arp:'Atas de Registro (ARP)',
@@ -3437,6 +3590,7 @@
     }
     if(view==="ferramentas") LICSYSTEM.ferramentas.carregarView();
     if(view==="entregas") LICSYSTEM.entregas.renderLista();
+    if(view==="histEntregas") LICSYSTEM.histEntregas.render();
     if(view==="catalogo") listarProdutos();
     if(view==="arp") LICSYSTEM.arp.renderAll();
     if(view==="disputa") LICSYSTEM.disputa.atualizarResultados();
@@ -4369,6 +4523,280 @@
       LICSYSTEM.disputa.renderHistorico();
       LICSYSTEM.disputa.atualizarResultados();
       hideAlert("disputaAlert");
+    }
+  };
+
+  /* ============================ HISTÓRICO E CONTROLE DE ENTREGAS ============================ */
+  var HIST_ENTREGAS_KEY = "licsystem_hist_entregas_v1";
+
+  function histUid(){
+    return "he_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+  }
+
+  function histStatusOf(it){
+    var sol = Number(it.qtdSolicitada) || 0;
+    var ent = Number(it.qtdEntregue) || 0;
+    if(ent <= 0) return "pendente";
+    if(ent >= sol && sol > 0) return "concluido";
+    return "parcial";
+  }
+
+  /**
+   * Atualiza "Falta Entregar" ao alterar Qtd Entregue.
+   * Se entregue === solicitada, marca a checkbox e destaca a linha.
+   */
+  function calcularFaltaEntregar(id, qtdEntregueRaw){
+    LICSYSTEM.histEntregas.load();
+    var item = null;
+    for(var i=0;i<LICSYSTEM.histEntregas.items.length;i++){
+      if(LICSYSTEM.histEntregas.items[i].id === id){ item = LICSYSTEM.histEntregas.items[i]; break; }
+    }
+    if(!item) return 0;
+
+    var solicitada = Math.max(0, Number(item.qtdSolicitada) || 0);
+    var entregue = Math.max(0, Number(qtdEntregueRaw));
+    if(!isFinite(entregue)) entregue = 0;
+    if(entregue > solicitada) entregue = solicitada;
+    item.qtdEntregue = entregue;
+
+    var falta = Math.max(0, solicitada - entregue);
+    item.concluido = (solicitada > 0 && entregue >= solicitada);
+
+    var row = document.querySelector('tr[data-hist-row="'+id+'"]');
+    if(row){
+      var faltaCell = row.querySelector(".hist-falta");
+      if(faltaCell){
+        faltaCell.textContent = String(falta);
+        faltaCell.classList.toggle("zero", falta === 0 && solicitada > 0);
+      }
+      var chk = row.querySelector(".hist-check");
+      if(chk) chk.checked = !!item.concluido;
+      var lbl = row.querySelector(".hist-check-label");
+      if(lbl) lbl.textContent = item.concluido ? "Concluído" : (entregue > 0 ? "Parcial" : "Pendente");
+      row.classList.toggle("hist-done", !!item.concluido);
+      var qInp = row.querySelector('input[data-hist-f="qtdEntregue"]');
+      if(qInp && String(qInp.value) !== String(entregue)) qInp.value = entregue;
+    }
+
+    LICSYSTEM.histEntregas.saveLocal();
+    calcularResumoFinanceiro();
+    return falta;
+  }
+
+  /**
+   * Multiplica Qtd Entregue × Custo/Venda e atualiza os cards do topo.
+   * Card 4: soma das unidades ainda pendentes (lista filtrada).
+   */
+  function calcularResumoFinanceiro(){
+    LICSYSTEM.histEntregas.load();
+    var list = LICSYSTEM.histEntregas.filtrados();
+    var totalVendido = 0;
+    var custoTotal = 0;
+    var pendentes = 0;
+
+    for(var i=0;i<list.length;i++){
+      var it = list[i];
+      var ent = Math.max(0, Number(it.qtdEntregue) || 0);
+      var sol = Math.max(0, Number(it.qtdSolicitada) || 0);
+      var custo = Math.max(0, Number(it.custoUn) || 0);
+      var venda = Math.max(0, Number(it.vendaUn) || 0);
+      totalVendido += ent * venda;
+      custoTotal += ent * custo;
+      pendentes += Math.max(0, sol - ent);
+    }
+
+    var lucro = totalVendido - custoTotal;
+    if(el("histTotalVendido")) el("histTotalVendido").textContent = utils.formatBrl(totalVendido);
+    if(el("histCustoTotal")) el("histCustoTotal").textContent = utils.formatBrl(custoTotal);
+    if(el("histLucroBruto")) el("histLucroBruto").textContent = utils.formatBrl(lucro);
+    if(el("histPendentes")) el("histPendentes").textContent = String(pendentes);
+    return { totalVendido: totalVendido, custoTotal: custoTotal, lucroBruto: lucro, pendentes: pendentes };
+  }
+
+  window.calcularFaltaEntregar = calcularFaltaEntregar;
+  window.calcularResumoFinanceiro = calcularResumoFinanceiro;
+
+  LICSYSTEM.histEntregas = {
+    items: [],
+    _loaded: false,
+    filtroTexto: "",
+    filtroStatus: "todos",
+
+    exemplos: function(){
+      return [
+        { id: histUid(), empenho: "Pref. Ibaiti — 2026/001", produto: "Abraçadeira Borboleta 12–20mm (kit 10)", qtdSolicitada: 50, qtdEntregue: 20, custoUn: 8.5, vendaUn: 14.9, concluido: false },
+        { id: histUid(), empenho: "Pref. Ibaiti — 2026/001", produto: "Furadeira de Impacto 750W", qtdSolicitada: 12, qtdEntregue: 12, custoUn: 189, vendaUn: 279, concluido: true },
+        { id: histUid(), empenho: "Câmara Jacarezinho — NE 2026/088", produto: "Trena Laser 40m", qtdSolicitada: 8, qtdEntregue: 0, custoUn: 95, vendaUn: 149.9, concluido: false },
+        { id: histUid(), empenho: "Pref. Santo Antônio — PE 014/2026", produto: "Parafusadeira 12V + kit bits", qtdSolicitada: 25, qtdEntregue: 10, custoUn: 210, vendaUn: 329, concluido: false },
+        { id: histUid(), empenho: "Consórcio Norte Pioneiro — ARP 03/2026", produto: "Disco de Corte 4.1/2\" (cx 25)", qtdSolicitada: 40, qtdEntregue: 40, custoUn: 42, vendaUn: 68, concluido: true }
+      ];
+    },
+
+    load: function(){
+      if(LICSYSTEM.histEntregas._loaded) return LICSYSTEM.histEntregas.items;
+      try{
+        var raw = localStorage.getItem(HIST_ENTREGAS_KEY);
+        var saved = raw ? JSON.parse(raw) : null;
+        if(Array.isArray(saved) && saved.length){
+          LICSYSTEM.histEntregas.items = saved;
+        } else {
+          LICSYSTEM.histEntregas.items = LICSYSTEM.histEntregas.exemplos();
+          LICSYSTEM.histEntregas.saveLocal();
+        }
+      }catch(e){
+        LICSYSTEM.histEntregas.items = LICSYSTEM.histEntregas.exemplos();
+      }
+      LICSYSTEM.histEntregas._loaded = true;
+      return LICSYSTEM.histEntregas.items;
+    },
+
+    saveLocal: function(){
+      try{
+        localStorage.setItem(HIST_ENTREGAS_KEY, JSON.stringify(LICSYSTEM.histEntregas.items || []));
+      }catch(e){}
+      // TODO Firestore: collection('historico_entregas').doc(id).set(item, { merge:true })
+    },
+
+    carregarExemplos: function(force){
+      if(force && !confirm("Substituir a lista atual pelos exemplos de demonstração?")) return;
+      LICSYSTEM.histEntregas.items = LICSYSTEM.histEntregas.exemplos();
+      LICSYSTEM.histEntregas._loaded = true;
+      LICSYSTEM.histEntregas.saveLocal();
+      LICSYSTEM.histEntregas.render();
+      showAlert("histEntregasAlert","ok","Exemplos carregados.");
+    },
+
+    filtrados: function(){
+      LICSYSTEM.histEntregas.load();
+      var q = utils.fold(LICSYSTEM.histEntregas.filtroTexto || "").toLowerCase().trim();
+      var st = LICSYSTEM.histEntregas.filtroStatus || "todos";
+      return LICSYSTEM.histEntregas.items.filter(function(it){
+        var status = histStatusOf(it);
+        if(st !== "todos" && status !== st) return false;
+        if(!q) return true;
+        var blob = utils.fold((it.empenho||"")+" "+(it.produto||"")).toLowerCase();
+        return blob.indexOf(q) !== -1;
+      });
+    },
+
+    aplicarFiltros: function(){
+      LICSYSTEM.histEntregas.filtroTexto = (el("histBusca") && el("histBusca").value) || "";
+      LICSYSTEM.histEntregas.filtroStatus = (el("histStatus") && el("histStatus").value) || "todos";
+      LICSYSTEM.histEntregas.renderTabela();
+      calcularResumoFinanceiro();
+    },
+
+    find: function(id){
+      LICSYSTEM.histEntregas.load();
+      for(var i=0;i<LICSYSTEM.histEntregas.items.length;i++){
+        if(LICSYSTEM.histEntregas.items[i].id === id) return LICSYSTEM.histEntregas.items[i];
+      }
+      return null;
+    },
+
+    onEdit: function(id, field, value){
+      var item = LICSYSTEM.histEntregas.find(id);
+      if(!item) return;
+      if(field === "empenho" || field === "produto"){
+        item[field] = String(value || "");
+      } else if(field === "qtdSolicitada"){
+        var sol = Math.max(0, Number(value) || 0);
+        item.qtdSolicitada = sol;
+        if((Number(item.qtdEntregue)||0) > sol) item.qtdEntregue = sol;
+        calcularFaltaEntregar(id, item.qtdEntregue);
+        return;
+      } else if(field === "custoUn" || field === "vendaUn"){
+        item[field] = Math.max(0, Number(value) || 0);
+        LICSYSTEM.histEntregas.saveLocal();
+        calcularResumoFinanceiro();
+        return;
+      }
+      LICSYSTEM.histEntregas.saveLocal();
+    },
+
+    toggleConcluido: function(id, checked){
+      var item = LICSYSTEM.histEntregas.find(id);
+      if(!item) return;
+      var sol = Math.max(0, Number(item.qtdSolicitada) || 0);
+      if(checked){
+        calcularFaltaEntregar(id, sol);
+      } else {
+        var atual = Math.max(0, Number(item.qtdEntregue) || 0);
+        var novo = atual >= sol ? Math.max(0, sol - 1) : atual;
+        calcularFaltaEntregar(id, novo);
+      }
+    },
+
+    adicionarItem: function(){
+      LICSYSTEM.histEntregas.load();
+      LICSYSTEM.histEntregas.items.unshift({
+        id: histUid(),
+        empenho: "",
+        produto: "",
+        qtdSolicitada: 1,
+        qtdEntregue: 0,
+        custoUn: 0,
+        vendaUn: 0,
+        concluido: false
+      });
+      LICSYSTEM.histEntregas.saveLocal();
+      if(el("histStatus")) el("histStatus").value = "todos";
+      LICSYSTEM.histEntregas.filtroStatus = "todos";
+      LICSYSTEM.histEntregas.render();
+      showAlert("histEntregasAlert","ok","Linha adicionada — preencha empenho, produto e quantidades.");
+    },
+
+    remover: function(id){
+      if(!confirm("Remover este item do histórico?")) return;
+      LICSYSTEM.histEntregas.load();
+      LICSYSTEM.histEntregas.items = LICSYSTEM.histEntregas.items.filter(function(it){ return it.id !== id; });
+      LICSYSTEM.histEntregas.saveLocal();
+      LICSYSTEM.histEntregas.render();
+      showAlert("histEntregasAlert","ok","Item removido.");
+    },
+
+    render: function(){
+      if(el("histBusca")) LICSYSTEM.histEntregas.filtroTexto = el("histBusca").value || "";
+      if(el("histStatus")) LICSYSTEM.histEntregas.filtroStatus = el("histStatus").value || "todos";
+      LICSYSTEM.histEntregas.load();
+      LICSYSTEM.histEntregas.renderTabela();
+      calcularResumoFinanceiro();
+    },
+
+    renderTabela: function(){
+      var body = el("histEntregasBody");
+      if(!body) return;
+      var list = LICSYSTEM.histEntregas.filtrados();
+      if(!list.length){
+        body.innerHTML = '<tr><td colspan="9" class="muted small" style="text-align:center;padding:22px">Nenhum item encontrado com os filtros atuais.</td></tr>';
+        return;
+      }
+      var html = "";
+      for(var i=0;i<list.length;i++){
+        var it = list[i];
+        var sol = Math.max(0, Number(it.qtdSolicitada) || 0);
+        var ent = Math.max(0, Number(it.qtdEntregue) || 0);
+        var falta = Math.max(0, sol - ent);
+        var done = sol > 0 && ent >= sol;
+        var st = histStatusOf(it);
+        var stLabel = st === "concluido" ? "Concluído" : (st === "parcial" ? "Parcial" : "Pendente");
+        html +=
+          '<tr data-hist-row="'+utils.escapeHtml(it.id)+'" class="'+(done?"hist-done":"")+'">'+
+            '<td><input type="text" data-hist-id="'+utils.escapeHtml(it.id)+'" data-hist-f="empenho" value="'+utils.escapeHtml(it.empenho||"")+'" placeholder="ex.: Pref. Ibaiti — 2026/001" /></td>'+
+            '<td><input type="text" data-hist-id="'+utils.escapeHtml(it.id)+'" data-hist-f="produto" value="'+utils.escapeHtml(it.produto||"")+'" placeholder="Nome do item" /></td>'+
+            '<td><input class="hist-qtd" type="number" min="0" step="1" data-hist-id="'+utils.escapeHtml(it.id)+'" data-hist-f="qtdSolicitada" value="'+sol+'" /></td>'+
+            '<td><input class="hist-qtd" type="number" min="0" step="1" data-hist-id="'+utils.escapeHtml(it.id)+'" data-hist-f="qtdEntregue" value="'+ent+'" /></td>'+
+            '<td class="hist-falta'+(falta===0 && sol>0?" zero":"")+'">'+falta+'</td>'+
+            '<td><input class="hist-money" type="number" min="0" step="0.01" data-hist-id="'+utils.escapeHtml(it.id)+'" data-hist-f="custoUn" value="'+(Number(it.custoUn)||0)+'" /></td>'+
+            '<td><input class="hist-money" type="number" min="0" step="0.01" data-hist-id="'+utils.escapeHtml(it.id)+'" data-hist-f="vendaUn" value="'+(Number(it.vendaUn)||0)+'" /></td>'+
+            '<td><div class="hist-check-wrap">'+
+              '<input class="hist-check" type="checkbox" data-hist-id="'+utils.escapeHtml(it.id)+'" '+(done?"checked":"")+' aria-label="Marcar como concluído" />'+
+              '<span class="hist-check-label">'+stLabel+'</span>'+
+            '</div></td>'+
+            '<td><button type="button" class="btn btn-ghost btn-sm histDel" data-hist-id="'+utils.escapeHtml(it.id)+'" title="Remover">🗑</button></td>'+
+          '</tr>';
+      }
+      body.innerHTML = html;
     }
   };
 
