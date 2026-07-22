@@ -256,6 +256,181 @@
   tbody tr:nth-child(even){background:#fafbfd}
   tbody tr:hover{background:#f3f6fb}
   td input{padding:6px 8px;font-size:12px;width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+  .pager{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    margin-top:12px;padding:10px 4px 2px;
+  }
+  .pager-info{font-size:12.5px;color:var(--ls-muted);font-weight:600}
+  .pager-info b{color:var(--ls-navy)}
+  .pager-btns{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .pager-btns .btn[disabled]{opacity:.45;cursor:not-allowed}
+  /* ---------- Entregas (offcanvas) ---------- */
+  .entrega-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+  .entrega-subcard{
+    background:#f8fafc;border:1px solid var(--ls-line);border-radius:14px;padding:16px;
+  }
+  .entrega-subcard h3{margin:0 0 12px;font-size:13px;font-weight:700;color:var(--ls-navy);letter-spacing:.2px}
+  .radio-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0 14px}
+  .radio-card{
+    position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;
+    padding:16px 14px;border:2px solid var(--ls-line);border-radius:14px;background:#fff;
+    cursor:pointer;transition:border .15s,box-shadow .15s,background .15s;user-select:none;
+  }
+  .radio-card input{position:absolute;opacity:0;pointer-events:none}
+  .radio-card .rc-ico{font-size:22px;line-height:1}
+  .radio-card .rc-title{font-weight:800;font-size:13px;color:var(--ls-navy)}
+  .radio-card .rc-sub{font-size:11px;color:var(--ls-muted);line-height:1.35}
+  .radio-card:hover{border-color:#d4c48a}
+  .radio-card.is-active{
+    border-color:var(--ls-gold);background:linear-gradient(180deg,#fffdf5,#fff);
+    box-shadow:0 6px 16px rgba(201,162,39,.18);
+  }
+  .status-nf-wrap{display:flex;gap:8px;flex-wrap:wrap}
+  .status-nf{
+    flex:1;min-width:120px;text-align:center;padding:10px 12px;border-radius:10px;
+    border:2px solid var(--ls-line);background:#fff;font-weight:700;font-size:12px;
+    cursor:pointer;color:var(--ls-muted);transition:all .15s;
+  }
+  .status-nf input{display:none}
+  .status-nf.is-feito{border-color:#1e9e5a;background:#e6f6ee;color:#136c3d}
+  .status-nf.is-nao{border-color:#d23b3b;background:#fbe7e7;color:#a12626}
+  .upload-box{
+    display:flex;align-items:center;gap:12px;padding:14px;border:2px dashed var(--ls-line);
+    border-radius:12px;background:#fff;cursor:pointer;transition:border .15s,background .15s;
+  }
+  .upload-box:hover{border-color:var(--ls-gold);background:#fffbeb}
+  .upload-box .ub-ico{
+    width:42px;height:42px;border-radius:12px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,var(--ls-gold),var(--ls-gold-soft));font-size:18px;
+  }
+  .upload-box .ub-txt b{display:block;font-size:13px;color:var(--ls-navy)}
+  .upload-box .ub-txt span{font-size:11px;color:var(--ls-muted)}
+  .entrega-list{display:flex;flex-direction:column;gap:10px}
+  .entrega-item{
+    display:flex;justify-content:space-between;gap:12px;align-items:flex-start;
+    padding:14px 16px;border:1px solid var(--ls-line);border-radius:14px;background:#fff;
+    box-shadow:0 2px 8px rgba(21,38,66,.04);
+  }
+  .entrega-item .ei-title{font-weight:800;color:var(--ls-navy);font-size:14px}
+  .entrega-item .ei-meta{font-size:12px;color:var(--ls-muted);margin-top:4px;line-height:1.4}
+  .badge-nf{
+    display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;
+    font-size:11px;font-weight:700;white-space:nowrap;
+  }
+  .badge-nf.ok{background:#e6f6ee;color:#136c3d}
+  .badge-nf.pend{background:#fdf4dd;color:#8a6410}
+  #entregaOverlay{
+    display:none;position:fixed;inset:0;z-index:2147483000;background:rgba(15,26,46,.5);
+    backdrop-filter:blur(3px);opacity:0;transition:opacity .25s ease;
+    align-items:center;justify-content:center;padding:18px;
+  }
+  #entregaOverlay.show{display:flex;opacity:1}
+  .search-bar{
+    display:flex;align-items:center;gap:10px;margin-bottom:14px;
+    padding:10px 14px;border:1px solid var(--ls-line);border-radius:12px;background:#fff;
+  }
+  .search-bar .sb-ico{font-size:16px;opacity:.7;flex-shrink:0}
+  .search-bar input{
+    border:0!important;box-shadow:none!important;padding:6px 0!important;margin:0;background:transparent;
+  }
+  .cat-actions{display:flex;gap:6px;flex-wrap:wrap}
+  .badge-edit-mode{
+    display:none;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;
+    background:#e8f0fe;color:#1a4fa0;font-size:12px;font-weight:600;margin-bottom:12px;
+  }
+  .badge-edit-mode.show{display:inline-flex}
+  .saldo-zero{background:#fbe7e7!important;color:#a12626}
+  .saldo-zero td{color:#a12626;font-weight:600}
+  .saldo-ok{font-weight:800;color:var(--ls-green)}
+  .saldo-esgotado{font-weight:800;color:var(--ls-red)}
+  .toggle-row{
+    display:flex;align-items:center;gap:10px;padding:12px 14px;
+    border:1px solid var(--ls-line);border-radius:12px;background:#f8fafc;
+  }
+  .toggle-row input[type=checkbox]{width:18px;height:18px;accent-color:var(--ls-gold)}
+  .toggle-row label{font-weight:700;font-size:13px;color:var(--ls-navy);cursor:pointer;margin:0}
+  .disputa-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px;align-items:start}
+  .disputa-kpi{
+    display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 16px;
+  }
+  .disputa-card{
+    border-radius:14px;padding:16px 18px;border:1px solid var(--ls-line);background:#fff;
+    box-shadow:0 4px 14px rgba(21,38,66,.06);min-height:96px;
+  }
+  .disputa-card .dc-label{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--ls-muted)}
+  .disputa-card .dc-value{font-size:28px;font-weight:800;color:var(--ls-navy);margin-top:8px;line-height:1.1}
+  .disputa-card .dc-sub{font-size:12px;color:var(--ls-muted);margin-top:6px}
+  .disputa-card.warn{
+    background:#fbe7e7;border-color:#f2c4c4;animation:disputaPulse 1s ease-in-out infinite;
+  }
+  .disputa-card.warn .dc-value,.disputa-card.warn .dc-label{color:#a12626}
+  .disputa-card.ok{background:#e6f6ee;border-color:#b6e3ca}
+  .disputa-card.ok .dc-value{color:#136c3d}
+  @keyframes disputaPulse{
+    0%,100%{box-shadow:0 0 0 0 rgba(210,59,59,.35)}
+    50%{box-shadow:0 0 0 8px rgba(210,59,59,0)}
+  }
+  .lance-hist{list-style:none;margin:0;padding:0;max-height:420px;overflow-y:auto}
+  .lance-hist li{
+    display:flex;justify-content:space-between;gap:12px;align-items:center;
+    padding:12px 14px;border-bottom:1px solid var(--ls-line);font-size:13px;
+  }
+  .lance-hist li:nth-child(odd){background:#fafbfd}
+  .lance-hist .lh-hora{font-weight:700;color:var(--ls-muted);font-variant-numeric:tabular-nums;min-width:72px}
+  .lance-hist .lh-val{font-weight:800;color:var(--ls-navy)}
+  .lance-hist .lh-empty{text-align:center;color:var(--ls-muted);padding:28px 12px;font-size:13px}
+  .btn-navy{background:var(--ls-navy);color:#fff}
+  .btn-navy:hover{background:var(--ls-navy-3)}
+  @media (max-width:900px){
+    .disputa-grid{grid-template-columns:1fr}
+    .disputa-kpi{grid-template-columns:1fr}
+  }
+  body.entrega-open iframe[title*="Voiceflow"],
+  body.entrega-open [class*="vfrc"],
+  body.entrega-open #voiceflow-chat{
+    opacity:0!important;pointer-events:none!important;visibility:hidden!important;
+  }
+  #entregaOffcanvas{
+    position:relative;z-index:90;width:min(640px,100%);max-height:min(92vh,900px);
+    background:#fff;border-radius:18px;
+    box-shadow:0 24px 60px rgba(21,38,66,.28);
+    transform:translateY(16px) scale(.98);opacity:0;
+    transition:transform .25s ease,opacity .25s ease;
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  #entregaOverlay.show #entregaOffcanvas,
+  #entregaOffcanvas.open{
+    transform:translateY(0) scale(1);opacity:1;
+  }
+  .oc-head{
+    display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+    padding:20px 22px 16px;border-bottom:1px solid var(--ls-line);
+    background:linear-gradient(180deg,#fff,#f8fafc);flex-shrink:0;
+  }
+  .oc-head h2{margin:0;font-size:18px;color:var(--ls-navy)}
+  .oc-head p{margin:4px 0 0;font-size:12px;color:var(--ls-muted)}
+  .oc-close{
+    width:36px;height:36px;border:0;border-radius:10px;background:#eef1f6;
+    cursor:pointer;font-size:18px;color:var(--ls-navy);flex-shrink:0;
+  }
+  .oc-body{flex:1;overflow-y:auto;padding:18px 22px 20px;-webkit-overflow-scrolling:touch;min-height:0}
+  .oc-foot{
+    display:flex;gap:10px;flex-wrap:wrap;padding:14px 22px;
+    border-top:1px solid var(--ls-line);background:#f8fafc;flex-shrink:0;
+  }
+  .oc-foot .btn{flex:1}
+  .oc-section{margin-bottom:18px}
+  .oc-section > .oc-label{
+    display:block;font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;
+    color:var(--ls-muted);margin-bottom:10px;
+  }
+  body.entrega-open{overflow:hidden}
+  @media (max-width:700px){
+    .entrega-grid,.radio-cards{grid-template-columns:1fr}
+    #entregaOverlay{padding:10px;align-items:flex-end}
+    #entregaOffcanvas{width:100%;max-height:94vh;border-radius:16px 16px 0 0}
+  }
   .risk-row{border-left:3px solid var(--ls-red)!important}
   .risk-cell{border:1.5px solid var(--ls-red)!important;border-radius:6px}
   .risk-flag{color:var(--ls-red);font-weight:700;margin-right:4px;cursor:help}
@@ -426,10 +601,11 @@
       <button data-view="orcamento"><span class="ico">🧮</span> Orçamento</button>
       <button data-view="cruzamento"><span class="ico">🔀</span> Cruzamento ML</button>
       <button data-view="cofre"><span class="ico">🔐</span> Cofre de Documentos</button>
+      <button data-view="entregas"><span class="ico">🚚</span> Licitação</button>
       <button data-view="concorrencia"><span class="ico">🔎</span> Concorrência</button>
+      <button data-view="catalogo"><span class="ico">📚</span> Catálogo</button>
       <button data-view="arp"><span class="ico">📄</span> Atas de Registro</button>
       <button data-view="disputa"><span class="ico">⚔️</span> Sala de Disputa</button>
-      <button data-view="catalogo"><span class="ico">📚</span> Catálogo</button>
       <button data-view="ferramentas"><span class="ico">🛠️</span> Ferramentas</button>
     </nav>
     <div class="side-foot">LICSYSTEM &copy; Sistema Licitação<br/>v1.0 — frontend SPA</div>
@@ -465,7 +641,7 @@
         views[j].classList.toggle('active', views[j].id===('view-'+view));
       }
       var titleEl=document.getElementById('topTitle');
-      var map={dashboard:'Dashboard',captacao:'Captação de Editais',orcamento:'Orçamento',cruzamento:'Cruzamento Inteligente (ML)',cofre:'Cofre de Documentos',concorrencia:'Análise de Concorrência',arp:'Atas de Registro de Preço',disputa:'Sala de Disputa',catalogo:'Catálogo',ferramentas:'Ferramentas'};
+      var map={dashboard:'Dashboard',captacao:'Captação de Editais',orcamento:'Orçamento',cruzamento:'Cruzamento Inteligente (ML)',cofre:'Cofre de Documentos',entregas:'Licitação',concorrencia:'Análise de Concorrência',catalogo:'Catálogo Interno',arp:'Atas de Registro (ARP)',disputa:'Sala de Disputa',ferramentas:'Ferramentas'};
       if(titleEl) titleEl.textContent = map[view]||'LICSYSTEM';
       // notify app modules (guarded — nav never depends on this)
       try{ if(window.LICSYSTEM && LICSYSTEM.onViewChange) LICSYSTEM.onViewChange(view); }catch(e){}
@@ -616,6 +792,13 @@
               </tbody>
             </table>
           </div>
+          <div class="pager" id="capPager" style="display:none">
+            <div class="pager-info" id="capPagerInfo"></div>
+            <div class="pager-btns">
+              <button type="button" class="btn btn-ghost btn-sm" id="capPrev">← Anterior</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="capNext">Próxima →</button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -630,7 +813,7 @@
               <button class="btn btn-gold" id="btnPropostaOrc">📑 Gerar Proposta Comercial PDF</button>
             </div>
           </div>
-          <div class="desc">Total = Qtd × V. Unit × (1 + %/100). A margem vem apenas dos campos editados (sem valores fixos).</div>
+          <div class="desc">Total = Qtd × V. Unit × (1 + %/100). A margem vem apenas dos campos editados. Exibe <b>100 itens por página</b> para não sobrecarregar o navegador.</div>
 
           <div class="dropzone" id="orcDrop" style="margin-bottom:16px">
             <span class="big">📊</span>
@@ -664,6 +847,13 @@
                 </tr>
               </tfoot>
             </table>
+          </div>
+          <div class="pager" id="orcPager" style="display:none">
+            <div class="pager-info" id="orcPagerInfo"></div>
+            <div class="pager-btns">
+              <button type="button" class="btn btn-ghost btn-sm" id="orcPrev">← Anterior</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="orcNext">Próxima →</button>
+            </div>
           </div>
         </div>
       </section>
@@ -728,6 +918,21 @@
         </div>
       </section>
 
+      <!-- ===================== ENTREGAS ===================== -->
+      <section id="view-entregas" class="view">
+        <div class="card">
+          <div class="card-head">
+            <h2>🚚 Controle de Entrega de Licitações</h2>
+            <button type="button" class="btn btn-gold btn-sm" id="btnNovaEntrega">+ Nova Entrega</button>
+          </div>
+          <div class="desc">Registre empenho, nota fiscal, anexos e destinação logística. Dados locais por enquanto — prontos para Firebase Storage / Firestore.</div>
+          <div id="entregaAlert" class="alert"></div>
+          <div id="entregaList" class="entrega-list">
+            <div class="muted small" style="padding:18px;text-align:center">Nenhuma entrega registrada ainda.</div>
+          </div>
+        </div>
+      </section>
+
       <!-- ===================== CONCORRÊNCIA ===================== -->
       <section id="view-concorrencia" class="view">
         <div class="card">
@@ -744,26 +949,234 @@
         </div>
       </section>
 
-      <!-- ===================== PLACEHOLDERS ===================== -->
-      <section id="view-arp" class="view">
-        <div class="card" style="text-align:center;padding:44px">
-          <div class="placeholder-ico">📄</div>
-          <h2>Atas de Registro de Preço</h2>
-          <div class="desc">Módulo para acompanhamento de ARPs vigentes, saldos e caronas. Em desenvolvimento.</div>
-        </div>
-      </section>
-      <section id="view-disputa" class="view">
-        <div class="card" style="text-align:center;padding:44px">
-          <div class="placeholder-ico">⚔️</div>
-          <h2>Sala de Disputa</h2>
-          <div class="desc">Calculadora de lances em tempo real, limite mínimo de preço e histórico de disputa. Em desenvolvimento.</div>
-        </div>
-      </section>
+      <!-- ===================== CATÁLOGO INTERNO ===================== -->
       <section id="view-catalogo" class="view">
-        <div class="card" style="text-align:center;padding:44px">
-          <div class="placeholder-ico">📚</div>
-          <h2>Catálogo de Produtos</h2>
-          <div class="desc">Base de produtos padronizados do LICSYSTEM com preços de referência. Em desenvolvimento.</div>
+        <div class="card">
+          <div class="card-head">
+            <h2>📚 Catálogo Interno</h2>
+            <span class="tag">Produtos</span>
+          </div>
+          <div class="desc">Cadastre produtos com preço de referência para reutilizar em orçamentos. Persistência local agora — preparado para Firestore (<code>catalogo</code>).</div>
+          <div id="catalogoAlert" class="alert"></div>
+          <div class="badge-edit-mode" id="catEditBadge">Editando produto — altere os campos e clique em Salvar.</div>
+
+          <div class="entrega-subcard" style="margin-bottom:18px">
+            <h3 style="margin:0 0 12px;font-size:13px;font-weight:700;color:var(--ls-navy)">Cadastro de produto</h3>
+            <input type="hidden" id="catEditId" value="" />
+            <div class="form-row">
+              <div style="flex:2">
+                <label class="fld" for="catNome">Nome do Produto / Descrição</label>
+                <input type="text" id="catNome" placeholder="ex.: Abraçadeira Borboleta 12–20mm (kit 10)" />
+              </div>
+              <div>
+                <label class="fld" for="catSku">Código / SKU</label>
+                <input type="text" id="catSku" placeholder="ex.: ABR-BOR-1220" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label class="fld" for="catPreco">Preço de Referência (R$)</label>
+                <input type="number" id="catPreco" min="0" step="0.01" placeholder="0,00" />
+              </div>
+              <div>
+                <label class="fld" for="catMarca">Marca / Fabricante</label>
+                <input type="text" id="catMarca" placeholder="ex.: Vonder" />
+              </div>
+              <div style="display:flex;align-items:flex-end;gap:8px;flex:0 0 auto">
+                <button type="button" class="btn btn-green" id="btnSalvarProduto">💾 Salvar Produto</button>
+                <button type="button" class="btn btn-ghost" id="btnCancelarEditCat" style="display:none">Cancelar edição</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="search-bar">
+            <span class="sb-ico" aria-hidden="true">🔍</span>
+            <input type="text" id="catBusca" placeholder="Filtrar por nome, código ou marca…" aria-label="Pesquisar no catálogo" />
+          </div>
+
+          <div class="tbl-wrap">
+            <table id="catalogoTable">
+              <thead>
+                <tr>
+                  <th style="width:120px">Código</th>
+                  <th>Descrição</th>
+                  <th style="width:140px">Marca</th>
+                  <th style="width:120px">Preço Ref.</th>
+                  <th style="width:140px">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="catalogoBody">
+                <tr><td colspan="5" class="muted" style="text-align:center;padding:24px">Nenhum produto cadastrado.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== ATAS DE REGISTRO (ARP) ===================== -->
+      <section id="view-arp" class="view">
+        <div class="card">
+          <div class="card-head">
+            <h2>📄 Atas de Registro (ARP)</h2>
+            <span class="tag">Saldos</span>
+          </div>
+          <div class="desc">Cadastre a ata, itens homologados e acompanhe o <b>saldo disponível</b> (Total − Consumido). Preparado para persistência no banco.</div>
+          <div id="arpAlert" class="alert"></div>
+
+          <!-- 1. Cabeçalho da Ata -->
+          <div class="entrega-subcard" style="margin-bottom:16px">
+            <h3 style="margin:0 0 12px;font-size:13px;font-weight:700;color:var(--ls-navy)">1 · Dados gerais da ata</h3>
+            <input type="hidden" id="arpId" value="" />
+            <div class="form-row">
+              <div style="flex:2">
+                <label class="fld" for="arpOrgao">Órgão Gerenciador</label>
+                <input type="text" id="arpOrgao" placeholder="ex.: Prefeitura de Ibaiti" />
+              </div>
+              <div>
+                <label class="fld" for="arpNumero">Número do Pregão / ARP</label>
+                <input type="text" id="arpNumero" placeholder="ex.: PE 013/2026 — ARP 05/2026" />
+              </div>
+              <div style="max-width:180px">
+                <label class="fld" for="arpValidade">Data de Vencimento / Validade</label>
+                <input type="date" id="arpValidade" />
+              </div>
+            </div>
+            <div class="toggle-row" style="margin-top:4px">
+              <input type="checkbox" id="arpAceitaCarona" />
+              <label for="arpAceitaCarona">Aceita Carona (Adesão)?</label>
+            </div>
+          </div>
+
+          <!-- 2. Itens da Ata -->
+          <div class="entrega-subcard" style="margin-bottom:16px">
+            <h3 style="margin:0 0 12px;font-size:13px;font-weight:700;color:var(--ls-navy)">2 · Adicionar item à ata</h3>
+            <div class="form-row">
+              <div style="flex:2">
+                <label class="fld" for="arpItemProduto">Produto</label>
+                <input type="text" id="arpItemProduto" placeholder="Descrição do item homologado" />
+              </div>
+              <div>
+                <label class="fld" for="arpItemQtdTotal">Qtd. Total Homologada</label>
+                <input type="number" id="arpItemQtdTotal" min="0" step="1" placeholder="0" />
+              </div>
+              <div>
+                <label class="fld" for="arpItemQtdConsumida">Qtd. Já Consumida / Empenhada</label>
+                <input type="number" id="arpItemQtdConsumida" min="0" step="1" value="0" placeholder="0" />
+              </div>
+              <div style="display:flex;align-items:flex-end">
+                <button type="button" class="btn btn-primary" id="btnArpAddItem">+ Adicionar Item à Ata</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Tabela de saldo -->
+          <div class="card-head" style="padding:0;margin-bottom:10px;border:0">
+            <h2 style="font-size:15px;margin:0">3 · Acompanhamento de saldo</h2>
+            <button type="button" class="btn btn-green btn-sm" id="btnArpSalvarAta">💾 Salvar Ata</button>
+          </div>
+          <div class="tbl-wrap">
+            <table id="arpItensTable">
+              <thead>
+                <tr>
+                  <th style="width:48px">#</th>
+                  <th>Produto</th>
+                  <th style="width:120px">Qtd. Total</th>
+                  <th style="width:130px">Qtd. Consumida</th>
+                  <th style="width:140px">Saldo Disponível</th>
+                  <th style="width:90px">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="arpItensBody">
+                <tr><td colspan="6" class="muted" style="text-align:center;padding:24px">Nenhum item adicionado a esta ata.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="margin-top:18px">
+            <div class="card-head" style="padding:0;margin-bottom:10px;border:0">
+              <h2 style="font-size:15px;margin:0">Atas salvas</h2>
+              <button type="button" class="btn btn-ghost btn-sm" id="btnArpNova">+ Nova Ata</button>
+            </div>
+            <div id="arpListaSalvas" class="entrega-list">
+              <div class="muted small" style="padding:14px;text-align:center">Nenhuma ARP salva ainda.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== SALA DE DISPUTA ===================== -->
+      <section id="view-disputa" class="view">
+        <div class="card">
+          <div class="card-head">
+            <h2>⚔️ Sala de Disputa</h2>
+            <span class="tag">Ao vivo</span>
+          </div>
+          <div class="desc">Painel de apoio durante o pregão: calcule desconto e margem em tempo real e registre seus lances com horário.</div>
+          <div id="disputaAlert" class="alert"></div>
+
+          <div class="disputa-grid">
+            <!-- Coluna esquerda: calculadora -->
+            <div class="entrega-subcard">
+              <h3 style="margin:0 0 12px;font-size:13px;font-weight:700;color:var(--ls-navy)">Calculadora em tempo real</h3>
+              <div class="form-row">
+                <div style="flex:1;width:100%">
+                  <label class="fld" for="disputaPrecoRef">Preço de Referência (meu custo + margem desejada)</label>
+                  <input type="number" id="disputaPrecoRef" min="0" step="0.01" placeholder="0,00" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div>
+                  <label class="fld" for="disputaDegrau">Lance Mínimo Permitido (Degrau)</label>
+                  <input type="number" id="disputaDegrau" min="0" step="0.01" placeholder="0,00" />
+                </div>
+                <div>
+                  <label class="fld" for="disputaLanceConcorrente">Lance Atual do Concorrente</label>
+                  <input type="number" id="disputaLanceConcorrente" min="0" step="0.01" placeholder="0,00" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div style="flex:1;width:100%">
+                  <label class="fld" for="disputaMeuCusto">Meu Custo (para margem restante)</label>
+                  <input type="number" id="disputaMeuCusto" min="0" step="0.01" placeholder="Custo sem margem" />
+                </div>
+              </div>
+
+              <div class="disputa-kpi">
+                <div class="disputa-card" id="cardDescontoAtual">
+                  <div class="dc-label">Desconto atual (%)</div>
+                  <div class="dc-value" id="disputaDescontoPct">—</div>
+                  <div class="dc-sub" id="disputaDescontoSub">Em relação ao preço de referência</div>
+                </div>
+                <div class="disputa-card" id="cardMargemRestante">
+                  <div class="dc-label">Margem restante</div>
+                  <div class="dc-value" id="disputaMargemRestante">—</div>
+                  <div class="dc-sub" id="disputaMargemSub">Lance atual − meu custo</div>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div style="flex:1">
+                  <label class="fld" for="disputaMeuProximoLance">Meu próximo lance (sugerido)</label>
+                  <input type="number" id="disputaMeuProximoLance" min="0" step="0.01" readonly />
+                </div>
+              </div>
+              <div class="btn-row">
+                <button type="button" class="btn btn-navy" id="btnRegistrarLance">📌 Registrar Meu Lance</button>
+                <button type="button" class="btn btn-ghost" id="btnLimparDisputa">Limpar sessão</button>
+              </div>
+            </div>
+
+            <!-- Coluna direita: histórico -->
+            <div class="entrega-subcard">
+              <div class="card-head" style="padding:0;margin:0 0 10px;border:0">
+                <h3 style="margin:0;font-size:13px;font-weight:700;color:var(--ls-navy)">Histórico de lances</h3>
+                <span class="small muted" id="disputaHistCount">0 registro(s)</span>
+              </div>
+              <ul class="lance-hist" id="disputaHistorico">
+                <li class="lh-empty">Nenhum lance registrado ainda.</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -825,6 +1238,163 @@
       </section>
     </div>
   </div>
+</div>
+
+<!-- ============ MODAL CENTRAL: CONTROLE DE ENTREGA ============ -->
+<div id="entregaOverlay" aria-hidden="true">
+<aside id="entregaOffcanvas" role="dialog" aria-modal="true" aria-labelledby="entregaOcTitle" aria-hidden="true">
+  <div class="oc-head">
+    <div>
+      <h2 id="entregaOcTitle">Nova Entrega</h2>
+      <p>Preencha identificação, nota fiscal e destinação logística.</p>
+    </div>
+    <button type="button" class="oc-close" id="btnFecharEntrega" aria-label="Fechar">&times;</button>
+  </div>
+  <div class="oc-body">
+    <div id="entregaFormAlert" class="alert"></div>
+
+    <!-- Sessão 1: Identificação -->
+    <div class="oc-section">
+      <span class="oc-label">1 · Identificação</span>
+      <div class="form-row">
+        <div style="flex:2">
+          <label class="fld" for="entregaNomeLicitacao">Nome da Licitação</label>
+          <input type="text" id="entregaNomeLicitacao" placeholder="ex.: PREFEITURA IBAITI" />
+        </div>
+        <div>
+          <label class="fld" for="entregaNumeroEmpenho">Número do Empenho</label>
+          <input type="text" id="entregaNumeroEmpenho" placeholder="ex.: 2026NE001234" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Sessão 2: Faturamento / Anexos -->
+    <div class="oc-section">
+      <span class="oc-label">2 · Faturamento, origem e anexos</span>
+      <div class="entrega-grid">
+        <div class="entrega-subcard">
+          <h3>Status da Nota</h3>
+          <div class="status-nf-wrap" role="radiogroup" aria-label="Status da Nota">
+            <label class="status-nf is-nao" id="lblStatusNaoFeito">
+              <input type="radio" name="entregaStatusNota" id="entregaStatusNaoFeito" value="NAO_FEITO" checked />
+              NÃO FEITO
+            </label>
+            <label class="status-nf" id="lblStatusFeito">
+              <input type="radio" name="entregaStatusNota" id="entregaStatusFeito" value="FEITO" />
+              FEITO
+            </label>
+          </div>
+        </div>
+        <div class="entrega-subcard">
+          <h3>Anexar Nota Fiscal</h3>
+          <label class="upload-box" for="entregaArquivoNf" id="entregaUploadBox">
+            <span class="ub-ico" aria-hidden="true">📎</span>
+            <span class="ub-txt">
+              <b id="entregaArquivoNome">PDF ou imagem</b>
+              <span>Clique para selecionar o arquivo</span>
+            </span>
+          </label>
+          <input type="file" id="entregaArquivoNf" accept="application/pdf,image/*" style="display:none" />
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:12px">
+        <div style="flex:1;width:100%">
+          <label class="fld" for="entregaObservacoes">Observações / Balão da Nota</label>
+          <textarea id="entregaObservacoes" placeholder="Detalhes da NF, pendências, contato…"></textarea>
+        </div>
+      </div>
+      <div class="form-row">
+        <div style="flex:1;width:100%">
+          <label class="fld" for="entregaMaterialOrigem">Material Adquirido / Fornecedor de Origem</label>
+          <input type="text" id="entregaMaterialOrigem" placeholder="ex.: Ferragens XYZ — abraçadeiras e furadeiras" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Sessão 3: Logística -->
+    <div class="oc-section">
+      <span class="oc-label">3 · Logística de destinação</span>
+      <div class="radio-cards">
+        <label class="radio-card is-active" id="cardDestinoFinal">
+          <input type="radio" name="entregaTipoDestino" id="entregaDestinoFinal" value="DESTINO_FINAL" checked />
+          <span class="rc-ico">🏢</span>
+          <span class="rc-title">DESTINO FINAL</span>
+          <span class="rc-sub">Entrega direta no órgão / local do cliente</span>
+        </label>
+        <label class="radio-card" id="cardMinhaLoja">
+          <input type="radio" name="entregaTipoDestino" id="entregaMinhaLoja" value="MINHA_LOJA" />
+          <span class="rc-ico">🏪</span>
+          <span class="rc-title">MINHA LOJA</span>
+          <span class="rc-sub">Estoque interno — envio futuro</span>
+        </label>
+      </div>
+
+      <div id="painelDestinoFinal">
+        <div class="entrega-subcard">
+          <h3>Endereço do destino</h3>
+          <div class="form-row">
+            <div style="flex:1;width:100%">
+              <label class="fld" for="entregaLocalResponsavel">Nome do Local / Responsável</label>
+              <input type="text" id="entregaLocalResponsavel" placeholder="ex.: Almoxarifado Pref. Ibaiti — João" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div style="max-width:160px">
+              <label class="fld" for="entregaCep">CEP</label>
+              <input type="text" id="entregaCep" placeholder="00000-000" maxlength="9" inputmode="numeric" />
+            </div>
+            <div style="flex:2">
+              <label class="fld" for="entregaEndereco">Endereço</label>
+              <input type="text" id="entregaEndereco" placeholder="Rua / Avenida (ViaCEP)" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div style="max-width:120px">
+              <label class="fld" for="entregaNumero">Número</label>
+              <input type="text" id="entregaNumero" placeholder="Nº" />
+            </div>
+            <div style="flex:1">
+              <label class="fld" for="entregaComplemento">Complemento</label>
+              <input type="text" id="entregaComplemento" placeholder="Sala, bloco, referência…" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label class="fld" for="entregaBairro">Bairro</label>
+              <input type="text" id="entregaBairro" placeholder="Bairro" />
+            </div>
+            <div>
+              <label class="fld" for="entregaCidade">Cidade</label>
+              <input type="text" id="entregaCidade" placeholder="Cidade" />
+            </div>
+            <div style="max-width:80px">
+              <label class="fld" for="entregaUf">UF</label>
+              <input type="text" id="entregaUf" placeholder="UF" maxlength="2" />
+            </div>
+          </div>
+          <div class="small muted" id="entregaCepHint">Digite o CEP (8 dígitos) para preencher via ViaCEP.</div>
+        </div>
+      </div>
+
+      <div id="painelMinhaLoja" style="display:none">
+        <div class="entrega-subcard">
+          <h3>Envio futuro</h3>
+          <label class="fld" for="entregaTransporte">Transporte para envio futuro</label>
+          <select id="entregaTransporte">
+            <option value="">Selecione…</option>
+            <option value="CORREIOS">Correios</option>
+            <option value="TRANSPORTADORA">Transportadora</option>
+            <option value="VEICULO_PROPRIO">Veículo Próprio</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="oc-foot">
+    <button type="button" class="btn btn-ghost" id="btnCancelarEntrega">Cancelar</button>
+    <button type="button" class="btn btn-green" id="btnSalvarEntrega">💾 Salvar Entrega</button>
+  </div>
+</aside>
 </div>
 
 <!-- =================================================================== -->
@@ -1100,19 +1670,39 @@
   };
 
   var _fbInit = null;
-  utils.ensureFirebase = function(){
+  var _fbAuthInit = null;
+  var _fbDbReady = null;
+
+  /** Só App + Auth (login rápido). Database sobe sob demanda. */
+  utils.ensureFirebaseAuth = function(){
     if(!utils.hasFirebaseConfig()) return Promise.reject(new Error("firebase-config-vazio"));
-    if(_fbInit) return _fbInit;
-    _fbInit = utils.loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js")
-      .then(function(){ return utils.loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"); })
-      .then(function(){ return utils.loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"); })
+    if(_fbAuthInit) return _fbAuthInit;
+    _fbAuthInit = utils.loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js")
+      .then(function(){
+        return utils.loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js");
+      })
       .then(function(){
         if(!window.firebase.apps.length){
           window.firebase.initializeApp(DEFAULT_FIREBASE_CONFIG);
         }
         return window.firebase;
       })
-      .catch(function(err){ _fbInit = null; throw err; });
+      .catch(function(err){ _fbAuthInit = null; throw err; });
+    return _fbAuthInit;
+  };
+
+  /** App + Auth + Realtime Database (paralelo após o app). */
+  utils.ensureFirebase = function(){
+    if(!utils.hasFirebaseConfig()) return Promise.reject(new Error("firebase-config-vazio"));
+    if(_fbInit) return _fbInit;
+    _fbInit = utils.ensureFirebaseAuth()
+      .then(function(){
+        if(_fbDbReady) return _fbDbReady;
+        _fbDbReady = utils.loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js");
+        return _fbDbReady;
+      })
+      .then(function(){ return window.firebase; })
+      .catch(function(err){ _fbInit = null; _fbDbReady = null; throw err; });
     return _fbInit;
   };
 
@@ -1221,6 +1811,15 @@
 
   LICSYSTEM.state = {
     authUser: null,
+    _orcDirty: true,
+    _orcRendered: false,
+    _dashReady: false,
+    _cofreRendered: false,
+    orcPage: 1,
+    orcPageSize: 100,
+    capPage: 1,
+    capPageSize: 100,
+    capFiltered: [],
     orcItems: [],
     aprovadosCruzamento: [],
     pncpAlerts: [],
@@ -1501,6 +2100,7 @@
               var full = pages.join("\n");
               var items = LICSYSTEM.captacao.splitEdital(full);
               LICSYSTEM.state.captacaoLines = items;
+              LICSYSTEM.state.capPage = 1;
               LICSYSTEM.captacao.render(items);
               showAlert("pdfStatus","ok","Texto extraído: "+items.length+" linha(s) no formato qtd + UN + descrição (ex.: 100,000 UN Viga 5x15mt - Viga 5x15mt).");
             });
@@ -1514,7 +2114,7 @@
       });
     },
 
-    // Uma <tr> por item, com checkbox individual
+    // Uma <tr> por item, com checkbox individual — paginado (100/página)
     render:function(lines, filterAll){
       var kw = (el("pdfKeywords").value||"").split(",").map(function(s){return utils.fold(s).toLowerCase().trim();}).filter(Boolean);
       var body = el("captacaoBody");
@@ -1528,13 +2128,26 @@
           return kw.some(function(k){ return t.indexOf(k) !== -1; });
         });
       }
-      if(!filtered.length){
+      LICSYSTEM.state.capFiltered = filtered;
+      var size = LICSYSTEM.state.capPageSize || 100;
+      var total = filtered.length;
+      var pages = Math.max(1, Math.ceil(total / size) || 1);
+      if(!LICSYSTEM.state.capPage || LICSYSTEM.state.capPage < 1) LICSYSTEM.state.capPage = 1;
+      if(LICSYSTEM.state.capPage > pages) LICSYSTEM.state.capPage = pages;
+
+      if(!total){
         body.innerHTML='<tr><td colspan="4" class="muted" style="text-align:center;padding:24px">Nenhuma linha corresponde ao filtro.</td></tr>';
+        LICSYSTEM.captacao.updatePager();
         return;
       }
+
+      var page = LICSYSTEM.state.capPage;
+      var start = (page - 1) * size;
+      var end = Math.min(start + size, total);
       var html="";
-      filtered.forEach(function(l,idx){
-        if(!utils.isLinhaProdutoEdital(l)) return;
+      for(var idx = start; idx < end; idx++){
+        var l = filtered[idx];
+        if(!utils.isLinhaProdutoEdital(l)) continue;
         var linha = utils.formatLinhaEdital(l) || l;
         var risco = utils.riscoMatch(linha);
         var flag = risco.length ? '<span class="risk-flag" title="Risco: '+utils.escapeHtml(risco.join(", "))+'">⚠</span>' : "";
@@ -1544,10 +2157,44 @@
           '<td>'+flag+utils.escapeHtml(linha)+'</td>'+
           '<td><button type="button" class="btn btn-ghost btn-sm capGoogle" data-q="'+utils.escapeHtml(utils.nomeProdutoEdital(linha))+'">🔎 Google</button></td>'+
           '</tr>';
-      });
+      }
       body.innerHTML = html;
       var all = el("capCheckAll");
       if(all) all.checked = false;
+      LICSYSTEM.captacao.updatePager();
+    },
+
+    updatePager:function(){
+      var pager = el("capPager");
+      var info = el("capPagerInfo");
+      var prev = el("capPrev");
+      var next = el("capNext");
+      var total = (LICSYSTEM.state.capFiltered || []).length;
+      var size = LICSYSTEM.state.capPageSize || 100;
+      var pages = Math.max(1, Math.ceil(total / size) || 1);
+      var page = LICSYSTEM.state.capPage || 1;
+      if(!pager) return;
+      if(total <= size){
+        pager.style.display = "none";
+        return;
+      }
+      pager.style.display = "flex";
+      var start = total ? ((page - 1) * size + 1) : 0;
+      var end = Math.min(page * size, total);
+      if(info) info.innerHTML = "Itens <b>"+start+"–"+end+"</b> de <b>"+total+"</b> · Página <b>"+page+"</b>/"+pages+" (100 por página)";
+      if(prev) prev.disabled = page <= 1;
+      if(next) next.disabled = page >= pages;
+    },
+
+    goPage:function(delta){
+      var size = LICSYSTEM.state.capPageSize || 100;
+      var total = (LICSYSTEM.state.capFiltered || []).length;
+      var pages = Math.max(1, Math.ceil(total / size) || 1);
+      var next = (LICSYSTEM.state.capPage || 1) + delta;
+      if(next < 1) next = 1;
+      if(next > pages) next = pages;
+      LICSYSTEM.state.capPage = next;
+      LICSYSTEM.captacao.render(LICSYSTEM.state.captacaoLines, false);
     },
 
     exportarPdf:function(){
@@ -1689,16 +2336,70 @@
       var q=Number(it.qtd)||0, v=Number(it.vunit)||0, p=Number(it.pct)||0;
       return q*v*(1+p/100);
     },
-    render:function(){
+    pageCount:function(){
+      var n = LICSYSTEM.state.orcItems.length;
+      var size = LICSYSTEM.state.orcPageSize || 100;
+      return Math.max(1, Math.ceil(n / size) || 1);
+    },
+    clampPage:function(){
+      var pages = LICSYSTEM.orcamento.pageCount();
+      if(!LICSYSTEM.state.orcPage || LICSYSTEM.state.orcPage < 1) LICSYSTEM.state.orcPage = 1;
+      if(LICSYSTEM.state.orcPage > pages) LICSYSTEM.state.orcPage = pages;
+      return LICSYSTEM.state.orcPage;
+    },
+    updatePager:function(){
+      var pager = el("orcPager");
+      var info = el("orcPagerInfo");
+      var prev = el("orcPrev");
+      var next = el("orcNext");
+      if(!pager) return;
+      var total = LICSYSTEM.state.orcItems.length;
+      var size = LICSYSTEM.state.orcPageSize || 100;
+      var pages = LICSYSTEM.orcamento.pageCount();
+      var page = LICSYSTEM.orcamento.clampPage();
+      if(total <= size){
+        pager.style.display = "none";
+        return;
+      }
+      pager.style.display = "flex";
+      var start = total ? ((page - 1) * size + 1) : 0;
+      var end = Math.min(page * size, total);
+      if(info) info.innerHTML = "Itens <b>"+start+"–"+end+"</b> de <b>"+total+"</b> · Página <b>"+page+"</b>/"+pages+" (100 por página)";
+      if(prev) prev.disabled = page <= 1;
+      if(next) next.disabled = page >= pages;
+    },
+    goPage:function(delta){
+      var pages = LICSYSTEM.orcamento.pageCount();
+      var next = (LICSYSTEM.state.orcPage || 1) + delta;
+      if(next < 1) next = 1;
+      if(next > pages) next = pages;
+      LICSYSTEM.state.orcPage = next;
+      LICSYSTEM.state._orcDirty = true;
+      LICSYSTEM.orcamento.render({ save:false });
+    },
+    render:function(opts){
+      opts = opts || {};
       var body = el("orcBody");
-      var html="";
-      var geral=0;
-      LICSYSTEM.state.orcItems.forEach(function(it,i){
+      if(!body) return;
+      var items = LICSYSTEM.state.orcItems;
+      var n = items.length;
+      var size = LICSYSTEM.state.orcPageSize || 100;
+      var page = LICSYSTEM.orcamento.clampPage();
+      var start = (page - 1) * size;
+      var end = Math.min(start + size, n);
+
+      // Total geral sempre de TODOS os itens (não só da página)
+      var geral = 0;
+      for(var g = 0; g < n; g++) geral += LICSYSTEM.orcamento.calcTotal(items[g]);
+
+      var buf = [];
+      for(var i = start; i < end; i++){
+        var it = items[i];
         var total = LICSYSTEM.orcamento.calcTotal(it);
-        geral += total;
         var risco = utils.riscoMatch(it.produto);
         var flag = risco.length ? '<span class="risk-flag" title="Risco: '+utils.escapeHtml(risco.join(", "))+'">⚠</span>' : "";
-        html+='<tr class="'+(risco.length?'risk-row':'')+'" data-item-idx="'+i+'">'+
+        buf.push(
+          '<tr class="'+(risco.length?'risk-row':'')+'" data-item-idx="'+i+'">'+
           '<td><input type="checkbox" class="orcChk" data-i="'+i+'" aria-label="Selecionar item '+(i+1)+'"></td>'+
           '<td>'+(i+1)+'</td>'+
           '<td class="'+(risco.length?'risk-cell':'')+'">'+flag+'<input type="text" data-i="'+i+'" data-f="produto" value="'+utils.escapeHtml(it.produto)+'" placeholder="Descrição"></td>'+
@@ -1711,16 +2412,26 @@
             '<button type="button" class="btn btn-ghost btn-sm orcGoogle" data-i="'+i+'">G</button>'+
             '<button type="button" class="btn btn-ghost btn-sm orcMl" data-i="'+i+'">ML</button></div></td>'+
           '<td><button type="button" class="btn btn-ghost btn-sm orcDel" data-i="'+i+'">✕</button></td>'+
-          '</tr>';
-      });
-      body.innerHTML = html;
+          '</tr>'
+        );
+      }
+      if(!buf.length){
+        body.innerHTML = '<tr><td colspan="10" class="muted" style="text-align:center;padding:20px">Nenhum item nesta página.</td></tr>';
+      } else {
+        body.innerHTML = buf.join("");
+      }
       el("orcTotalGeral").textContent = utils.formatBrl(geral);
       var all = el("orcCheckAll");
       if(all) all.checked = false;
-      LICSYSTEM.orcamento.save();
+      LICSYSTEM.state._orcDirty = false;
+      LICSYSTEM.state._orcRendered = true;
+      LICSYSTEM.orcamento.updatePager();
+      if(opts.save !== false) LICSYSTEM.orcamento.save();
     },
     addLinha:function(){
       LICSYSTEM.state.orcItems.push({produto:"",qtd:1,vunit:0,pct:0,link:""});
+      LICSYSTEM.state.orcPage = LICSYSTEM.orcamento.pageCount();
+      LICSYSTEM.state._orcDirty = true;
       LICSYSTEM.orcamento.render();
     },
     addFromLines:function(lines){
@@ -1733,11 +2444,15 @@
       LICSYSTEM.state.orcItems = LICSYSTEM.state.orcItems.filter(function(it,idx){
         return !(idx===0 && !it.produto && !Number(it.vunit));
       });
+      LICSYSTEM.state.orcPage = 1;
+      LICSYSTEM.state._orcDirty = true;
       LICSYSTEM.orcamento.render();
     },
     limpar:function(){
       if(!confirm("Limpar toda a planilha de orçamento?")) return;
       LICSYSTEM.state.orcItems = [ {produto:"",qtd:1,vunit:0,pct:0,link:""} ];
+      LICSYSTEM.state.orcPage = 1;
+      LICSYSTEM.state._orcDirty = true;
       LICSYSTEM.orcamento.render();
     },
 
@@ -1840,8 +2555,22 @@
       var it=LICSYSTEM.state.orcItems[i]; if(!it) return;
       if(f==="produto"||f==="link") it[f]=val;
       else it[f]=Number(val)||0;
-      // update row total + geral without full rerender for perf
-      LICSYSTEM.orcamento.render();
+      LICSYSTEM.state._orcDirty = true;
+      // Atualiza só o total da linha + geral (não remonta 2000 linhas)
+      var row = document.querySelector('#orcBody tr[data-item-idx="'+i+'"]');
+      if(row && row.cells && row.cells[6]){
+        row.cells[6].textContent = utils.formatBrl(LICSYSTEM.orcamento.calcTotal(it));
+      }
+      var geral = 0;
+      for(var k=0;k<LICSYSTEM.state.orcItems.length;k++){
+        geral += LICSYSTEM.orcamento.calcTotal(LICSYSTEM.state.orcItems[k]);
+      }
+      if(el("orcTotalGeral")) el("orcTotalGeral").textContent = utils.formatBrl(geral);
+      clearTimeout(LICSYSTEM.orcamento._saveTimer);
+      LICSYSTEM.orcamento._saveTimer = setTimeout(function(){
+        LICSYSTEM.orcamento.save();
+        LICSYSTEM.state._orcDirty = false;
+      }, 400);
     }
   };
 
@@ -2574,6 +3303,10 @@
     on("btnAddLinha","click", LICSYSTEM.orcamento.addLinha);
     on("btnLimparOrc","click", LICSYSTEM.orcamento.limpar);
     on("btnPropostaOrc","click", LICSYSTEM.orcamento.gerarProposta);
+    on("orcPrev","click", function(){ LICSYSTEM.orcamento.goPage(-1); });
+    on("orcNext","click", function(){ LICSYSTEM.orcamento.goPage(1); });
+    on("capPrev","click", function(){ LICSYSTEM.captacao.goPage(-1); });
+    on("capNext","click", function(){ LICSYSTEM.captacao.goPage(1); });
     on("orcCheckAll","change", function(){
       var onChk = this.checked;
       document.querySelectorAll(".orcChk").forEach(function(c){ c.checked = onChk; });
@@ -2599,6 +3332,52 @@
 
     // Cofre
     on("btnSalvarCofre","click", LICSYSTEM.cofre.save);
+
+    // Entregas (offcanvas)
+    LICSYSTEM.entregas.wire();
+
+    // Catálogo Interno
+    on("btnSalvarProduto","click", salvarProduto);
+    on("btnCancelarEditCat","click", function(){ LICSYSTEM.catalogo.cancelEdit(); });
+    on("catBusca","input", filtrarCatalogo);
+    on("catalogoBody","click", function(e){
+      var ed = e.target.closest(".catEdit");
+      if(ed){ LICSYSTEM.catalogo.editar(ed.getAttribute("data-id")); return; }
+      var ex = e.target.closest(".catDel");
+      if(ex){ LICSYSTEM.catalogo.excluir(ex.getAttribute("data-id")); return; }
+    });
+
+    // Atas de Registro (ARP)
+    on("btnArpAddItem","click", function(){ LICSYSTEM.arp.adicionarItem(); });
+    on("btnArpSalvarAta","click", function(){ LICSYSTEM.arp.salvarAta(); });
+    on("btnArpNova","click", function(){ LICSYSTEM.arp.novaAta(); });
+    on("arpItensBody","click", function(e){
+      var del = e.target.closest(".arpDelItem");
+      if(del){ LICSYSTEM.arp.removerItem(Number(del.getAttribute("data-i"))); return; }
+    });
+    on("arpItensBody","input", function(e){
+      var inp = e.target.closest("input[data-arp-i]");
+      if(!inp) return;
+      LICSYSTEM.arp.onEditItem(
+        Number(inp.getAttribute("data-arp-i")),
+        inp.getAttribute("data-arp-f"),
+        inp.value
+      );
+    });
+    on("arpListaSalvas","click", function(e){
+      var loadBtn = e.target.closest(".arpLoad");
+      if(loadBtn){ LICSYSTEM.arp.carregarAta(loadBtn.getAttribute("data-id")); return; }
+      var delBtn = e.target.closest(".arpDelAta");
+      if(delBtn){ LICSYSTEM.arp.excluirAta(delBtn.getAttribute("data-id")); return; }
+    });
+
+    // Sala de Disputa (cálculos ao vivo)
+    ["disputaPrecoRef","disputaDegrau","disputaLanceConcorrente","disputaMeuCusto"].forEach(function(id){
+      on(id,"input", function(){ LICSYSTEM.disputa.atualizarResultados(); });
+      on(id,"change", function(){ LICSYSTEM.disputa.atualizarResultados(); });
+    });
+    on("btnRegistrarLance","click", function(){ LICSYSTEM.disputa.registrarLance(); });
+    on("btnLimparDisputa","click", function(){ LICSYSTEM.disputa.limparSessao(); });
 
     // Concorrência
     on("btnCnpj","click", LICSYSTEM.concorrencia.buscar);
@@ -2627,29 +3406,970 @@
     orcamento:'Orçamento',
     cruzamento:'Cruzamento Inteligente (ML)',
     cofre:'Cofre de Documentos',
+    entregas:'Licitação',
     concorrencia:'Análise de Concorrência',
-    arp:'Atas de Registro de Preço',
+    catalogo:'Catálogo Interno',
+    arp:'Atas de Registro (ARP)',
     disputa:'Sala de Disputa',
-    catalogo:'Catálogo',
     ferramentas:'Ferramentas'
   };
   LICSYSTEM.VIEW_TITLES = VIEW_TITLES;
 
   LICSYSTEM.onViewChange = function(view){
     LICSYSTEM.state.currentView = view || "dashboard";
-    if(view==="dashboard") LICSYSTEM.dashboard.render();
-    if(view==="orcamento") LICSYSTEM.orcamento.render();
-    if(view==="cofre") LICSYSTEM.cofre.render();
-    if(view==="ferramentas") LICSYSTEM.ferramentas.carregarView();
-    if(view==="cruzamento"){
-      LICSYSTEM.cruzamento.resolveCep().catch(function(){});
-    }
-    // Contexto da página atual → Voiceflow (após widget pronto)
-    try{
-      if(LICSYSTEM.voiceflow && LICSYSTEM.voiceflow.syncContext){
-        LICSYSTEM.voiceflow.syncContext(view);
+    // Não remonta telas pesadas a cada clique no menu
+    if(view==="dashboard"){
+      if(!LICSYSTEM.state._dashReady){
+        LICSYSTEM.state._dashReady = true;
+        LICSYSTEM.dashboard.render();
       }
+    }
+    if(view==="orcamento"){
+      if(LICSYSTEM.state._orcDirty || !LICSYSTEM.state._orcRendered){
+        LICSYSTEM.orcamento.render({ save:false });
+      }
+    }
+    if(view==="cofre"){
+      if(!LICSYSTEM.state._cofreRendered){
+        LICSYSTEM.state._cofreRendered = true;
+        LICSYSTEM.cofre.render();
+      }
+    }
+    if(view==="ferramentas") LICSYSTEM.ferramentas.carregarView();
+    if(view==="entregas") LICSYSTEM.entregas.renderLista();
+    if(view==="catalogo") listarProdutos();
+    if(view==="arp") LICSYSTEM.arp.renderAll();
+    if(view==="disputa") LICSYSTEM.disputa.atualizarResultados();
+    if(view==="cruzamento"){
+      // CEP em background — não bloqueia a troca de tela
+      setTimeout(function(){
+        LICSYSTEM.cruzamento.resolveCep().catch(function(){});
+      }, 0);
+    }
+    // Voiceflow: só guarda a página — NÃO recarrega o chat a cada clique
+    try{
+      if(LICSYSTEM.voiceflow) LICSYSTEM.voiceflow.currentView = view;
     }catch(e){}
+  };
+
+  /* ============================ ENTREGAS ============================ */
+  var ENTREGAS_KEY = "licsystem_entregas_v1";
+
+  /**
+   * Monta o payload da entrega (texto + arquivo) para persistência futura.
+   * Pronto para: Firebase Storage (arquivo) + Firestore/RTDB (metadados).
+   * @returns {{ ok:boolean, erro?:string, dados?:object, arquivo?:File|null }}
+   */
+  function coletarDadosEntrega(){
+    var val = function(id){ var n = el(id); return n ? String(n.value || "").trim() : ""; };
+    var statusEl = document.querySelector('input[name="entregaStatusNota"]:checked');
+    var destinoEl = document.querySelector('input[name="entregaTipoDestino"]:checked');
+    var fileInput = el("entregaArquivoNf");
+    var arquivo = (fileInput && fileInput.files && fileInput.files[0]) ? fileInput.files[0] : null;
+
+    var statusNota = statusEl ? statusEl.value : "NAO_FEITO";
+    var tipoDestino = destinoEl ? destinoEl.value : "DESTINO_FINAL";
+
+    var dados = {
+      // --- Identificação ---
+      nomeLicitacao: val("entregaNomeLicitacao"),
+      numeroEmpenho: val("entregaNumeroEmpenho"),
+
+      // --- Faturamento / anexos ---
+      statusNota: statusNota, // "FEITO" | "NAO_FEITO"
+      observacoes: val("entregaObservacoes"),
+      materialOrigem: val("entregaMaterialOrigem"),
+      // Metadados do anexo (o File em si vai em `arquivo` abaixo)
+      anexo: arquivo ? {
+        nome: arquivo.name,
+        tipo: arquivo.type || "",
+        tamanho: arquivo.size || 0
+        // TODO Firebase Storage:
+        // 1) storage.ref("entregas/"+id+"/"+arquivo.name).put(arquivo)
+        // 2) url = await snap.ref.getDownloadURL()
+        // 3) dados.anexo.url = url
+      } : null,
+
+      // --- Logística ---
+      tipoDestino: tipoDestino, // "DESTINO_FINAL" | "MINHA_LOJA"
+      destinoFinal: null,
+      minhaLoja: null,
+
+      // --- Controle ---
+      criadoEm: new Date().toISOString(),
+      atualizadoEm: new Date().toISOString()
+      // TODO Firestore/RTDB:
+      // await firebase.firestore().collection("entregas").add(dados)
+      // ou utils.firebasePush("entregas", dados)
+    };
+
+    if(tipoDestino === "DESTINO_FINAL"){
+      dados.destinoFinal = {
+        localResponsavel: val("entregaLocalResponsavel"),
+        cep: val("entregaCep").replace(/\D/g,""),
+        endereco: val("entregaEndereco"),
+        numero: val("entregaNumero"),
+        complemento: val("entregaComplemento"),
+        bairro: val("entregaBairro"),
+        cidade: val("entregaCidade"),
+        uf: val("entregaUf").toUpperCase()
+      };
+    } else {
+      dados.minhaLoja = {
+        transporte: val("entregaTransporte") // CORREIOS | TRANSPORTADORA | VEICULO_PROPRIO
+      };
+    }
+
+    if(!dados.nomeLicitacao){
+      return { ok:false, erro:"Informe o Nome da Licitação." };
+    }
+    if(tipoDestino === "MINHA_LOJA" && !(dados.minhaLoja && dados.minhaLoja.transporte)){
+      return { ok:false, erro:"Selecione o transporte para envio futuro." };
+    }
+
+    return { ok:true, dados:dados, arquivo:arquivo };
+  }
+  // Exposto globalmente conforme solicitado
+  window.coletarDadosEntrega = coletarDadosEntrega;
+
+  LICSYSTEM.entregas = {
+    items: [],
+
+    load:function(){
+      try{
+        var saved = JSON.parse(localStorage.getItem(ENTREGAS_KEY) || "[]");
+        LICSYSTEM.entregas.items = Array.isArray(saved) ? saved : [];
+      }catch(e){
+        LICSYSTEM.entregas.items = [];
+      }
+    },
+
+    saveLocal:function(){
+      try{
+        localStorage.setItem(ENTREGAS_KEY, JSON.stringify(LICSYSTEM.entregas.items));
+      }catch(e){
+        console.warn("Entregas: falha ao salvar localmente", e);
+      }
+    },
+
+    open:function(){
+      var oc = el("entregaOffcanvas");
+      var ov = el("entregaOverlay");
+      if(oc){
+        oc.classList.add("open");
+        oc.setAttribute("aria-hidden","false");
+      }
+      if(ov){
+        ov.classList.add("show");
+        ov.setAttribute("aria-hidden","false");
+      }
+      document.body.classList.add("entrega-open");
+      hideAlert("entregaFormAlert");
+      setTimeout(function(){ var f = el("entregaNomeLicitacao"); if(f) f.focus(); }, 200);
+    },
+
+    close:function(){
+      var oc = el("entregaOffcanvas");
+      var ov = el("entregaOverlay");
+      if(oc){
+        oc.classList.remove("open");
+        oc.setAttribute("aria-hidden","true");
+      }
+      if(ov){
+        ov.classList.remove("show");
+        ov.setAttribute("aria-hidden","true");
+      }
+      document.body.classList.remove("entrega-open");
+    },
+
+    resetForm:function(){
+      [
+        "entregaNomeLicitacao","entregaNumeroEmpenho","entregaObservacoes","entregaMaterialOrigem",
+        "entregaLocalResponsavel","entregaCep","entregaEndereco","entregaNumero","entregaComplemento",
+        "entregaBairro","entregaCidade","entregaUf"
+      ].forEach(function(id){ if(el(id)) el(id).value = ""; });
+      if(el("entregaTransporte")) el("entregaTransporte").value = "";
+      if(el("entregaStatusNaoFeito")) el("entregaStatusNaoFeito").checked = true;
+      if(el("entregaDestinoFinal")) el("entregaDestinoFinal").checked = true;
+      if(el("entregaArquivoNf")) el("entregaArquivoNf").value = "";
+      if(el("entregaArquivoNome")) el("entregaArquivoNome").textContent = "PDF ou imagem";
+      if(el("entregaCepHint")) el("entregaCepHint").textContent = "Digite o CEP (8 dígitos) para preencher via ViaCEP.";
+      LICSYSTEM.entregas.syncStatusUi();
+      LICSYSTEM.entregas.syncDestinoUi();
+      hideAlert("entregaFormAlert");
+    },
+
+    syncStatusUi:function(){
+      var feito = el("entregaStatusFeito") && el("entregaStatusFeito").checked;
+      var lblN = el("lblStatusNaoFeito");
+      var lblF = el("lblStatusFeito");
+      if(lblN) lblN.className = "status-nf" + (feito ? "" : " is-nao");
+      if(lblF) lblF.className = "status-nf" + (feito ? " is-feito" : "");
+    },
+
+    syncDestinoUi:function(){
+      var loja = el("entregaMinhaLoja") && el("entregaMinhaLoja").checked;
+      var cardF = el("cardDestinoFinal");
+      var cardL = el("cardMinhaLoja");
+      if(cardF) cardF.classList.toggle("is-active", !loja);
+      if(cardL) cardL.classList.toggle("is-active", !!loja);
+      if(el("painelDestinoFinal")) el("painelDestinoFinal").style.display = loja ? "none" : "";
+      if(el("painelMinhaLoja")) el("painelMinhaLoja").style.display = loja ? "" : "none";
+    },
+
+    /** ViaCEP — preenche endereço ao completar 8 dígitos */
+    buscarCep:function(){
+      var cepInput = el("entregaCep");
+      if(!cepInput) return;
+      var cep = String(cepInput.value || "").replace(/\D/g,"");
+      if(cep.length === 8){
+        cepInput.value = cep.slice(0,5) + "-" + cep.slice(5);
+      }
+      var hint = el("entregaCepHint");
+      if(cep.length !== 8){
+        if(hint) hint.textContent = "Digite o CEP (8 dígitos) para preencher via ViaCEP.";
+        return;
+      }
+      if(hint) hint.textContent = "Consultando ViaCEP…";
+      fetch("https://viacep.com.br/ws/"+cep+"/json/")
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+          if(!j || j.erro){
+            if(hint) hint.textContent = "CEP não encontrado.";
+            return;
+          }
+          if(el("entregaEndereco")) el("entregaEndereco").value = j.logradouro || "";
+          if(el("entregaBairro")) el("entregaBairro").value = j.bairro || "";
+          if(el("entregaCidade")) el("entregaCidade").value = j.localidade || "";
+          if(el("entregaUf")) el("entregaUf").value = j.uf || "";
+          if(hint) hint.textContent = "Endereço preenchido via ViaCEP. Confira o número.";
+          if(el("entregaNumero")) el("entregaNumero").focus();
+        })
+        .catch(function(){
+          if(hint) hint.textContent = "Falha ao consultar ViaCEP (rede/CORS). Preencha manualmente.";
+        });
+    },
+
+    renderLista:function(){
+      LICSYSTEM.entregas.load();
+      var box = el("entregaList");
+      if(!box) return;
+      var list = LICSYSTEM.entregas.items || [];
+      if(!list.length){
+        box.innerHTML = '<div class="muted small" style="padding:18px;text-align:center">Nenhuma entrega registrada ainda.</div>';
+        return;
+      }
+      var html = "";
+      list.slice().reverse().forEach(function(it, revIdx){
+        var idx = list.length - 1 - revIdx;
+        var badge = it.statusNota === "FEITO"
+          ? '<span class="badge-nf ok">NF FEITO</span>'
+          : '<span class="badge-nf pend">NF NÃO FEITO</span>';
+        var dest = it.tipoDestino === "MINHA_LOJA"
+          ? ("Loja · " + ((it.minhaLoja && it.minhaLoja.transporte) || "—"))
+          : ("Destino · " + ((it.destinoFinal && (it.destinoFinal.cidade || it.destinoFinal.localResponsavel)) || "—"));
+        html += '<div class="entrega-item" data-idx="'+idx+'">'+
+          '<div>'+
+            '<div class="ei-title">'+utils.escapeHtml(it.nomeLicitacao||"Sem nome")+'</div>'+
+            '<div class="ei-meta">Empenho: '+utils.escapeHtml(it.numeroEmpenho||"—")+
+              ' · '+utils.escapeHtml(dest)+
+              (it.anexo && it.anexo.nome ? ' · 📎 '+utils.escapeHtml(it.anexo.nome) : '')+
+            '</div>'+
+          '</div>'+badge+
+        '</div>';
+      });
+      box.innerHTML = html;
+    },
+
+    salvar:function(){
+      var pack = coletarDadosEntrega();
+      if(!pack.ok){
+        showAlert("entregaFormAlert","warn", utils.escapeHtml(pack.erro));
+        return;
+      }
+      // Persistência local imediata (metadados). Arquivo fica só no File/seleção atual.
+      // TODO: integrar Storage + Firestore aqui usando pack.dados + pack.arquivo
+      var registro = pack.dados;
+      registro.id = "ent_"+Date.now();
+      LICSYSTEM.entregas.load();
+      LICSYSTEM.entregas.items.push(registro);
+      LICSYSTEM.entregas.saveLocal();
+      LICSYSTEM.entregas.renderLista();
+      LICSYSTEM.entregas.close();
+      LICSYSTEM.entregas.resetForm();
+      showAlert("entregaAlert","ok","✅ Entrega salva localmente ("+utils.escapeHtml(registro.nomeLicitacao)+").");
+    },
+
+    wire:function(){
+      function on(id, evt, fn){
+        var n = el(id); if(n) n.addEventListener(evt, fn);
+      }
+      on("btnNovaEntrega","click", function(){
+        LICSYSTEM.entregas.resetForm();
+        LICSYSTEM.entregas.open();
+      });
+      on("btnFecharEntrega","click", LICSYSTEM.entregas.close);
+      on("btnCancelarEntrega","click", function(){
+        LICSYSTEM.entregas.close();
+        LICSYSTEM.entregas.resetForm();
+      });
+      on("btnSalvarEntrega","click", LICSYSTEM.entregas.salvar);
+      on("entregaOverlay","click", function(e){
+        // Fecha só ao clicar no fundo escuro, não no card do formulário
+        if(e.target && e.target.id === "entregaOverlay") LICSYSTEM.entregas.close();
+      });
+
+      ["entregaStatusFeito","entregaStatusNaoFeito"].forEach(function(id){
+        on(id,"change", LICSYSTEM.entregas.syncStatusUi);
+      });
+      ["entregaDestinoFinal","entregaMinhaLoja"].forEach(function(id){
+        on(id,"change", LICSYSTEM.entregas.syncDestinoUi);
+      });
+      on("entregaCep","blur", LICSYSTEM.entregas.buscarCep);
+      on("entregaCep","input", function(){
+        var v = (el("entregaCep").value || "").replace(/\D/g,"");
+        if(v.length === 8) LICSYSTEM.entregas.buscarCep();
+      });
+      on("entregaArquivoNf","change", function(){
+        var f = el("entregaArquivoNf");
+        var nome = (f && f.files && f.files[0]) ? f.files[0].name : "PDF ou imagem";
+        if(el("entregaArquivoNome")) el("entregaArquivoNome").textContent = nome;
+      });
+
+      document.addEventListener("keydown", function(e){
+        if(e.key === "Escape" && document.body.classList.contains("entrega-open")){
+          LICSYSTEM.entregas.close();
+        }
+      });
+    }
+  };
+
+  /* ============================ CATÁLOGO INTERNO ============================ */
+  var CATALOGO_KEY = "licsystem_catalogo_v1";
+
+  LICSYSTEM.catalogo = {
+    items: [],
+    filtro: "",
+
+    /** Carrega do localStorage. Trocar por Firestore: collection('catalogo').get() */
+    load: function(){
+      try{
+        var saved = JSON.parse(localStorage.getItem(CATALOGO_KEY) || "[]");
+        LICSYSTEM.catalogo.items = Array.isArray(saved) ? saved : [];
+      }catch(e){
+        LICSYSTEM.catalogo.items = [];
+      }
+      return LICSYSTEM.catalogo.items;
+    },
+
+    /**
+     * Persiste localmente.
+     * TODO Firestore:
+     *   await firebase.firestore().collection('catalogo').doc(id).set(produto, { merge:true })
+     *   ou .add(produto) para novos
+     */
+    saveLocal: function(){
+      try{
+        localStorage.setItem(CATALOGO_KEY, JSON.stringify(LICSYSTEM.catalogo.items));
+      }catch(e){
+        console.warn("Catálogo: falha ao salvar localmente", e);
+      }
+    },
+
+    limparForm: function(){
+      if(el("catEditId")) el("catEditId").value = "";
+      if(el("catNome")) el("catNome").value = "";
+      if(el("catSku")) el("catSku").value = "";
+      if(el("catPreco")) el("catPreco").value = "";
+      if(el("catMarca")) el("catMarca").value = "";
+      var badge = el("catEditBadge");
+      if(badge) badge.classList.remove("show");
+      var btnCancel = el("btnCancelarEditCat");
+      if(btnCancel) btnCancel.style.display = "none";
+      var btnSave = el("btnSalvarProduto");
+      if(btnSave) btnSave.textContent = "💾 Salvar Produto";
+    },
+
+    cancelEdit: function(){
+      LICSYSTEM.catalogo.limparForm();
+      hideAlert("catalogoAlert");
+    },
+
+    editar: function(id){
+      LICSYSTEM.catalogo.load();
+      var item = null;
+      for(var i=0;i<LICSYSTEM.catalogo.items.length;i++){
+        if(LICSYSTEM.catalogo.items[i].id === id){ item = LICSYSTEM.catalogo.items[i]; break; }
+      }
+      if(!item) return;
+      if(el("catEditId")) el("catEditId").value = item.id;
+      if(el("catNome")) el("catNome").value = item.nome || "";
+      if(el("catSku")) el("catSku").value = item.sku || "";
+      if(el("catPreco")) el("catPreco").value = item.preco != null ? item.preco : "";
+      if(el("catMarca")) el("catMarca").value = item.marca || "";
+      var badge = el("catEditBadge");
+      if(badge) badge.classList.add("show");
+      var btnCancel = el("btnCancelarEditCat");
+      if(btnCancel) btnCancel.style.display = "";
+      var btnSave = el("btnSalvarProduto");
+      if(btnSave) btnSave.textContent = "💾 Atualizar Produto";
+      if(el("catNome")) el("catNome").focus();
+    },
+
+    excluir: function(id){
+      if(!id || !confirm("Excluir este produto do catálogo?")) return;
+      LICSYSTEM.catalogo.load();
+      LICSYSTEM.catalogo.items = LICSYSTEM.catalogo.items.filter(function(it){ return it.id !== id; });
+      LICSYSTEM.catalogo.saveLocal();
+      // TODO Firestore: await firebase.firestore().collection('catalogo').doc(id).delete()
+      listarProdutos();
+      showAlert("catalogoAlert","ok","Produto excluído.");
+      if((el("catEditId")||{}).value === id) LICSYSTEM.catalogo.limparForm();
+    }
+  };
+
+  /**
+   * Salva (cria ou atualiza) um produto do formulário.
+   * Estrutura pronta para coleção Firestore 'catalogo'.
+   */
+  function salvarProduto(){
+    var nome = ((el("catNome") && el("catNome").value) || "").trim();
+    var sku = ((el("catSku") && el("catSku").value) || "").trim();
+    var marca = ((el("catMarca") && el("catMarca").value) || "").trim();
+    var preco = Number((el("catPreco") && el("catPreco").value) || 0);
+    var editId = ((el("catEditId") && el("catEditId").value) || "").trim();
+
+    if(!nome){
+      showAlert("catalogoAlert","warn","Informe o Nome do Produto / Descrição.");
+      if(el("catNome")) el("catNome").focus();
+      return null;
+    }
+    if(preco < 0 || !isFinite(preco)){
+      showAlert("catalogoAlert","warn","Preço de referência inválido.");
+      return null;
+    }
+
+    LICSYSTEM.catalogo.load();
+    var agora = new Date().toISOString();
+    var produto;
+
+    if(editId){
+      var found = false;
+      for(var i=0;i<LICSYSTEM.catalogo.items.length;i++){
+        if(LICSYSTEM.catalogo.items[i].id === editId){
+          produto = LICSYSTEM.catalogo.items[i];
+          produto.nome = nome;
+          produto.sku = sku;
+          produto.marca = marca;
+          produto.preco = preco;
+          produto.atualizadoEm = agora;
+          found = true;
+          break;
+        }
+      }
+      if(!found){
+        showAlert("catalogoAlert","error","Produto para edição não encontrado.");
+        return null;
+      }
+      // TODO Firestore: collection('catalogo').doc(editId).update({ nome, sku, marca, preco, atualizadoEm })
+    } else {
+      produto = {
+        id: "cat_" + Date.now() + "_" + Math.floor(Math.random()*1000),
+        nome: nome,
+        sku: sku,
+        marca: marca,
+        preco: preco,
+        criadoEm: agora,
+        atualizadoEm: agora
+      };
+      LICSYSTEM.catalogo.items.push(produto);
+      // TODO Firestore: collection('catalogo').add({ ...produto sem id, ou .doc(produto.id).set(produto) })
+    }
+
+    LICSYSTEM.catalogo.saveLocal();
+    LICSYSTEM.catalogo.limparForm();
+    listarProdutos();
+    showAlert("catalogoAlert","ok", editId ? "✅ Produto atualizado." : "✅ Produto salvo no catálogo.");
+    return produto;
+  }
+
+  /**
+   * Lista produtos na tabela (respeita filtro atual).
+   * TODO Firestore: snapshot = await collection('catalogo').orderBy('nome').get()
+   */
+  function listarProdutos(){
+    LICSYSTEM.catalogo.load();
+    var body = el("catalogoBody");
+    if(!body) return;
+    var q = utils.fold(LICSYSTEM.catalogo.filtro || "").toLowerCase().trim();
+    var list = LICSYSTEM.catalogo.items.slice();
+
+    if(q){
+      list = list.filter(function(it){
+        var blob = utils.fold([it.nome, it.sku, it.marca].join(" ")).toLowerCase();
+        return blob.indexOf(q) !== -1;
+      });
+    }
+
+    list.sort(function(a,b){
+      return String(a.nome||"").localeCompare(String(b.nome||""), "pt-BR", { sensitivity:"base" });
+    });
+
+    if(!list.length){
+      body.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;padding:24px">'+(
+        q ? "Nenhum produto correspondente à busca." : "Nenhum produto cadastrado."
+      )+'</td></tr>';
+      return;
+    }
+
+    var html = "";
+    list.forEach(function(it){
+      html += '<tr data-id="'+utils.escapeHtml(it.id)+'">'+
+        '<td>'+utils.escapeHtml(it.sku || "—")+'</td>'+
+        '<td>'+utils.escapeHtml(it.nome || "")+'</td>'+
+        '<td>'+utils.escapeHtml(it.marca || "—")+'</td>'+
+        '<td style="font-weight:700;color:var(--ls-navy)">'+utils.formatBrl(Number(it.preco)||0)+'</td>'+
+        '<td><div class="cat-actions">'+
+          '<button type="button" class="btn btn-ghost btn-sm catEdit" data-id="'+utils.escapeHtml(it.id)+'">✎ Editar</button>'+
+          '<button type="button" class="btn btn-ghost btn-sm catDel" data-id="'+utils.escapeHtml(it.id)+'">✕</button>'+
+        '</div></td>'+
+      '</tr>';
+    });
+    body.innerHTML = html;
+  }
+
+  /**
+   * Filtra a tabela pelo texto da barra de pesquisa (#catBusca).
+   */
+  function filtrarCatalogo(){
+    LICSYSTEM.catalogo.filtro = (el("catBusca") && el("catBusca").value) || "";
+    listarProdutos();
+  }
+
+  // API pública (conforme solicitado)
+  window.salvarProduto = salvarProduto;
+  window.listarProdutos = listarProdutos;
+  window.filtrarCatalogo = filtrarCatalogo;
+
+  /* ============================ ATAS DE REGISTRO (ARP) ============================ */
+  var ARP_KEY = "licsystem_arp_v1";
+
+  /**
+   * Calcula saldo disponível: Qtd Total Homologada − Qtd Consumida/Empenhada.
+   * Nunca retorna negativo (piso em 0).
+   * @param {number|string} qtdTotal
+   * @param {number|string} qtdConsumida
+   * @returns {number}
+   */
+  function calcularSaldoAta(qtdTotal, qtdConsumida){
+    var total = Number(qtdTotal) || 0;
+    var cons = Number(qtdConsumida) || 0;
+    var saldo = total - cons;
+    if(saldo < 0) saldo = 0;
+    return saldo;
+  }
+  window.calcularSaldoAta = calcularSaldoAta;
+
+  LICSYSTEM.arp = {
+    /** Itens da ata em edição (rascunho na tela) */
+    draftItens: [],
+    /** Lista de atas persistidas */
+    atas: [],
+
+    load: function(){
+      try{
+        var saved = JSON.parse(localStorage.getItem(ARP_KEY) || "[]");
+        LICSYSTEM.arp.atas = Array.isArray(saved) ? saved : [];
+      }catch(e){
+        LICSYSTEM.arp.atas = [];
+      }
+      return LICSYSTEM.arp.atas;
+    },
+
+    /**
+     * Persistência local.
+     * TODO banco (RTDB/Firestore):
+     *   utils.firebaseSet("arp/"+ata.id, ata)
+     *   ou firestore.collection("arp").doc(ata.id).set(ata)
+     */
+    saveLocal: function(){
+      try{
+        localStorage.setItem(ARP_KEY, JSON.stringify(LICSYSTEM.arp.atas));
+      }catch(e){
+        console.warn("ARP: falha ao salvar localmente", e);
+      }
+    },
+
+    /** Monta objeto estruturado da ata atual (cabeçalho + itens com saldo). */
+    coletarAta: function(){
+      var orgao = ((el("arpOrgao") && el("arpOrgao").value) || "").trim();
+      var numero = ((el("arpNumero") && el("arpNumero").value) || "").trim();
+      var validade = ((el("arpValidade") && el("arpValidade").value) || "").trim();
+      var aceitaCarona = !!(el("arpAceitaCarona") && el("arpAceitaCarona").checked);
+      var id = ((el("arpId") && el("arpId").value) || "").trim();
+
+      var itens = (LICSYSTEM.arp.draftItens || []).map(function(it){
+        var total = Number(it.qtdTotal) || 0;
+        var cons = Number(it.qtdConsumida) || 0;
+        return {
+          id: it.id || ("item_"+Date.now()+"_"+Math.floor(Math.random()*999)),
+          produto: String(it.produto || "").trim(),
+          qtdTotal: total,
+          qtdConsumida: cons,
+          saldoDisponivel: calcularSaldoAta(total, cons)
+        };
+      });
+
+      return {
+        id: id || ("arp_"+Date.now()),
+        orgaoGerenciador: orgao,
+        numeroPregaoArp: numero,
+        dataValidade: validade,
+        aceitaCarona: aceitaCarona,
+        itens: itens,
+        atualizadoEm: new Date().toISOString()
+      };
+    },
+
+    adicionarItem: function(){
+      var produto = ((el("arpItemProduto") && el("arpItemProduto").value) || "").trim();
+      var qtdTotal = Number((el("arpItemQtdTotal") && el("arpItemQtdTotal").value) || 0);
+      var qtdConsumida = Number((el("arpItemQtdConsumida") && el("arpItemQtdConsumida").value) || 0);
+
+      if(!produto){
+        showAlert("arpAlert","warn","Informe o Produto do item.");
+        if(el("arpItemProduto")) el("arpItemProduto").focus();
+        return;
+      }
+      if(qtdTotal < 0 || qtdConsumida < 0){
+        showAlert("arpAlert","warn","Quantidades não podem ser negativas.");
+        return;
+      }
+      if(qtdConsumida > qtdTotal){
+        showAlert("arpAlert","warn","Quantidade consumida não pode ser maior que a homologada.");
+        return;
+      }
+
+      LICSYSTEM.arp.draftItens.push({
+        id: "item_"+Date.now()+"_"+Math.floor(Math.random()*999),
+        produto: produto,
+        qtdTotal: qtdTotal,
+        qtdConsumida: qtdConsumida
+      });
+
+      if(el("arpItemProduto")) el("arpItemProduto").value = "";
+      if(el("arpItemQtdTotal")) el("arpItemQtdTotal").value = "";
+      if(el("arpItemQtdConsumida")) el("arpItemQtdConsumida").value = "0";
+      LICSYSTEM.arp.renderItens();
+      hideAlert("arpAlert");
+      if(el("arpItemProduto")) el("arpItemProduto").focus();
+    },
+
+    removerItem: function(index){
+      if(index < 0 || index >= LICSYSTEM.arp.draftItens.length) return;
+      LICSYSTEM.arp.draftItens.splice(index, 1);
+      LICSYSTEM.arp.renderItens();
+    },
+
+    onEditItem: function(index, field, value){
+      var it = LICSYSTEM.arp.draftItens[index];
+      if(!it) return;
+      if(field === "produto") it.produto = value;
+      else it[field] = Number(value) || 0;
+      // Recalcula só o saldo da linha no DOM (rápido)
+      var row = document.querySelector('#arpItensBody tr[data-i="'+index+'"]');
+      if(row){
+        var saldo = calcularSaldoAta(it.qtdTotal, it.qtdConsumida);
+        var cell = row.querySelector(".arp-saldo");
+        if(cell){
+          cell.textContent = String(saldo);
+          cell.className = "arp-saldo " + (saldo === 0 ? "saldo-esgotado" : "saldo-ok");
+        }
+        row.classList.toggle("saldo-zero", saldo === 0);
+      }
+    },
+
+    renderItens: function(){
+      var body = el("arpItensBody");
+      if(!body) return;
+      var itens = LICSYSTEM.arp.draftItens || [];
+      if(!itens.length){
+        body.innerHTML = '<tr><td colspan="6" class="muted" style="text-align:center;padding:24px">Nenhum item adicionado a esta ata.</td></tr>';
+        return;
+      }
+      var html = "";
+      itens.forEach(function(it, i){
+        var saldo = calcularSaldoAta(it.qtdTotal, it.qtdConsumida);
+        var zero = saldo === 0;
+        html += '<tr class="'+(zero?"saldo-zero":"")+'" data-i="'+i+'">'+
+          '<td>'+(i+1)+'</td>'+
+          '<td><input type="text" data-arp-i="'+i+'" data-arp-f="produto" value="'+utils.escapeHtml(it.produto)+'" /></td>'+
+          '<td><input type="number" data-arp-i="'+i+'" data-arp-f="qtdTotal" min="0" step="1" value="'+utils.escapeHtml(it.qtdTotal)+'" /></td>'+
+          '<td><input type="number" data-arp-i="'+i+'" data-arp-f="qtdConsumida" min="0" step="1" value="'+utils.escapeHtml(it.qtdConsumida)+'" /></td>'+
+          '<td class="arp-saldo '+(zero?"saldo-esgotado":"saldo-ok")+'">'+saldo+'</td>'+
+          '<td><button type="button" class="btn btn-ghost btn-sm arpDelItem" data-i="'+i+'">✕</button></td>'+
+        '</tr>';
+      });
+      body.innerHTML = html;
+    },
+
+    renderListaSalvas: function(){
+      LICSYSTEM.arp.load();
+      var box = el("arpListaSalvas");
+      if(!box) return;
+      var list = LICSYSTEM.arp.atas || [];
+      if(!list.length){
+        box.innerHTML = '<div class="muted small" style="padding:14px;text-align:center">Nenhuma ARP salva ainda.</div>';
+        return;
+      }
+      var html = "";
+      list.slice().reverse().forEach(function(ata){
+        var nItens = (ata.itens && ata.itens.length) || 0;
+        var saldosZero = 0;
+        (ata.itens || []).forEach(function(it){
+          if(calcularSaldoAta(it.qtdTotal, it.qtdConsumida) === 0) saldosZero++;
+        });
+        html += '<div class="entrega-item">'+
+          '<div>'+
+            '<div class="ei-title">'+utils.escapeHtml(ata.orgaoGerenciador || "Sem órgão")+'</div>'+
+            '<div class="ei-meta">'+utils.escapeHtml(ata.numeroPregaoArp || "—")+
+              ' · Validade: '+utils.escapeHtml(ata.dataValidade || "—")+
+              ' · '+nItens+' item(ns)'+
+              (ata.aceitaCarona ? ' · Carona: sim' : '')+
+              (saldosZero ? ' · '+saldosZero+' esgotado(s)' : '')+
+            '</div>'+
+          '</div>'+
+          '<div class="cat-actions">'+
+            '<button type="button" class="btn btn-ghost btn-sm arpLoad" data-id="'+utils.escapeHtml(ata.id)+'">Abrir</button>'+
+            '<button type="button" class="btn btn-ghost btn-sm arpDelAta" data-id="'+utils.escapeHtml(ata.id)+'">✕</button>'+
+          '</div>'+
+        '</div>';
+      });
+      box.innerHTML = html;
+    },
+
+    renderAll: function(){
+      LICSYSTEM.arp.renderItens();
+      LICSYSTEM.arp.renderListaSalvas();
+    },
+
+    novaAta: function(){
+      if(el("arpId")) el("arpId").value = "";
+      if(el("arpOrgao")) el("arpOrgao").value = "";
+      if(el("arpNumero")) el("arpNumero").value = "";
+      if(el("arpValidade")) el("arpValidade").value = "";
+      if(el("arpAceitaCarona")) el("arpAceitaCarona").checked = false;
+      LICSYSTEM.arp.draftItens = [];
+      LICSYSTEM.arp.renderItens();
+      hideAlert("arpAlert");
+      if(el("arpOrgao")) el("arpOrgao").focus();
+    },
+
+    carregarAta: function(id){
+      LICSYSTEM.arp.load();
+      var ata = null;
+      for(var i=0;i<LICSYSTEM.arp.atas.length;i++){
+        if(LICSYSTEM.arp.atas[i].id === id){ ata = LICSYSTEM.arp.atas[i]; break; }
+      }
+      if(!ata) return;
+      if(el("arpId")) el("arpId").value = ata.id || "";
+      if(el("arpOrgao")) el("arpOrgao").value = ata.orgaoGerenciador || "";
+      if(el("arpNumero")) el("arpNumero").value = ata.numeroPregaoArp || "";
+      if(el("arpValidade")) el("arpValidade").value = ata.dataValidade || "";
+      if(el("arpAceitaCarona")) el("arpAceitaCarona").checked = !!ata.aceitaCarona;
+      LICSYSTEM.arp.draftItens = (ata.itens || []).map(function(it){
+        return {
+          id: it.id,
+          produto: it.produto,
+          qtdTotal: Number(it.qtdTotal)||0,
+          qtdConsumida: Number(it.qtdConsumida)||0
+        };
+      });
+      LICSYSTEM.arp.renderItens();
+      showAlert("arpAlert","info","Ata carregada para edição.");
+      window.scrollTo(0,0);
+    },
+
+    excluirAta: function(id){
+      if(!id || !confirm("Excluir esta ARP salva?")) return;
+      LICSYSTEM.arp.load();
+      LICSYSTEM.arp.atas = LICSYSTEM.arp.atas.filter(function(a){ return a.id !== id; });
+      LICSYSTEM.arp.saveLocal();
+      // TODO: firebase/firestore delete doc(id)
+      if((el("arpId")||{}).value === id) LICSYSTEM.arp.novaAta();
+      LICSYSTEM.arp.renderListaSalvas();
+      showAlert("arpAlert","ok","ARP excluída.");
+    },
+
+    salvarAta: function(){
+      var ata = LICSYSTEM.arp.coletarAta();
+      if(!ata.orgaoGerenciador){
+        showAlert("arpAlert","warn","Informe o Órgão Gerenciador.");
+        if(el("arpOrgao")) el("arpOrgao").focus();
+        return null;
+      }
+      if(!ata.numeroPregaoArp){
+        showAlert("arpAlert","warn","Informe o Número do Pregão / ARP.");
+        return null;
+      }
+      if(!ata.itens.length){
+        showAlert("arpAlert","warn","Adicione ao menos um item à ata.");
+        return null;
+      }
+
+      if(!ata.criadoEm) ata.criadoEm = new Date().toISOString();
+
+      LICSYSTEM.arp.load();
+      var idx = -1;
+      for(var i=0;i<LICSYSTEM.arp.atas.length;i++){
+        if(LICSYSTEM.arp.atas[i].id === ata.id){ idx = i; break; }
+      }
+      if(idx >= 0){
+        ata.criadoEm = LICSYSTEM.arp.atas[idx].criadoEm || ata.criadoEm;
+        LICSYSTEM.arp.atas[idx] = ata;
+      } else {
+        LICSYSTEM.arp.atas.push(ata);
+      }
+
+      if(el("arpId")) el("arpId").value = ata.id;
+      LICSYSTEM.arp.saveLocal();
+      // TODO Firestore/RTDB:
+      // await firestore.collection('arp').doc(ata.id).set(ata)
+      // ou utils.firebaseSet('arp/'+ata.id, ata)
+
+      LICSYSTEM.arp.renderListaSalvas();
+      showAlert("arpAlert","ok","✅ Ata salva ("+utils.escapeHtml(ata.numeroPregaoArp)+") com "+ata.itens.length+" item(ns).");
+      return ata;
+    }
+  };
+
+  /* ============================ SALA DE DISPUTA ============================ */
+  LICSYSTEM.disputa = {
+    historico: [],
+
+    num: function(id){
+      var n = el(id);
+      var v = n ? Number(n.value) : NaN;
+      return isFinite(v) ? v : 0;
+    },
+
+    /** Atualiza cards de desconto % e margem restante em tempo real (oninput/onchange). */
+    atualizarResultados: function(){
+      var ref = LICSYSTEM.disputa.num("disputaPrecoRef");
+      var degrau = LICSYSTEM.disputa.num("disputaDegrau");
+      var lanceConc = LICSYSTEM.disputa.num("disputaLanceConcorrente");
+      var custo = LICSYSTEM.disputa.num("disputaMeuCusto");
+
+      // Desconto atual (%) em relação ao preço de referência
+      var descontoPct = null;
+      if(ref > 0 && lanceConc > 0){
+        descontoPct = ((ref - lanceConc) / ref) * 100;
+      }
+      var elPct = el("disputaDescontoPct");
+      var elPctSub = el("disputaDescontoSub");
+      if(elPct){
+        elPct.textContent = descontoPct == null ? "—" : (descontoPct.toFixed(2).replace(".", ",") + "%");
+      }
+      if(elPctSub){
+        elPctSub.textContent = lanceConc > 0
+          ? ("Lance concorrente: " + utils.formatBrl(lanceConc))
+          : "Informe o lance do concorrente";
+      }
+
+      // Margem restante = preço/lance atual − meu custo
+      // Se custo não informado, usa (preço ref − margem implícita) via próprio custo campo
+      var margem = null;
+      if(lanceConc > 0 && (el("disputaMeuCusto") && String(el("disputaMeuCusto").value || "").trim() !== "")){
+        margem = lanceConc - custo;
+      }
+      var elMarg = el("disputaMargemRestante");
+      var elMargSub = el("disputaMargemSub");
+      var cardMarg = el("cardMargemRestante");
+      if(elMarg){
+        elMarg.textContent = margem == null ? "—" : utils.formatBrl(margem);
+      }
+      if(elMargSub){
+        if(margem == null) elMargSub.textContent = "Informe meu custo e o lance atual";
+        else if(margem < 0) elMargSub.textContent = "⚠ PARAR — margem negativa / prejuízo";
+        else elMargSub.textContent = "Lance atual − meu custo";
+      }
+      if(cardMarg){
+        cardMarg.classList.remove("warn","ok");
+        if(margem != null && margem < 0) cardMarg.classList.add("warn");
+        else if(margem != null && margem >= 0) cardMarg.classList.add("ok");
+      }
+
+      // Próximo lance sugerido = lance concorrente − degrau
+      var prox = null;
+      if(lanceConc > 0 && degrau >= 0){
+        prox = Math.max(0, lanceConc - degrau);
+      }
+      if(el("disputaMeuProximoLance")){
+        el("disputaMeuProximoLance").value = prox == null ? "" : prox.toFixed(2);
+      }
+    },
+
+    registrarLance: function(){
+      LICSYSTEM.disputa.atualizarResultados();
+      var degrau = LICSYSTEM.disputa.num("disputaDegrau");
+      var lanceConc = LICSYSTEM.disputa.num("disputaLanceConcorrente");
+      if(!(lanceConc > 0)){
+        showAlert("disputaAlert","warn","Informe o Lance Atual do Concorrente.");
+        if(el("disputaLanceConcorrente")) el("disputaLanceConcorrente").focus();
+        return;
+      }
+      var meuLance = Math.max(0, lanceConc - degrau);
+      // Atualiza o "lance atual" para o meu lance (próxima rodada)
+      if(el("disputaLanceConcorrente")) el("disputaLanceConcorrente").value = meuLance.toFixed(2);
+
+      var agora = new Date();
+      var hh = ("0"+agora.getHours()).slice(-2);
+      var mm = ("0"+agora.getMinutes()).slice(-2);
+      var ss = ("0"+agora.getSeconds()).slice(-2);
+      var hora = hh+":"+mm+":"+ss;
+
+      LICSYSTEM.disputa.historico.unshift({
+        hora: hora,
+        valor: meuLance,
+        ts: agora.toISOString()
+      });
+
+      LICSYSTEM.disputa.renderHistorico();
+      LICSYSTEM.disputa.atualizarResultados();
+      hideAlert("disputaAlert");
+      showAlert("disputaAlert","ok","Lance registrado: "+utils.formatBrl(meuLance)+" às "+hora);
+    },
+
+    renderHistorico: function(){
+      var ul = el("disputaHistorico");
+      var count = el("disputaHistCount");
+      var list = LICSYSTEM.disputa.historico || [];
+      if(count) count.textContent = list.length + " registro(s)";
+      if(!ul) return;
+      if(!list.length){
+        ul.innerHTML = '<li class="lh-empty">Nenhum lance registrado ainda.</li>';
+        return;
+      }
+      var html = "";
+      list.forEach(function(it, i){
+        html += '<li>'+
+          '<span class="lh-hora">'+utils.escapeHtml(it.hora)+'</span>'+
+          '<span class="lh-val">'+(i===0?"→ ":"")+utils.formatBrl(it.valor)+'</span>'+
+        '</li>';
+      });
+      ul.innerHTML = html;
+    },
+
+    limparSessao: function(){
+      if(LICSYSTEM.disputa.historico.length && !confirm("Limpar histórico e campos da disputa?")) return;
+      LICSYSTEM.disputa.historico = [];
+      ["disputaPrecoRef","disputaDegrau","disputaLanceConcorrente","disputaMeuCusto","disputaMeuProximoLance"].forEach(function(id){
+        if(el(id)) el(id).value = "";
+      });
+      LICSYSTEM.disputa.renderHistorico();
+      LICSYSTEM.disputa.atualizarResultados();
+      hideAlert("disputaAlert");
+    }
   };
 
   /* ============================ AUTH (Firebase) ============================ */
@@ -2695,13 +4415,13 @@
     },
 
     login: function(email, pass){
-      return utils.ensureFirebase().then(function(fb){
+      return utils.ensureFirebaseAuth().then(function(fb){
         return fb.auth().signInWithEmailAndPassword(email, pass);
       });
     },
 
     logout: function(){
-      return utils.ensureFirebase().then(function(fb){
+      return utils.ensureFirebaseAuth().then(function(fb){
         return fb.auth().signOut();
       }).then(function(){
         LICSYSTEM.state.authUser = null;
@@ -2751,7 +4471,7 @@
       LICSYSTEM.auth.wire();
       LICSYSTEM.auth.lock();
 
-      return utils.ensureFirebase().then(function(fb){
+      return utils.ensureFirebaseAuth().then(function(fb){
         return new Promise(function(resolve){
           var first = true;
           fb.auth().onAuthStateChanged(function(user){
@@ -2785,17 +4505,34 @@
 
   /* ============================ BOOT ============================ */
   function bootApp(){
+    wire();
     LICSYSTEM.captacao.initUf();
     LICSYSTEM.orcamento.load();
-    LICSYSTEM.orcamento.render();
+    LICSYSTEM.state._orcDirty = true;
+    LICSYSTEM.state._orcRendered = false;
+    LICSYSTEM.state._dashReady = false;
+    LICSYSTEM.state._cofreRendered = false;
+    LICSYSTEM.updateBell();
+    LICSYSTEM.state.currentView = "dashboard";
+
+    // UI primeiro; pesado depois (não trava a abertura)
+    requestAnimationFrame(function(){
+      LICSYSTEM.dashboard.render();
+      LICSYSTEM.state._dashReady = true;
     LICSYSTEM.cofre.load();
     LICSYSTEM.cofre.render();
-    wire();
-    LICSYSTEM.updateBell();
-    LICSYSTEM.dashboard.render();
-    LICSYSTEM.state.currentView = "dashboard";
-    LICSYSTEM.ferramentas.getPerfil(true).catch(function(){});
-    if(window.__licsystemInitVoiceflow) window.__licsystemInitVoiceflow();
+    LICSYSTEM.state._cofreRendered = true;
+    LICSYSTEM.entregas.load();
+    // Orçamento só monta quando abrir a aba (planilha grande)
+      setTimeout(function(){
+        LICSYSTEM.ferramentas.getPerfil(true).catch(function(){});
+        // Database em background (perfil/Firebase)
+        utils.ensureFirebase().catch(function(){});
+      }, 400);
+      setTimeout(function(){
+        if(window.__licsystemInitVoiceflow) window.__licsystemInitVoiceflow();
+      }, 2500);
+    });
   }
 
   function boot(){
@@ -2865,9 +4602,7 @@
 
     api.syncContext = function(view){
       api.currentView = view || api.currentView || "dashboard";
-      if(!api.ready) return;
-      // Reenvia contexto da página atual para a IA
-      api.loadChat(api.currentView);
+      // Não recarrega o widget a cada troca de menu (causava lentidão)
     };
 
     return api;
