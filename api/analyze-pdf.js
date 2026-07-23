@@ -2,9 +2,9 @@
  * POST /api/analyze-pdf
  * Analyzes edital text with Google Gemini REST API.
  * GEMINI_API_KEY stays only in process.env (never in the frontend).
- * No npm dependency — uses native fetch.
+ * No npm dependency  uses native fetch.
  */
-var MAX_CHARS = 120000;
+var MAX_CHARS = 150000;
 
 function send(res, status, body) {
   res.statusCode = status;
@@ -130,10 +130,10 @@ module.exports = async function handler(req, res) {
     }
 
     if (text.length > MAX_CHARS) {
-      text = text.slice(0, MAX_CHARS) + "\n\n[...truncated...]";
+      text = text.substring(0, MAX_CHARS) + "\n\n[...truncated...]";
     }
 
-    var modelName = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+    var modelName = process.env.GEMINI_MODEL || "gemini-1.5-flash";
     var url =
       "https://generativelanguage.googleapis.com/v1beta/models/" +
       encodeURIComponent(modelName) +
