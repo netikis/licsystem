@@ -1,9 +1,10 @@
 /**
  * POST /api/analyze-pdf
- * Analyzes edital text with Google Gemini REST API.
+ * Analyzes edital text with Google Gemini (@google/generative-ai).
  * GEMINI_API_KEY stays only in process.env (never in the frontend).
- * No npm dependency ù uses native fetch.
  */
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
 var MAX_CHARS = 150000;
 
 function send(res, status, body) {
@@ -78,6 +79,22 @@ function normalizeResult(obj) {
   };
 }
 
+/**
+ * Model id for getGenerativeModel({ model }) ó NEVER include "models/" prefix.
+ * SDK / REST path adds that automatically.
+ */
+function normalizeModelId(name) {
+  var m = String(name || "gemini-1.5-flash-latest").trim();
+  if (m.toLowerCase().indexOf("models/") === 0) {
+    m = m.slice(7);
+  }
+  // Alias legado ? vers„o compatÌvel com v1beta
+  if (m === "gemini-1.5-flash") {
+    m = "gemini-1.5-flash-latest";
+  }
+  return m;
+}
+
 function buildPrompt(filename, text) {
   return [
     "Voce e um analista especialista em licitacoes publicas brasileiras.",
@@ -133,50 +150,24 @@ module.exports = async function handler(req, res) {
       text = text.substring(0, MAX_CHARS) + "\n\n[...truncated...]";
     }
 
-    var modelName = process.env.GEMINI_MODEL || "gemini-1.5-flash";
-    var url =
-      "https://generativelanguage.googleapis.com/v1beta/models/" +
-      encodeURIComponent(modelName) +
-      ":generateContent?key=" +
-      encodeURIComponent(apiKey);
+    var modelName = normalizeModelId(
+      process.env.GEMINI_MODEL || "gemini-1.5-flash-latest"
+    );
 
-    var upstream = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: buildPrompt(filename, text) }] }],
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: "application/json",
-        },
-      }),
+    var genAI = new GoogleGenerativeAI(apiKey);
+    var model = genAI.getGenerativeModel({
+      model: modelName, // exatamente "gemini-1.5-flash-latest" ó sem "models/"
+      generationConfig: {
+        temperature: 0.2,
+        responseMimeType: "application/json",
+      },
     });
 
-    var upstreamJson = await upstream.json().catch(function () {
-      return null;
-    });
-
-    if (!upstream.ok) {
-      var detail =
-        (upstreamJson &&
-          upstreamJson.error &&
-          (upstreamJson.error.message || JSON.stringify(upstreamJson.error))) ||
-        ("Gemini HTTP " + upstream.status);
-      return send(res, 502, {
-        error: "Gemini request failed",
-        detail: detail,
-        model: modelName,
-      });
-    }
-
+    var result = await model.generateContent(buildPrompt(filename, text));
+    var response = await result.response;
     var rawText = "";
     try {
-      rawText =
-        upstreamJson.candidates[0].content.parts
-          .map(function (p) {
-            return p.text || "";
-          })
-          .join("");
+      rawText = response.text();
     } catch (e) {
       rawText = "";
     }
@@ -197,9 +188,11 @@ module.exports = async function handler(req, res) {
       resumo_objeto: parsed.resumo_objeto,
     });
   } catch (err) {
-    return send(res, 500, {
-      error: "analyze_pdf_crash",
-      detail: (err && err.message) || String(err),
+    var msg = (err && err.message) || String(err);
+    return send(res, 502, {
+      error: "Gemini request failed",
+      detail: msg,
+      model: normalizeModelId(process.env.GEMINI_MODEL || "gemini-1.5-flash-latest"),
     });
   }
 };
