@@ -1,9 +1,7 @@
 /**
- * firebaseConfig.js — cliente LICSYSTEM
- * Carrega a configuração Firebase de /api/firebase-config (variáveis .env no servidor)
- * e inicializa o SDK compat. Nenhuma chave fica hardcoded neste arquivo.
- *
- * Uso no index.html: <script src="/firebaseConfig.js"></script>
+ * firebaseConfig.js - LICSYSTEM client
+ * Loads Firebase config from /api/firebase-config (env vars on the server)
+ * and initializes the compat SDK. No keys hardcoded here.
  */
 (function (global) {
   "use strict";
@@ -16,25 +14,40 @@
   var _config = null;
   var _scripts = {};
 
+  function errMsg(err) {
+    if (!err) return "Unknown error";
+    if (typeof err === "string") return err;
+    if (err.message && typeof err.message === "string") return err.message;
+    try {
+      return JSON.stringify(err);
+    } catch (e) {
+      return String(err);
+    }
+  }
+
   function loadScript(src) {
     if (_scripts[src]) return _scripts[src];
     _scripts[src] = new Promise(function (resolve, reject) {
       var existing = document.querySelector('script[src="' + src + '"]');
       if (existing) {
         if (src.indexOf("firebase-app") !== -1 && global.firebase) return resolve();
-        existing.addEventListener("load", function () { resolve(); });
+        existing.addEventListener("load", function () {
+          resolve();
+        });
         existing.addEventListener("error", function () {
-          reject(new Error("Falha ao carregar: " + src));
+          reject(new Error("Failed to load: " + src));
         });
         return;
       }
       var s = document.createElement("script");
       s.src = src;
       s.async = true;
-      s.onload = function () { resolve(); };
+      s.onload = function () {
+        resolve();
+      };
       s.onerror = function () {
         delete _scripts[src];
-        reject(new Error("Falha ao carregar: " + src));
+        reject(new Error("Failed to load: " + src));
       };
       document.head.appendChild(s);
     });
@@ -51,15 +64,25 @@
       cache: "no-store",
     })
       .then(function (res) {
-        return res.json().then(function (body) {
+        return res.text().then(function (raw) {
+          var body = null;
+          try {
+            body = raw ? JSON.parse(raw) : null;
+          } catch (e) {
+            throw new Error(
+              "firebase-config returned non-JSON (HTTP " +
+                res.status +
+                "). Redeploy api/firebase-config.js on Vercel."
+            );
+          }
           if (!res.ok) {
             var msg =
               (body && (body.detail || body.error)) ||
-              "Não foi possível obter a config Firebase (" + res.status + ")";
-            throw new Error(msg);
+              "Could not load Firebase config (HTTP " + res.status + ")";
+            throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
           }
           if (!body || !body.apiKey || !body.projectId) {
-            throw new Error("Config Firebase incompleta em /api/firebase-config");
+            throw new Error("Incomplete Firebase config from /api/firebase-config");
           }
           _config = {
             apiKey: body.apiKey,
@@ -75,7 +98,7 @@
       })
       .catch(function (err) {
         _configPromise = null;
-        throw err;
+        throw new Error(errMsg(err));
       });
 
     return _configPromise;
@@ -88,7 +111,7 @@
   function initializeApp() {
     return loadConfig().then(function (cfg) {
       return loadScript(FB_APP).then(function () {
-        if (!global.firebase) throw new Error("Firebase SDK não carregou");
+        if (!global.firebase) throw new Error("Firebase SDK did not load");
         if (!global.firebase.apps.length) {
           global.firebase.initializeApp(cfg);
         }

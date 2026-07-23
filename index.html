@@ -5167,9 +5167,11 @@
         });
       }).catch(function(err){
         LICSYSTEM.auth.lock();
+        var msg = (err && err.message) ? err.message : (typeof err === "string" ? err : "erro desconhecido");
+        try{ if(typeof msg !== "string") msg = JSON.stringify(msg); }catch(e){ msg = String(err); }
         showAlert("authAlert","error",
-          "Não foi possível carregar o Firebase Auth: "+utils.escapeHtml(err.message||String(err))+
-          "<br/><span class=\"small\">Confira FIREBASE_* no .env / Environment Variables da Vercel e se /api/firebase-config responde.</span>"
+          "Não foi possível carregar o Firebase Auth: "+utils.escapeHtml(msg)+
+          "<br/><span class=\"small\">Confira FIREBASE_* nas Environment Variables da Vercel e se /api/firebase-config responde. Depois faça Redeploy.</span>"
         );
         throw err;
       });
