@@ -175,7 +175,7 @@ function parseHtmlCards(html) {
   while ((m = re.exec(html)) !== null) {
     var url = m[1].replace(/&amp;/g, "&");
     var price = Number(String(m[2]).replace(/\./g, "")) || Number(m[2]) || 0;
-    // fraction often without cents separator — keep as-is if has dot decimal
+    // fraction often without cents separator ï¿½ keep as-is if has dot decimal
     if (String(m[2]).indexOf(".") !== -1) price = Number(m[2]);
     var titleM = html
       .slice(Math.max(0, m.index - 400), m.index + 200)
