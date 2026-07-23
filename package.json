@@ -3,6 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "description": "LICSYSTEM - licitacoes (Vercel + Firebase + Gemini)",
+  "scripts": {
+    "dev": "vercel dev --listen 3000",
+    "start": "vercel dev --listen 3000"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1"
+  },
   "engines": {
     "node": "20.x"
   }
