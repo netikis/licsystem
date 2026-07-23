@@ -383,6 +383,39 @@
   }
   .hist-check-label{font-size:11px;font-weight:700;color:var(--ls-muted);white-space:nowrap}
   tr.hist-done .hist-check-label{color:var(--ls-green)}
+  /* ---------- Análise Inteligente (IA) ---------- */
+  .ia-layout{display:grid;grid-template-columns:1.05fr .95fr;gap:16px;align-items:start}
+  .ia-drop{
+    border:2px dashed var(--ls-line);border-radius:16px;padding:28px 20px;text-align:center;
+    background:linear-gradient(180deg,#fff,#f7f9fc);cursor:pointer;transition:border .15s,background .15s,box-shadow .15s;
+  }
+  .ia-drop:hover,.ia-drop.drag{
+    border-color:var(--ls-gold);background:#fffbeb;box-shadow:0 8px 20px rgba(201,162,39,.12);
+  }
+  .ia-drop .ia-ico{font-size:34px;line-height:1;margin-bottom:10px}
+  .ia-drop b{display:block;color:var(--ls-navy);font-size:15px;margin-bottom:4px}
+  .ia-drop span{display:block;color:var(--ls-muted);font-size:12px;line-height:1.4}
+  .ia-file-meta{
+    display:none;margin-top:12px;padding:10px 12px;border-radius:10px;
+    background:var(--ls-green-bg);color:#136c3d;font-size:12px;font-weight:600;text-align:left;
+  }
+  .ia-file-meta.show{display:block}
+  .ia-progress{
+    display:none;margin-top:14px;height:8px;border-radius:999px;background:#e8edf5;overflow:hidden;
+  }
+  .ia-progress.show{display:block}
+  .ia-progress > i{
+    display:block;height:100%;width:35%;border-radius:999px;
+    background:linear-gradient(90deg,var(--ls-navy),var(--ls-gold));
+    animation:iaSlide 1.1s ease-in-out infinite;
+  }
+  @keyframes iaSlide{
+    0%{transform:translateX(-120%)}
+    100%{transform:translateX(320%)}
+  }
+  @media (max-width:900px){
+    .ia-layout{grid-template-columns:1fr}
+  }
   @media (max-width:1100px){
     .hist-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   }
@@ -648,6 +681,7 @@
     <nav id="nav">
       <button class="active" data-view="dashboard"><span class="ico">📊</span> Dashboard</button>
       <button data-view="captacao"><span class="ico">🎯</span> Captação</button>
+      <button data-view="analiseIa"><span class="ico">🤖</span> Análise IA</button>
       <button data-view="orcamento"><span class="ico">🧮</span> Orçamento</button>
       <button data-view="cruzamento"><span class="ico">🔀</span> Cruzamento ML</button>
       <button data-view="cofre"><span class="ico">🔐</span> Cofre de Documentos</button>
@@ -692,7 +726,7 @@
         views[j].classList.toggle('active', views[j].id===('view-'+view));
       }
       var titleEl=document.getElementById('topTitle');
-      var map={dashboard:'Dashboard',captacao:'Captação de Editais',orcamento:'Orçamento',cruzamento:'Cruzamento Inteligente (ML)',cofre:'Cofre de Documentos',entregas:'Licitação',histEntregas:'Histórico e Controle de Entregas',concorrencia:'Análise de Concorrência',catalogo:'Catálogo Interno',arp:'Atas de Registro (ARP)',disputa:'Sala de Disputa',ferramentas:'Ferramentas'};
+      var map={dashboard:'Dashboard',captacao:'Captação de Editais',analiseIa:'Análise Inteligente de Editais',orcamento:'Orçamento',cruzamento:'Cruzamento Inteligente (ML)',cofre:'Cofre de Documentos',entregas:'Licitação',histEntregas:'Histórico e Controle de Entregas',concorrencia:'Análise de Concorrência',catalogo:'Catálogo Interno',arp:'Atas de Registro (ARP)',disputa:'Sala de Disputa',ferramentas:'Ferramentas'};
       if(titleEl) titleEl.textContent = map[view]||'LICSYSTEM';
       // notify app modules (guarded — nav never depends on this)
       try{ if(window.LICSYSTEM && LICSYSTEM.onViewChange) LICSYSTEM.onViewChange(view); }catch(e){}
@@ -848,6 +882,69 @@
             <div class="pager-btns">
               <button type="button" class="btn btn-ghost btn-sm" id="capPrev">← Anterior</button>
               <button type="button" class="btn btn-ghost btn-sm" id="capNext">Próxima →</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== ANÁLISE INTELIGENTE DE EDITAIS (IA) ===================== -->
+      <section id="view-analiseIa" class="view">
+        <div class="card">
+          <div class="card-head">
+            <h2>🤖 Análise Inteligente de Editais</h2>
+            <span class="tag">Gemini</span>
+          </div>
+          <div class="desc">
+            O PDF é lido no seu navegador (<b>pdf.js</b>). Só o texto vai para <code>/api/analyze-pdf</code> —
+            a <b>GEMINI_API_KEY</b> permanece no servidor (Vercel / .env), nunca no frontend.
+          </div>
+          <div id="iaAlert" class="alert"></div>
+
+          <div class="ia-layout">
+            <div>
+              <div class="ia-drop" id="iaDrop" role="button" tabindex="0" aria-label="Enviar PDF do edital">
+                <div class="ia-ico">📄</div>
+                <b>Arraste o PDF do edital aqui</b>
+                <span>ou clique para selecionar · apenas texto é enviado à IA</span>
+                <input type="file" id="iaPdfFile" accept="application/pdf" style="display:none" />
+              </div>
+              <div class="ia-file-meta" id="iaFileMeta"></div>
+              <div class="ia-progress" id="iaProgress" aria-hidden="true"><i></i></div>
+              <div class="btn-row" style="margin-top:14px">
+                <button type="button" class="btn btn-gold" id="btnIaAnalisar">✨ Analisar com IA</button>
+                <button type="button" class="btn btn-ghost" id="btnIaLimpar">Limpar</button>
+              </div>
+              <div class="small muted" style="margin-top:8px">
+                Extração local · análise via Vercel Serverless · JSON estruturado
+              </div>
+            </div>
+
+            <div class="entrega-subcard" style="margin:0">
+              <h3 style="margin:0 0 12px;font-size:13px;font-weight:700;color:var(--ls-navy)">Resultado da análise</h3>
+              <div class="form-row">
+                <div>
+                  <label class="fld" for="iaModalidade">Modalidade</label>
+                  <input type="text" id="iaModalidade" placeholder="ex.: Pregão Eletrônico" />
+                </div>
+                <div>
+                  <label class="fld" for="iaAbrangencia">Abrangência</label>
+                  <input type="text" id="iaAbrangencia" placeholder="ex.: Municipal — Ibaiti/PR" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div>
+                  <label class="fld" for="iaValorEstimado">Valor estimado</label>
+                  <input type="text" id="iaValorEstimado" placeholder="R$ 0,00" />
+                </div>
+                <div>
+                  <label class="fld" for="iaTotalProdutos">Total de produtos</label>
+                  <input type="text" id="iaTotalProdutos" placeholder="0" />
+                </div>
+              </div>
+              <div>
+                <label class="fld" for="iaResumoObjeto">Resumo do objeto</label>
+                <textarea id="iaResumoObjeto" rows="7" placeholder="O resumo do objeto da licitação aparecerá aqui após a análise…"></textarea>
+              </div>
             </div>
           </div>
         </div>
@@ -1523,7 +1620,8 @@
 
 <!-- =================================================================== -->
 <!-- ============================ APP SCRIPT ============================ -->
-<!-- Injected libs on demand; the menu above already works without any CDN -->
+<!-- Firebase config (sem chaves no HTML) + app principal -->
+<script src="/firebaseConfig.js"></script>
 <script>
 (function(){
   "use strict";
@@ -1773,44 +1871,26 @@
     return utils.loadScript("https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js");
   };
 
-  /* ------- Firebase (produção — config fixa, sem localStorage) ------- */
-  var DEFAULT_FIREBASE_CONFIG = {
-    apiKey: "AIzaSyBMT9JC6Blf5mRotMIz3qBWYDWobEVH81g",
-    authDomain: "fhlicitacoes-382b6.firebaseapp.com",
-    databaseURL: "https://fhlicitacoes-382b6-default-rtdb.firebaseio.com",
-    projectId: "fhlicitacoes-382b6",
-    storageBucket: "fhlicitacoes-382b6.firebasestorage.app",
-    messagingSenderId: "563712824331",
-    appId: "1:563712824331:web:db18753af1229ad389a30e"
-  };
-
+  /* ------- Firebase (config via .env → /api/firebase-config → firebaseConfig.js) ------- */
   utils.getFirebaseConfig = function(){
-    return DEFAULT_FIREBASE_CONFIG;
+    if(window.LICSYSTEMFirebase && typeof window.LICSYSTEMFirebase.getConfigSync === "function"){
+      return window.LICSYSTEMFirebase.getConfigSync();
+    }
+    return null;
   };
 
   utils.hasFirebaseConfig = function(){
-    var c = DEFAULT_FIREBASE_CONFIG;
-    return !!(c && c.databaseURL && c.apiKey);
+    return !!(window.LICSYSTEMFirebase && typeof window.LICSYSTEMFirebase.ensureAuth === "function");
   };
 
   var _fbInit = null;
   var _fbAuthInit = null;
-  var _fbDbReady = null;
 
   /** Só App + Auth (login rápido). Database sobe sob demanda. */
   utils.ensureFirebaseAuth = function(){
     if(!utils.hasFirebaseConfig()) return Promise.reject(new Error("firebase-config-vazio"));
     if(_fbAuthInit) return _fbAuthInit;
-    _fbAuthInit = utils.loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js")
-      .then(function(){
-        return utils.loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js");
-      })
-      .then(function(){
-        if(!window.firebase.apps.length){
-          window.firebase.initializeApp(DEFAULT_FIREBASE_CONFIG);
-        }
-        return window.firebase;
-      })
+    _fbAuthInit = window.LICSYSTEMFirebase.ensureAuth()
       .catch(function(err){ _fbAuthInit = null; throw err; });
     return _fbAuthInit;
   };
@@ -1819,14 +1899,8 @@
   utils.ensureFirebase = function(){
     if(!utils.hasFirebaseConfig()) return Promise.reject(new Error("firebase-config-vazio"));
     if(_fbInit) return _fbInit;
-    _fbInit = utils.ensureFirebaseAuth()
-      .then(function(){
-        if(_fbDbReady) return _fbDbReady;
-        _fbDbReady = utils.loadScript("https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js");
-        return _fbDbReady;
-      })
-      .then(function(){ return window.firebase; })
-      .catch(function(err){ _fbInit = null; _fbDbReady = null; throw err; });
+    _fbInit = window.LICSYSTEMFirebase.ensureDatabase()
+      .catch(function(err){ _fbInit = null; throw err; });
     return _fbInit;
   };
 
@@ -3423,6 +3497,9 @@
       }
     });
 
+    // Análise Inteligente de Editais (IA)
+    LICSYSTEM.analiseIa.wire();
+
     // Orçamento
     on("btnAddLinha","click", LICSYSTEM.orcamento.addLinha);
     on("btnLimparOrc","click", LICSYSTEM.orcamento.limpar);
@@ -3555,6 +3632,7 @@
   var VIEW_TITLES = {
     dashboard:'Dashboard',
     captacao:'Captação de Editais',
+    analiseIa:'Análise Inteligente de Editais',
     orcamento:'Orçamento',
     cruzamento:'Cruzamento Inteligente (ML)',
     cofre:'Cofre de Documentos',
@@ -4800,6 +4878,173 @@
     }
   };
 
+  /* ============================ ANÁLISE INTELIGENTE DE EDITAIS (IA) ============================ */
+  LICSYSTEM.analiseIa = {
+    file: null,
+    text: "",
+    busy: false,
+
+    setBusy: function(on){
+      LICSYSTEM.analiseIa.busy = !!on;
+      var btn = el("btnIaAnalisar");
+      if(btn){
+        btn.disabled = !!on;
+        btn.textContent = on ? "Analisando…" : "✨ Analisar com IA";
+      }
+      var prog = el("iaProgress");
+      if(prog){
+        prog.classList.toggle("show", !!on);
+        prog.setAttribute("aria-hidden", on ? "false" : "true");
+      }
+    },
+
+    limparCampos: function(){
+      ["iaModalidade","iaAbrangencia","iaValorEstimado","iaTotalProdutos","iaResumoObjeto"].forEach(function(id){
+        if(el(id)) el(id).value = "";
+      });
+    },
+
+    limpar: function(){
+      LICSYSTEM.analiseIa.file = null;
+      LICSYSTEM.analiseIa.text = "";
+      var inp = el("iaPdfFile");
+      if(inp) inp.value = "";
+      var meta = el("iaFileMeta");
+      if(meta){ meta.className = "ia-file-meta"; meta.textContent = ""; }
+      LICSYSTEM.analiseIa.limparCampos();
+      hideAlert("iaAlert");
+      LICSYSTEM.analiseIa.setBusy(false);
+    },
+
+    preencher: function(data){
+      data = data || {};
+      if(el("iaModalidade")) el("iaModalidade").value = data.modalidade || "";
+      if(el("iaAbrangencia")) el("iaAbrangencia").value = data.abrangencia || "";
+      if(el("iaValorEstimado")) el("iaValorEstimado").value = data.valor_estimado || "";
+      if(el("iaTotalProdutos")) el("iaTotalProdutos").value = data.total_produtos != null ? String(data.total_produtos) : "";
+      if(el("iaResumoObjeto")) el("iaResumoObjeto").value = data.resumo_objeto || "";
+    },
+
+    onFile: function(file){
+      if(!file) return;
+      if(file.type && file.type !== "application/pdf" && !/\.pdf$/i.test(file.name||"")){
+        showAlert("iaAlert","warn","Selecione um arquivo PDF.");
+        return;
+      }
+      LICSYSTEM.analiseIa.file = file;
+      LICSYSTEM.analiseIa.text = "";
+      LICSYSTEM.analiseIa.limparCampos();
+      var meta = el("iaFileMeta");
+      if(meta){
+        var kb = (file.size / 1024).toFixed(1);
+        meta.className = "ia-file-meta show";
+        meta.textContent = "Arquivo: " + file.name + " (" + kb + " KB) — clique em Analisar com IA.";
+      }
+      hideAlert("iaAlert");
+    },
+
+    extrairTextoPdf: function(file){
+      return utils.ensurePdfJs().then(function(){
+        return file.arrayBuffer();
+      }).then(function(buf){
+        return window.pdfjsLib.getDocument({ data: buf }).promise;
+      }).then(function(pdf){
+        var pages = [];
+        var i = 1;
+        function next(){
+          if(i > pdf.numPages) return Promise.resolve(pages.join("\n\n"));
+          return pdf.getPage(i).then(function(page){
+            return page.getTextContent().then(function(tc){
+              var line = (tc.items || []).map(function(it){ return it.str || ""; }).join(" ");
+              pages.push(line);
+              i++;
+              return next();
+            });
+          });
+        }
+        return next();
+      });
+    },
+
+    analisar: function(){
+      if(LICSYSTEM.analiseIa.busy) return;
+      var file = LICSYSTEM.analiseIa.file;
+      if(!file){
+        showAlert("iaAlert","warn","Selecione o PDF do edital primeiro.");
+        return;
+      }
+
+      LICSYSTEM.analiseIa.setBusy(true);
+      showAlert("iaAlert","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Extraindo texto do PDF no navegador…');
+
+      LICSYSTEM.analiseIa.extrairTextoPdf(file).then(function(text){
+        text = String(text || "").replace(/\s+/g, " ").trim();
+        if(!text || text.length < 40){
+          throw new Error("Não foi possível extrair texto suficiente deste PDF (pode ser imagem escaneada).");
+        }
+        LICSYSTEM.analiseIa.text = text;
+        showAlert("iaAlert","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Enviando texto para /api/analyze-pdf (Gemini)…');
+
+        return fetch("/api/analyze-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({
+            text: text,
+            filename: file.name || "edital.pdf"
+          })
+        }).then(function(res){
+          return res.json().then(function(body){
+            if(!res.ok){
+              var msg = (body && (body.detail || body.error)) || ("Erro HTTP " + res.status);
+              throw new Error(msg);
+            }
+            return body;
+          });
+        });
+      }).then(function(body){
+        var data = (body && body.data) ? body.data : body;
+        LICSYSTEM.analiseIa.preencher(data);
+        showAlert("iaAlert","ok","✅ Análise concluída. Campos preenchidos automaticamente.");
+      }).catch(function(err){
+        showAlert("iaAlert","error", utils.escapeHtml((err && err.message) || String(err)));
+      }).then(function(){
+        LICSYSTEM.analiseIa.setBusy(false);
+      });
+    },
+
+    wire: function(){
+      var drop = el("iaDrop");
+      var inp = el("iaPdfFile");
+      if(drop && inp){
+        drop.addEventListener("click", function(){ inp.click(); });
+        drop.addEventListener("keydown", function(e){
+          if(e.key === "Enter" || e.key === " "){ e.preventDefault(); inp.click(); }
+        });
+        ["dragenter","dragover"].forEach(function(ev){
+          drop.addEventListener(ev, function(e){
+            e.preventDefault(); e.stopPropagation();
+            drop.classList.add("drag");
+          });
+        });
+        ["dragleave","drop"].forEach(function(ev){
+          drop.addEventListener(ev, function(e){
+            e.preventDefault(); e.stopPropagation();
+            drop.classList.remove("drag");
+          });
+        });
+        drop.addEventListener("drop", function(e){
+          var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+          if(f) LICSYSTEM.analiseIa.onFile(f);
+        });
+        inp.addEventListener("change", function(){
+          if(this.files && this.files[0]) LICSYSTEM.analiseIa.onFile(this.files[0]);
+        });
+      }
+      on("btnIaAnalisar","click", function(){ LICSYSTEM.analiseIa.analisar(); });
+      on("btnIaLimpar","click", function(){ LICSYSTEM.analiseIa.limpar(); });
+    }
+  };
+
   /* ============================ AUTH (Firebase) ============================ */
   LICSYSTEM.auth = {
     _booted: false,
@@ -4924,7 +5169,7 @@
         LICSYSTEM.auth.lock();
         showAlert("authAlert","error",
           "Não foi possível carregar o Firebase Auth: "+utils.escapeHtml(err.message||String(err))+
-          "<br/><span class=\"small\">Confira a conexão e se o Authentication está ativo no projeto fhlicitacoes-382b6.</span>"
+          "<br/><span class=\"small\">Confira FIREBASE_* no .env / Environment Variables da Vercel e se /api/firebase-config responde.</span>"
         );
         throw err;
       });

@@ -1,0 +1,16 @@
+{
+  "name": "licsystem",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LICSYSTEM — licitações (Vercel + Firebase + Gemini)",
+  "scripts": {
+    "dev": "vercel dev",
+    "start": "vercel dev"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,23 @@
+# Segredos e ambiente local
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.production.local
+
+# Dependências e deploy
+node_modules/
+.vercel/
+*.log
+npm-debug.log*
+
+# Credenciais / backups locais
+FIREBASE CHAVE KEY.txt
+*.backup.html
+
+# SO / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
