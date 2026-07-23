@@ -3499,6 +3499,8 @@
 
     // Análise Inteligente de Editais (IA)
     LICSYSTEM.analiseIa.wire();
+    on("btnIaAnalisar","click", function(){ LICSYSTEM.analiseIa.analisar(); });
+    on("btnIaLimpar","click", function(){ LICSYSTEM.analiseIa.limpar(); });
 
     // Orçamento
     on("btnAddLinha","click", LICSYSTEM.orcamento.addLinha);
@@ -4883,6 +4885,8 @@
     file: null,
     text: "",
     busy: false,
+    MAX_PAGES: 45,
+    MAX_CHARS: 100000,
 
     setBusy: function(on){
       LICSYSTEM.analiseIa.busy = !!on;
@@ -4925,6 +4929,13 @@
       if(el("iaResumoObjeto")) el("iaResumoObjeto").value = data.resumo_objeto || "";
     },
 
+    errMsg: function(err){
+      if(!err) return "Erro desconhecido";
+      if(typeof err === "string") return err;
+      if(err.message && typeof err.message === "string") return err.message;
+      try{ return JSON.stringify(err); }catch(e){ return String(err); }
+    },
+
     onFile: function(file){
       if(!file) return;
       if(file.type && file.type !== "application/pdf" && !/\.pdf$/i.test(file.name||"")){
@@ -4934,6 +4945,7 @@
       LICSYSTEM.analiseIa.file = file;
       LICSYSTEM.analiseIa.text = "";
       LICSYSTEM.analiseIa.limparCampos();
+      LICSYSTEM.analiseIa.setBusy(false);
       var meta = el("iaFileMeta");
       if(meta){
         var kb = (file.size / 1024).toFixed(1);
@@ -4943,21 +4955,58 @@
       hideAlert("iaAlert");
     },
 
+    /**
+     * Extrai texto no browser (pdf.js). Usa Uint8Array (igual Captação).
+     * Limita páginas/caracteres para não travar editais grandes.
+     */
     extrairTextoPdf: function(file){
+      var maxPages = LICSYSTEM.analiseIa.MAX_PAGES;
+      var maxChars = LICSYSTEM.analiseIa.MAX_CHARS;
+
       return utils.ensurePdfJs().then(function(){
-        return file.arrayBuffer();
-      }).then(function(buf){
-        return window.pdfjsLib.getDocument({ data: buf }).promise;
+        return new Promise(function(resolve, reject){
+          var reader = new FileReader();
+          reader.onerror = function(){ reject(new Error("Falha ao ler o arquivo PDF.")); };
+          reader.onload = function(){
+            try{
+              var data = new Uint8Array(reader.result);
+              resolve(data);
+            }catch(e){
+              reject(e);
+            }
+          };
+          reader.readAsArrayBuffer(file);
+        });
+      }).then(function(data){
+        return window.pdfjsLib.getDocument({ data: data }).promise;
       }).then(function(pdf){
+        var total = pdf.numPages || 0;
+        var limit = Math.min(total, maxPages);
         var pages = [];
         var i = 1;
+
         function next(){
-          if(i > pdf.numPages) return Promise.resolve(pages.join("\n\n"));
+          if(i > limit){
+            var joined = pages.join("\n\n");
+            if(total > limit){
+              joined += "\n\n[... truncado: lidas "+limit+" de "+total+" páginas ...]";
+            }
+            return Promise.resolve(joined);
+          }
+          showAlert(
+            "iaAlert",
+            "info",
+            '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Extraindo texto… página '+i+' de '+limit+(total>limit?' (edital tem '+total+')':'')+'…'
+          );
           return pdf.getPage(i).then(function(page){
             return page.getTextContent().then(function(tc){
               var line = (tc.items || []).map(function(it){ return it.str || ""; }).join(" ");
               pages.push(line);
+              var soFar = pages.join("\n\n");
               i++;
+              if(soFar.length >= maxChars){
+                return soFar.slice(0, maxChars) + "\n\n[... texto truncado para análise ...]";
+              }
               return next();
             });
           });
@@ -4975,7 +5024,7 @@
       }
 
       LICSYSTEM.analiseIa.setBusy(true);
-      showAlert("iaAlert","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Extraindo texto do PDF no navegador…');
+      showAlert("iaAlert","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Carregando PDF e extraindo texto…');
 
       LICSYSTEM.analiseIa.extrairTextoPdf(file).then(function(text){
         text = String(text || "").replace(/\s+/g, " ").trim();
@@ -4983,7 +5032,11 @@
           throw new Error("Não foi possível extrair texto suficiente deste PDF (pode ser imagem escaneada).");
         }
         LICSYSTEM.analiseIa.text = text;
-        showAlert("iaAlert","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Enviando texto para /api/analyze-pdf (Gemini)…');
+        showAlert(
+          "iaAlert",
+          "info",
+          '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Texto extraído ('+text.length+' caracteres). Enviando para a IA…'
+        );
 
         return fetch("/api/analyze-pdf", {
           method: "POST",
@@ -4993,10 +5046,14 @@
             filename: file.name || "edital.pdf"
           })
         }).then(function(res){
-          return res.json().then(function(body){
+          return res.text().then(function(raw){
+            var body = null;
+            try{ body = raw ? JSON.parse(raw) : null; }catch(e){
+              throw new Error("Resposta inválida da API (HTTP "+res.status+"). Verifique /api/analyze-pdf na Vercel.");
+            }
             if(!res.ok){
               var msg = (body && (body.detail || body.error)) || ("Erro HTTP " + res.status);
-              throw new Error(msg);
+              throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
             }
             return body;
           });
@@ -5006,7 +5063,7 @@
         LICSYSTEM.analiseIa.preencher(data);
         showAlert("iaAlert","ok","✅ Análise concluída. Campos preenchidos automaticamente.");
       }).catch(function(err){
-        showAlert("iaAlert","error", utils.escapeHtml((err && err.message) || String(err)));
+        showAlert("iaAlert","error", utils.escapeHtml(LICSYSTEM.analiseIa.errMsg(err)));
       }).then(function(){
         LICSYSTEM.analiseIa.setBusy(false);
       });
@@ -5040,8 +5097,7 @@
           if(this.files && this.files[0]) LICSYSTEM.analiseIa.onFile(this.files[0]);
         });
       }
-      on("btnIaAnalisar","click", function(){ LICSYSTEM.analiseIa.analisar(); });
-      on("btnIaLimpar","click", function(){ LICSYSTEM.analiseIa.limpar(); });
+      // Botões são ligados em wire() principal (usa o helper local `on`)
     }
   };
 
