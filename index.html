@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
 <style>
   :root{
     --ls-navy:#152642;
@@ -383,8 +384,8 @@
   }
   .hist-check-label{font-size:11px;font-weight:700;color:var(--ls-muted);white-space:nowrap}
   tr.hist-done .hist-check-label{color:var(--ls-green)}
-  /* ---------- Análise Inteligente (IA) ---------- */
-  .ia-layout{display:grid;grid-template-columns:1.05fr .95fr;gap:16px;align-items:start}
+  /* ---------- Análise Inteligente (relatório Markdown) ---------- */
+  .ia-layout{display:grid;grid-template-columns:minmax(280px,.9fr) minmax(0,1.3fr);gap:16px;align-items:start}
   .ia-drop{
     border:2px dashed var(--ls-line);border-radius:16px;padding:28px 20px;text-align:center;
     background:linear-gradient(180deg,#fff,#f7f9fc);cursor:pointer;transition:border .15s,background .15s,box-shadow .15s;
@@ -412,6 +413,45 @@
   @keyframes iaSlide{
     0%{transform:translateX(-120%)}
     100%{transform:translateX(320%)}
+  }
+  .ia-report-toolbar{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;
+  }
+  .ia-report-toolbar h3{margin:0;font-size:13px;font-weight:700;color:var(--ls-navy)}
+  .ia-report-sheet{
+    background:#fff;border:1px solid var(--ls-line);border-radius:16px;padding:22px 24px;
+    max-height:min(72vh,820px);overflow-y:auto;box-shadow:var(--shadow);
+    color:var(--ls-text);line-height:1.55;font-size:13.5px;
+  }
+  .ia-report-sheet.ia-empty{
+    display:flex;align-items:center;justify-content:center;text-align:center;
+    color:var(--ls-muted);min-height:280px;font-size:13px;
+  }
+  .ia-report-sheet h1,.ia-report-sheet h2,.ia-report-sheet h3{
+    color:var(--ls-navy);margin:1.1em 0 .45em;line-height:1.25;
+  }
+  .ia-report-sheet h1{font-size:1.35rem}
+  .ia-report-sheet h2{font-size:1.15rem;border-bottom:1px solid var(--ls-line);padding-bottom:6px}
+  .ia-report-sheet h3{font-size:1.02rem}
+  .ia-report-sheet p{margin:.55em 0}
+  .ia-report-sheet ul,.ia-report-sheet ol{margin:.45em 0 .7em;padding-left:1.35em}
+  .ia-report-sheet li{margin:.2em 0}
+  .ia-report-sheet strong{color:var(--ls-navy)}
+  .ia-report-sheet hr{border:0;border-top:1px solid var(--ls-line);margin:1.2em 0}
+  .ia-report-sheet blockquote{
+    margin:.8em 0;padding:10px 14px;border-left:4px solid var(--ls-gold);
+    background:#fffbeb;border-radius:0 10px 10px 0;color:#6a5410;
+  }
+  .ia-report-sheet code{
+    background:#f3f6fb;padding:1px 6px;border-radius:6px;font-size:.92em;
+  }
+  @media print{
+    body *{visibility:hidden!important}
+    #iaReportSheet,#iaReportSheet *{visibility:visible!important}
+    #iaReportSheet{
+      position:absolute;left:0;top:0;width:100%;max-height:none;overflow:visible;
+      border:0;box-shadow:none;padding:12px;
+    }
   }
   @media (max-width:900px){
     .ia-layout{grid-template-columns:1fr}
@@ -895,8 +935,8 @@
             <span class="tag">Gemini</span>
           </div>
           <div class="desc">
-            O PDF é lido no seu navegador (<b>pdf.js</b>). Só o texto vai para <code>/api/analyze-pdf</code> —
-            a <b>GEMINI_API_KEY</b> permanece no servidor (Vercel / .env), nunca no frontend.
+            O PDF é lido no navegador (<b>pdf.js</b>). Só o texto vai para <code>/api/analyze-pdf</code>.
+            A IA devolve um <b>relatório completo em Markdown</b> (Lei 14.133/2021). A chave Gemini fica só no servidor.
           </div>
           <div id="iaAlert" class="alert"></div>
 
@@ -915,35 +955,20 @@
                 <button type="button" class="btn btn-ghost" id="btnIaLimpar">Limpar</button>
               </div>
               <div class="small muted" style="margin-top:8px">
-                Extração local · análise via Vercel Serverless · JSON estruturado
+                Extração local · análise via Vercel Serverless · relatório estruturado
               </div>
             </div>
 
-            <div class="entrega-subcard" style="margin:0">
-              <h3 style="margin:0 0 12px;font-size:13px;font-weight:700;color:var(--ls-navy)">Resultado da análise</h3>
-              <div class="form-row">
-                <div>
-                  <label class="fld" for="iaModalidade">Modalidade</label>
-                  <input type="text" id="iaModalidade" placeholder="ex.: Pregão Eletrônico" />
-                </div>
-                <div>
-                  <label class="fld" for="iaAbrangencia">Abrangência</label>
-                  <input type="text" id="iaAbrangencia" placeholder="ex.: Municipal — Ibaiti/PR" />
+            <div>
+              <div class="ia-report-toolbar">
+                <h3>Folha de Relatório</h3>
+                <div class="btn-row" style="margin:0">
+                  <button type="button" class="btn btn-ghost btn-sm" id="btnIaCopiar" disabled>📋 Copiar Relatório</button>
+                  <button type="button" class="btn btn-primary btn-sm" id="btnIaImprimir" disabled>🖨 Imprimir</button>
                 </div>
               </div>
-              <div class="form-row">
-                <div>
-                  <label class="fld" for="iaValorEstimado">Valor estimado</label>
-                  <input type="text" id="iaValorEstimado" placeholder="R$ 0,00" />
-                </div>
-                <div>
-                  <label class="fld" for="iaTotalProdutos">Total de produtos</label>
-                  <input type="text" id="iaTotalProdutos" placeholder="0" />
-                </div>
-              </div>
-              <div>
-                <label class="fld" for="iaResumoObjeto">Resumo do objeto</label>
-                <textarea id="iaResumoObjeto" rows="7" placeholder="O resumo do objeto da licitação aparecerá aqui após a análise…"></textarea>
+              <div id="iaReportSheet" class="ia-report-sheet ia-empty" aria-live="polite">
+                O relatório da análise aparecerá aqui após processar o edital.
               </div>
             </div>
           </div>
@@ -3501,6 +3526,8 @@
     LICSYSTEM.analiseIa.wire();
     on("btnIaAnalisar","click", function(){ LICSYSTEM.analiseIa.analisar(); });
     on("btnIaLimpar","click", function(){ LICSYSTEM.analiseIa.limpar(); });
+    on("btnIaCopiar","click", function(){ LICSYSTEM.analiseIa.copiarRelatorio(); });
+    on("btnIaImprimir","click", function(){ LICSYSTEM.analiseIa.imprimirRelatorio(); });
 
     // Orçamento
     on("btnAddLinha","click", LICSYSTEM.orcamento.addLinha);
@@ -4884,6 +4911,7 @@
   LICSYSTEM.analiseIa = {
     file: null,
     text: "",
+    relatorioMd: "",
     busy: false,
     MAX_PAGES: 45,
     MAX_CHARS: 150000,
@@ -4902,10 +4930,21 @@
       }
     },
 
-    limparCampos: function(){
-      ["iaModalidade","iaAbrangencia","iaValorEstimado","iaTotalProdutos","iaResumoObjeto"].forEach(function(id){
-        if(el(id)) el(id).value = "";
-      });
+    setActionButtons: function(enabled){
+      var c = el("btnIaCopiar");
+      var p = el("btnIaImprimir");
+      if(c) c.disabled = !enabled;
+      if(p) p.disabled = !enabled;
+    },
+
+    limparRelatorio: function(){
+      LICSYSTEM.analiseIa.relatorioMd = "";
+      var sheet = el("iaReportSheet");
+      if(sheet){
+        sheet.className = "ia-report-sheet ia-empty";
+        sheet.innerHTML = "O relatório da análise aparecerá aqui após processar o edital.";
+      }
+      LICSYSTEM.analiseIa.setActionButtons(false);
     },
 
     limpar: function(){
@@ -4915,18 +4954,69 @@
       if(inp) inp.value = "";
       var meta = el("iaFileMeta");
       if(meta){ meta.className = "ia-file-meta"; meta.textContent = ""; }
-      LICSYSTEM.analiseIa.limparCampos();
+      LICSYSTEM.analiseIa.limparRelatorio();
       hideAlert("iaAlert");
       LICSYSTEM.analiseIa.setBusy(false);
     },
 
-    preencher: function(data){
-      data = data || {};
-      if(el("iaModalidade")) el("iaModalidade").value = data.modalidade || "";
-      if(el("iaAbrangencia")) el("iaAbrangencia").value = data.abrangencia || "";
-      if(el("iaValorEstimado")) el("iaValorEstimado").value = data.valor_estimado || "";
-      if(el("iaTotalProdutos")) el("iaTotalProdutos").value = data.total_produtos != null ? String(data.total_produtos) : "";
-      if(el("iaResumoObjeto")) el("iaResumoObjeto").value = data.resumo_objeto || "";
+    renderRelatorio: function(md){
+      var sheet = el("iaReportSheet");
+      if(!sheet) return;
+      var raw = String(md || "").trim();
+      LICSYSTEM.analiseIa.relatorioMd = raw;
+      if(!raw){
+        LICSYSTEM.analiseIa.limparRelatorio();
+        return;
+      }
+      var html = "";
+      try{
+        if(window.marked && typeof window.marked.parse === "function"){
+          html = window.marked.parse(raw);
+        } else if(window.marked && typeof window.marked === "function"){
+          html = window.marked(raw);
+        } else {
+          html = "<pre style='white-space:pre-wrap;font-family:inherit'>"+utils.escapeHtml(raw)+"</pre>";
+        }
+      }catch(e){
+        html = "<pre style='white-space:pre-wrap;font-family:inherit'>"+utils.escapeHtml(raw)+"</pre>";
+      }
+      sheet.className = "ia-report-sheet";
+      sheet.innerHTML = html;
+      LICSYSTEM.analiseIa.setActionButtons(true);
+    },
+
+    copiarRelatorio: function(){
+      var md = LICSYSTEM.analiseIa.relatorioMd || "";
+      if(!md){
+        showAlert("iaAlert","warn","Não há relatório para copiar.");
+        return;
+      }
+      var done = function(){
+        showAlert("iaAlert","ok","Relatório copiado para a área de transferência.");
+      };
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(md).then(done).catch(function(){
+          var ta = document.createElement("textarea");
+          ta.value = md;
+          document.body.appendChild(ta);
+          ta.select();
+          try{ document.execCommand("copy"); done(); }
+          catch(e){ showAlert("iaAlert","error","Não foi possível copiar."); }
+          document.body.removeChild(ta);
+        });
+      } else {
+        showAlert("iaAlert","warn","Copiar não disponível neste navegador.");
+      }
+    },
+
+    imprimirRelatorio: function(){
+      if(!LICSYSTEM.analiseIa.relatorioMd){
+        showAlert("iaAlert","warn","Não há relatório para imprimir.");
+        return;
+      }
+      try{ window.print(); }catch(e){
+        showAlert("iaAlert","error","Falha ao abrir impressão.");
+      }
     },
 
     errMsg: function(err){
@@ -4944,7 +5034,7 @@
       }
       LICSYSTEM.analiseIa.file = file;
       LICSYSTEM.analiseIa.text = "";
-      LICSYSTEM.analiseIa.limparCampos();
+      LICSYSTEM.analiseIa.limparRelatorio();
       LICSYSTEM.analiseIa.setBusy(false);
       var meta = el("iaFileMeta");
       if(meta){
@@ -4955,10 +5045,6 @@
       hideAlert("iaAlert");
     },
 
-    /**
-     * Extrai texto no browser (pdf.js). Usa Uint8Array (igual Captação).
-     * Limita páginas/caracteres para não travar editais grandes.
-     */
     extrairTextoPdf: function(file){
       var maxPages = LICSYSTEM.analiseIa.MAX_PAGES;
       var maxChars = LICSYSTEM.analiseIa.MAX_CHARS;
@@ -4968,12 +5054,8 @@
           var reader = new FileReader();
           reader.onerror = function(){ reject(new Error("Falha ao ler o arquivo PDF.")); };
           reader.onload = function(){
-            try{
-              var data = new Uint8Array(reader.result);
-              resolve(data);
-            }catch(e){
-              reject(e);
-            }
+            try{ resolve(new Uint8Array(reader.result)); }
+            catch(e){ reject(e); }
           };
           reader.readAsArrayBuffer(file);
         });
@@ -5024,6 +5106,7 @@
       }
 
       LICSYSTEM.analiseIa.setBusy(true);
+      LICSYSTEM.analiseIa.limparRelatorio();
       showAlert("iaAlert","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Carregando PDF e extraindo texto…');
 
       LICSYSTEM.analiseIa.extrairTextoPdf(file).then(function(text){
@@ -5035,7 +5118,7 @@
         showAlert(
           "iaAlert",
           "info",
-          '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Texto extraído ('+text.length+' caracteres). Enviando para a IA…'
+          '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Texto extraído ('+text.length+' caracteres). Gerando relatório com a IA…'
         );
 
         return fetch("/api/analyze-pdf", {
@@ -5049,7 +5132,7 @@
           return res.text().then(function(raw){
             var body = null;
             try{ body = raw ? JSON.parse(raw) : null; }catch(e){
-              throw new Error("Resposta inválida da API (HTTP "+res.status+"). Verifique /api/analyze-pdf na Vercel.");
+              throw new Error("Resposta inválida da API (HTTP "+res.status+").");
             }
             if(!res.ok){
               var msg = (body && (body.detail || body.error)) || ("Erro HTTP " + res.status);
@@ -5059,9 +5142,10 @@
           });
         });
       }).then(function(body){
-        var data = (body && body.data) ? body.data : body;
-        LICSYSTEM.analiseIa.preencher(data);
-        showAlert("iaAlert","ok","✅ Análise concluída. Campos preenchidos automaticamente.");
+        var md = (body && body.relatorio) || "";
+        if(!md) throw new Error("A API não retornou o campo relatorio.");
+        LICSYSTEM.analiseIa.renderRelatorio(md);
+        showAlert("iaAlert","ok","✅ Relatório gerado com sucesso.");
       }).catch(function(err){
         showAlert("iaAlert","error", utils.escapeHtml(LICSYSTEM.analiseIa.errMsg(err)));
       }).then(function(){
@@ -5097,7 +5181,6 @@
           if(this.files && this.files[0]) LICSYSTEM.analiseIa.onFile(this.files[0]);
         });
       }
-      // Botões são ligados em wire() principal (usa o helper local `on`)
     }
   };
 
