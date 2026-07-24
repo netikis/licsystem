@@ -1,11 +1,15 @@
 /**
  * POST /api/analyze-pdf
- * Analyzes edital text with Google Gemini (@google/generative-ai).
+ * Analyzes edital text with the current Google Gen AI SDK (@google/genai).
  * GEMINI_API_KEY stays only in process.env (never in the frontend).
+ *
+ * Modelo estavel solicitado: exatamente "gemini-1.5-flash"
+ * (sem "-latest" e sem prefixo "models/").
  */
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require("@google/genai");
 
 var MAX_CHARS = 150000;
+var DEFAULT_MODEL = "gemini-1.5-flash";
 
 function send(res, status, body) {
   res.statusCode = status;
@@ -80,17 +84,16 @@ function normalizeResult(obj) {
 }
 
 /**
- * Model id for getGenerativeModel({ model }) — NEVER include "models/" prefix.
- * SDK / REST path adds that automatically.
+ * ID do modelo â€” exatamente "gemini-1.5-flash".
+ * Remove "models/" e converte "-latest" se vier da env.
  */
 function normalizeModelId(name) {
-  var m = String(name || "gemini-1.5-flash-latest").trim();
+  var m = String(name || DEFAULT_MODEL).trim();
   if (m.toLowerCase().indexOf("models/") === 0) {
     m = m.slice(7);
   }
-  // Alias legado ? versão compatível com v1beta
-  if (m === "gemini-1.5-flash") {
-    m = "gemini-1.5-flash-latest";
+  if (m === "gemini-1.5-flash-latest") {
+    m = "gemini-1.5-flash";
   }
   return m;
 }
@@ -150,27 +153,27 @@ module.exports = async function handler(req, res) {
       text = text.substring(0, MAX_CHARS) + "\n\n[...truncated...]";
     }
 
-    var modelName = normalizeModelId(
-      process.env.GEMINI_MODEL || "gemini-1.5-flash-latest"
-    );
+    // Exatamente "gemini-1.5-flash" â€” sem "-latest" e sem "models/"
+    var modelName = normalizeModelId(process.env.GEMINI_MODEL || DEFAULT_MODEL);
 
-    var genAI = new GoogleGenerativeAI(apiKey);
-    var model = genAI.getGenerativeModel({
-      model: modelName, // exatamente "gemini-1.5-flash-latest" — sem "models/"
-      generationConfig: {
+    // SDK oficial atual (substitui o legado @google/generative-ai)
+    var ai = new GoogleGenAI({ apiKey: apiKey });
+    var response = await ai.models.generateContent({
+      model: modelName,
+      contents: buildPrompt(filename, text),
+      config: {
         temperature: 0.2,
         responseMimeType: "application/json",
       },
     });
 
-    var result = await model.generateContent(buildPrompt(filename, text));
-    var response = await result.response;
     var rawText = "";
     try {
-      rawText = response.text();
+      rawText = typeof response.text === "function" ? response.text() : response.text;
     } catch (e) {
       rawText = "";
     }
+    rawText = String(rawText || "").trim();
 
     if (!rawText) {
       return send(res, 502, { error: "Empty Gemini response", model: modelName });
@@ -192,7 +195,7 @@ module.exports = async function handler(req, res) {
     return send(res, 502, {
       error: "Gemini request failed",
       detail: msg,
-      model: normalizeModelId(process.env.GEMINI_MODEL || "gemini-1.5-flash-latest"),
+      model: normalizeModelId(process.env.GEMINI_MODEL || DEFAULT_MODEL),
     });
   }
 };
