@@ -7,9 +7,6 @@
     "dev": "vercel dev --listen 3000",
     "start": "vercel dev --listen 3000"
   },
-  "dependencies": {
-    "@google/genai": "^2.13.0"
-  },
   "engines": {
     "node": "20.x"
   }
