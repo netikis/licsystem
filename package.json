@@ -2,12 +2,21 @@
   "name": "licsystem",
   "version": "1.0.0",
   "private": true,
-  "description": "LICSYSTEM - licitacoes (Vercel + Firebase + Gemini)",
+  "description": "LICSYSTEM - licitacoes (Vite + Vercel + Firebase + Gemini)",
   "scripts": {
-    "dev": "vercel dev --listen 3000",
-    "start": "vercel dev --listen 3000"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "dev:api": "vercel dev --listen 3000",
+    "start": "vite"
+  },
+  "devDependencies": {
+    "html-minifier-terser": "^7.2.0",
+    "javascript-obfuscator": "^5.5.0",
+    "terser": "^5.49.0",
+    "vite": "^6.3.5"
   },
   "engines": {
-    "node": "20.x"
+    "node": ">=20"
   }
 }

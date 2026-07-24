@@ -5,15 +5,20 @@
 .env.development.local
 .env.production.local
 
-# Dependências e deploy
+# Dependencias e deploy
 node_modules/
+dist/
 .vercel/
 *.log
 npm-debug.log*
 
 # Credenciais / backups locais
 FIREBASE CHAVE KEY.txt
+chave api/
+EDITAIS/
 *.backup.html
+licitacao.backup.html
+cruzamento-fuzzy.html
 
 # SO / editor
 .DS_Store
