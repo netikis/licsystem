@@ -1,13 +1,10 @@
 /**
  * POST /api/analyze-pdf
- * Analyzes edital text with the current Google Gen AI SDK (@google/genai).
- * GEMINI_API_KEY stays only in process.env (never in the frontend).
+ * Chamada HTTP direta à API REST do Gemini (sem SDK).
+ * GEMINI_API_KEY fica só em process.env — nunca no frontend.
  *
- * Modelo estavel solicitado: exatamente "gemini-1.5-flash"
- * (sem "-latest" e sem prefixo "models/").
+ * URL: /v1beta/models/gemini-1.5-flash:generateContent
  */
-const { GoogleGenAI } = require("@google/genai");
-
 var MAX_CHARS = 150000;
 var DEFAULT_MODEL = "gemini-1.5-flash";
 
@@ -83,18 +80,11 @@ function normalizeResult(obj) {
   };
 }
 
-/**
- * ID do modelo — exatamente "gemini-1.5-flash".
- * Remove "models/" e converte "-latest" se vier da env.
- */
+/** Modelo sem prefixo "models/" e sem "-latest". */
 function normalizeModelId(name) {
   var m = String(name || DEFAULT_MODEL).trim();
-  if (m.toLowerCase().indexOf("models/") === 0) {
-    m = m.slice(7);
-  }
-  if (m === "gemini-1.5-flash-latest") {
-    m = "gemini-1.5-flash";
-  }
+  if (m.toLowerCase().indexOf("models/") === 0) m = m.slice(7);
+  if (m === "gemini-1.5-flash-latest") m = "gemini-1.5-flash";
   return m;
 }
 
@@ -114,6 +104,20 @@ function buildPrompt(filename, text) {
     "--- TEXTO DO EDITAL ---",
     text,
   ].join("\n");
+}
+
+function extractTextFromGeminiResponse(upstreamJson) {
+  try {
+    var parts = upstreamJson.candidates[0].content.parts || [];
+    return parts
+      .map(function (p) {
+        return p.text || "";
+      })
+      .join("")
+      .trim();
+  } catch (e) {
+    return "";
+  }
 }
 
 module.exports = async function handler(req, res) {
@@ -139,44 +143,67 @@ module.exports = async function handler(req, res) {
     }
 
     var body = await readBody(req);
-    var text = String((body && body.text) || "").trim();
+    var textoExtraido = String((body && body.text) || "").trim();
     var filename = String((body && body.filename) || "edital.pdf").slice(0, 200);
 
-    if (!text || text.length < 40) {
+    if (!textoExtraido || textoExtraido.length < 40) {
       return send(res, 400, {
         error: "Insufficient edital text",
         detail: "Send extracted PDF text (min ~40 chars).",
       });
     }
 
-    if (text.length > MAX_CHARS) {
-      text = text.substring(0, MAX_CHARS) + "\n\n[...truncated...]";
+    if (textoExtraido.length > MAX_CHARS) {
+      textoExtraido = textoExtraido.substring(0, MAX_CHARS) + "\n\n[...truncated...]";
     }
 
-    // Exatamente "gemini-1.5-flash" — sem "-latest" e sem "models/"
     var modelName = normalizeModelId(process.env.GEMINI_MODEL || DEFAULT_MODEL);
+    var url =
+      "https://generativelanguage.googleapis.com/v1beta/models/" +
+      modelName +
+      ":generateContent?key=" +
+      encodeURIComponent(apiKey);
 
-    // SDK oficial atual (substitui o legado @google/generative-ai)
-    var ai = new GoogleGenAI({ apiKey: apiKey });
-    var response = await ai.models.generateContent({
-      model: modelName,
-      contents: buildPrompt(filename, text),
-      config: {
-        temperature: 0.2,
-        responseMimeType: "application/json",
-      },
+    var upstream = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [{ text: buildPrompt(filename, textoExtraido) }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: "application/json",
+        },
+      }),
     });
 
-    var rawText = "";
-    try {
-      rawText = typeof response.text === "function" ? response.text() : response.text;
-    } catch (e) {
-      rawText = "";
-    }
-    rawText = String(rawText || "").trim();
+    var upstreamJson = await upstream.json().catch(function () {
+      return null;
+    });
 
+    if (!upstream.ok) {
+      var detail =
+        (upstreamJson &&
+          upstreamJson.error &&
+          (upstreamJson.error.message || JSON.stringify(upstreamJson.error))) ||
+        ("Gemini HTTP " + upstream.status);
+      return send(res, 502, {
+        error: "Gemini request failed",
+        detail: detail,
+        model: modelName,
+        status: upstream.status,
+      });
+    }
+
+    var rawText = extractTextFromGeminiResponse(upstreamJson);
     if (!rawText) {
-      return send(res, 502, { error: "Empty Gemini response", model: modelName });
+      return send(res, 502, {
+        error: "Empty Gemini response",
+        model: modelName,
+      });
     }
 
     var parsed = normalizeResult(extractJson(rawText));
@@ -191,10 +218,9 @@ module.exports = async function handler(req, res) {
       resumo_objeto: parsed.resumo_objeto,
     });
   } catch (err) {
-    var msg = (err && err.message) || String(err);
-    return send(res, 502, {
-      error: "Gemini request failed",
-      detail: msg,
+    return send(res, 500, {
+      error: "analyze_pdf_crash",
+      detail: (err && err.message) || String(err),
       model: normalizeModelId(process.env.GEMINI_MODEL || DEFAULT_MODEL),
     });
   }
