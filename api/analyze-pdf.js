@@ -3,10 +3,21 @@
  * Chamada HTTP direta à API REST do Gemini (sem SDK).
  * GEMINI_API_KEY fica só em process.env — nunca no frontend.
  *
- * URL: /v1beta/models/gemini-1.5-flash:generateContent
+ * gemini-1.5-* e gemini-2.0-* foram descontinuados (404).
+ * Default atual (Free Tier): gemini-2.5-flash-lite
  */
 var MAX_CHARS = 150000;
-var DEFAULT_MODEL = "gemini-1.5-flash";
+var DEFAULT_MODEL = "gemini-2.5-flash-lite";
+
+/** Tenta nesta ordem se o modelo preferido der 404 */
+var MODEL_FALLBACKS = [
+  "gemini-2.5-flash-lite",
+  "gemini-flash-lite-latest",
+  "gemini-2.5-flash",
+  "gemini-flash-latest",
+  "gemini-3.1-flash-lite",
+  "gemini-3.6-flash",
+];
 
 function send(res, status, body) {
   res.statusCode = status;
@@ -80,11 +91,20 @@ function normalizeResult(obj) {
   };
 }
 
-/** Modelo sem prefixo "models/" e sem "-latest". */
 function normalizeModelId(name) {
   var m = String(name || DEFAULT_MODEL).trim();
   if (m.toLowerCase().indexOf("models/") === 0) m = m.slice(7);
-  if (m === "gemini-1.5-flash-latest") m = "gemini-1.5-flash";
+
+  // Modelos aposentados → substituto atual
+  var retired = {
+    "gemini-1.5-flash": "gemini-2.5-flash-lite",
+    "gemini-1.5-flash-latest": "gemini-2.5-flash-lite",
+    "gemini-1.5-pro": "gemini-2.5-flash",
+    "gemini-1.5-pro-latest": "gemini-2.5-flash",
+    "gemini-2.0-flash": "gemini-2.5-flash",
+    "gemini-2.0-flash-lite": "gemini-2.5-flash-lite",
+  };
+  if (retired[m]) m = retired[m];
   return m;
 }
 
@@ -118,6 +138,52 @@ function extractTextFromGeminiResponse(upstreamJson) {
   } catch (e) {
     return "";
   }
+}
+
+function isNotFoundPayload(upstreamJson, status) {
+  if (status === 404) return true;
+  var msg = String(
+    (upstreamJson &&
+      upstreamJson.error &&
+      (upstreamJson.error.message || JSON.stringify(upstreamJson.error))) ||
+      ""
+  ).toLowerCase();
+  return msg.indexOf("not found") !== -1 || msg.indexOf("not supported") !== -1;
+}
+
+function buildModelQueue(preferred) {
+  var first = normalizeModelId(preferred);
+  var queue = [first];
+  for (var i = 0; i < MODEL_FALLBACKS.length; i++) {
+    if (queue.indexOf(MODEL_FALLBACKS[i]) === -1) queue.push(MODEL_FALLBACKS[i]);
+  }
+  return queue;
+}
+
+async function callGemini(apiKey, modelName, prompt) {
+  var url =
+    "https://generativelanguage.googleapis.com/v1beta/models/" +
+    modelName +
+    ":generateContent?key=" +
+    encodeURIComponent(apiKey);
+
+  var upstream = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.2,
+        responseMimeType: "application/json",
+      },
+    }),
+  });
+
+  var upstreamJson = await upstream.json().catch(function () {
+    return null;
+  });
+
+  return { ok: upstream.ok, status: upstream.status, json: upstreamJson };
 }
 
 module.exports = async function handler(req, res) {
@@ -157,65 +223,65 @@ module.exports = async function handler(req, res) {
       textoExtraido = textoExtraido.substring(0, MAX_CHARS) + "\n\n[...truncated...]";
     }
 
-    var modelName = normalizeModelId(process.env.GEMINI_MODEL || DEFAULT_MODEL);
-    var url =
-      "https://generativelanguage.googleapis.com/v1beta/models/" +
-      modelName +
-      ":generateContent?key=" +
-      encodeURIComponent(apiKey);
+    var preferred = process.env.GEMINI_MODEL || DEFAULT_MODEL;
+    var queue = buildModelQueue(preferred);
+    var prompt = buildPrompt(filename, textoExtraido);
+    var tried = [];
+    var lastDetail = "";
+    var usedModel = queue[0];
 
-    var upstream = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: buildPrompt(filename, textoExtraido) }],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: "application/json",
-        },
-      }),
-    });
+    for (var i = 0; i < queue.length; i++) {
+      var modelName = queue[i];
+      tried.push(modelName);
+      var result = await callGemini(apiKey, modelName, prompt);
 
-    var upstreamJson = await upstream.json().catch(function () {
-      return null;
-    });
+      if (result.ok) {
+        var rawText = extractTextFromGeminiResponse(result.json);
+        if (!rawText) {
+          lastDetail = "Empty Gemini response from " + modelName;
+          continue;
+        }
+        usedModel = modelName;
+        var parsed = normalizeResult(extractJson(rawText));
+        return send(res, 200, {
+          ok: true,
+          model: usedModel,
+          tried: tried,
+          data: parsed,
+          modalidade: parsed.modalidade,
+          abrangencia: parsed.abrangencia,
+          valor_estimado: parsed.valor_estimado,
+          total_produtos: parsed.total_produtos,
+          resumo_objeto: parsed.resumo_objeto,
+        });
+      }
 
-    if (!upstream.ok) {
-      var detail =
-        (upstreamJson &&
-          upstreamJson.error &&
-          (upstreamJson.error.message || JSON.stringify(upstreamJson.error))) ||
-        ("Gemini HTTP " + upstream.status);
+      lastDetail =
+        (result.json &&
+          result.json.error &&
+          (result.json.error.message || JSON.stringify(result.json.error))) ||
+        ("Gemini HTTP " + result.status);
+
+      // 404 / modelo inexistente → tenta o próximo
+      if (isNotFoundPayload(result.json, result.status)) continue;
+
+      // Outros erros (quota, auth): para e devolve
       return send(res, 502, {
         error: "Gemini request failed",
-        detail: detail,
+        detail: lastDetail,
         model: modelName,
-        status: upstream.status,
+        tried: tried,
+        status: result.status,
       });
     }
 
-    var rawText = extractTextFromGeminiResponse(upstreamJson);
-    if (!rawText) {
-      return send(res, 502, {
-        error: "Empty Gemini response",
-        model: modelName,
-      });
-    }
-
-    var parsed = normalizeResult(extractJson(rawText));
-    return send(res, 200, {
-      ok: true,
-      model: modelName,
-      data: parsed,
-      modalidade: parsed.modalidade,
-      abrangencia: parsed.abrangencia,
-      valor_estimado: parsed.valor_estimado,
-      total_produtos: parsed.total_produtos,
-      resumo_objeto: parsed.resumo_objeto,
+    return send(res, 502, {
+      error: "Gemini request failed",
+      detail: lastDetail || "Nenhum modelo Gemini disponivel",
+      model: usedModel,
+      tried: tried,
+      hint:
+        "gemini-1.5 foi descontinuado. Na Vercel use GEMINI_MODEL=gemini-2.5-flash-lite",
     });
   } catch (err) {
     return send(res, 500, {
