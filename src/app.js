@@ -83,16 +83,17 @@
     return false;
   };
 
-  /** Prefixo opcional de lote/item no início da linha do edital. */
+  /** Prefixo opcional de lote/item no início da linha do edital.
+   *  Aceita qtd: 10,000 | 100.000 | 100000 */
   var RE_EDITAL_HEAD =
-    /^(?:(\d{1,5})\s+)?(\d{1,3}(?:\.\d{3})*,\d{3})\s+(UN|UND|UNI|UNID)\s+/i;
+    /^(?:(\d{1,5})\s+)?(\d{1,3}(?:\.\d{3})+,\d{3}|\d{1,3}(?:\.\d{3})+|\d+(?:[.,]\d+)?)\s+(UN|UND|UNI|UNID)\s+/i;
 
   /** Remove preços no fim e devolve só a parte planilha + descrição. */
   utils.stripPrecosEdital = function (line) {
     return String(line == null ? "" : line)
       .replace(/\s+/g, " ")
       .trim()
-      .replace(/\s+\d{1,3}(?:\.\d{3})*,\d{2,4}(?:\s+\d{1,3}(?:\.\d{3})*,\d{2})?\s*$/, "")
+      .replace(/\s+(\d{1,3}(?:\.\d{3})*,\d{2,4}|\d+[.,]\d{2,4})(?:\s+(\d{1,3}(?:\.\d{3})*,\d{2}|\d+[.,]\d{2}))?\s*$/, "")
       .trim();
   };
 
@@ -104,12 +105,17 @@
     var temPlanilha = RE_EDITAL_HEAD.test(raw);
     if (!temPlanilha) return true;
 
-    var m = raw.match(/^(?:\d{1,5}\s+)?\d{1,3}(?:\.\d{3})*,\d{3}\s+(?:UN|UND|UNI|UNID)\s+(.+)$/i);
+    var m = raw.match(/^(?:\d{1,5}\s+)?(?:\d{1,3}(?:\.\d{3})+,\d{3}|\d{1,3}(?:\.\d{3})+|\d+(?:[.,]\d+)?)\s+(?:UN|UND|UNI|UNID)\s+(.+)$/i);
     return utils.isTextoSpecEdital(m ? m[1] : raw);
   };
 
   /** Só linhas válidas de produto (lote opcional + qtd + UN + descrição). */
   utils.isLinhaProdutoEdital = function (line) {
+    if (line && typeof line === "object") {
+      var it = utils.asCaptacaoItem(line);
+      if (!it || !it.produto) return false;
+      return utils.isLinhaProdutoEdital(it.line || ((it.lote ? it.lote + " " : "") + it.qtd + " UN " + it.produto));
+    }
     var fmt = utils.formatLinhaEdital(line);
     if (!fmt) return false;
     if (utils.isLinhaSpecEdital(fmt)) return false;
@@ -158,51 +164,58 @@
   };
 
   /**
-   * Extrai lote, qtd, descrição, valor unitário e valor final da linha do edital.
+   * Extrai lote, qtd, descrição, valor unitário e valor final da linha do edital (PDF).
    * Ex.: "117 10,000 UND ALICATE UNIVERSAL 8\" ... 38,1700 381,70"
+   * Ex.: "100,000 UN Abraçadeira..." | "100.000 UN Abraçadeira..."
    */
   utils.parseLinhaEdital = function (raw) {
-    var s = String(raw == null ? "" : raw).replace(/\s+/g, " ").trim();
+    var s = String(raw == null ? "" : raw)
+      .replace(/[\u00A0\u202F\u2007\u2009\u200A\u2008]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
     if (!s) return null;
 
     var editalVunit = 0, editalTotal = 0;
-    var priceRe = /\s+(\d{1,3}(?:\.\d{3})*,\d{2,4})\s+(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/;
+    // preços no fim: unitário (2–4 casas) + total (2 casas); aceita 1.234,56 e 145.000,00
+    var priceRe = /\s+(\d{1,3}(?:\.\d{3})*,\d{2,4}|\d+[.,]\d{2,4})\s+(\d{1,3}(?:\.\d{3})*,\d{2}|\d+[.,]\d{2})\s*$/;
     var pm = s.match(priceRe);
     if (pm) {
       editalVunit = utils.parseBrNum(pm[1]);
       editalTotal = utils.parseBrNum(pm[2]);
       s = s.slice(0, pm.index).trim();
     } else {
-      // só unitário no fim (4 casas): 38,1700
-      var onlyUnit = s.match(/\s+(\d{1,3}(?:\.\d{3})*,\d{3,4})\s*$/);
+      var onlyUnit = s.match(/\s+(\d{1,3}(?:\.\d{3})*,\d{3,4}|\d+[.,]\d{3,4})\s*$/);
       if (onlyUnit) {
         editalVunit = utils.parseBrNum(onlyUnit[1]);
         s = s.slice(0, onlyUnit.index).trim();
       }
     }
 
+    // qtd: 10,000 (3 casas) | 100.000 (milhar BR) | 100000 | 10,5
+    var QTD = "(\\d{1,3}(?:\\.\\d{3})+,\\d{3}|\\d{1,3}(?:\\.\\d{3})+|\\d+(?:[.,]\\d+)?)";
+    var UND = "(UN|UND|UNI|UNID)";
     var lote = "", qtd = 1, desc = "", und = "UN";
-    var m = s.match(/^(\d{1,5})\s+(\d{1,3}(?:\.\d{3})*,\d{3}|\d+(?:[.,]\d+)?)\s+(UN|UND|UNI|UNID)\s+(.+)$/i);
+    var m = s.match(new RegExp("^(\\d{1,5})\\s+" + QTD + "\\s+" + UND + "\\s+(.+)$", "i"));
     if (m) {
       lote = m[1];
       qtd = utils.parseBrNum(m[2]) || 1;
       und = m[3].toUpperCase();
       desc = utils.enxugarDescricaoEdital(m[4].trim());
     } else {
-      m = s.match(/^(\d{1,3}(?:\.\d{3})*,\d{3}|\d+(?:[.,]\d+)?)\s+(UN|UND|UNI|UNID)\s+(.+)$/i);
+      m = s.match(new RegExp("^" + QTD + "\\s+" + UND + "\\s+(.+)$", "i"));
       if (!m) return null;
       qtd = utils.parseBrNum(m[1]) || 1;
       und = m[2].toUpperCase();
       desc = utils.enxugarDescricaoEdital(m[3].trim());
     }
-    if (!desc || desc.length < 2 || utils.isTextoSpecEdital(desc)) return null;
+    // Não rejeitar aqui por isTextoSpecEdital — o filtro fica em isLinhaProdutoEdital/splitEdital.
+    if (!desc || desc.length < 2) return null;
     if (!editalTotal && editalVunit) editalTotal = qtd * editalVunit;
 
     var qtdStr = (Math.round(qtd * 1000) / 1000).toLocaleString("pt-BR", {
       minimumFractionDigits: 3,
       maximumFractionDigits: 3
     });
-    // Mantém o número do lote/item no início (ex.: "117 10,000 UND ...")
     var line = (lote ? (lote + " ") : "") + qtdStr + " " + und + " " + desc;
     if (editalVunit > 0) {
       line += " " + editalVunit.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
@@ -220,6 +233,42 @@
       editalTotal: editalTotal,
       line: line
     };
+  };
+
+  /** Normaliza item da Captação (string antiga ou objeto parseado). */
+  utils.asCaptacaoItem = function (entry) {
+    if (entry && typeof entry === "object" && (entry.produto || entry.line || entry.qtd)) {
+      var qtd = Number(entry.qtd) || 0;
+      var editalVunit = Number(entry.editalVunit) || 0;
+      var editalTotal = Number(entry.editalTotal) || 0;
+      if (!editalTotal && editalVunit && qtd) editalTotal = qtd * editalVunit;
+      var produto = String(entry.produto || "").trim();
+      var lote = entry.lote != null && entry.lote !== "" ? String(entry.lote) : "";
+      var und = String(entry.und || "UN").toUpperCase();
+      var line = entry.line || "";
+      if (!line && produto) {
+        var rebuilt = utils.parseLinhaEdital(
+          (lote ? lote + " " : "") + (qtd || 1) + " " + und + " " + produto +
+          (editalVunit ? " " + editalVunit : "") +
+          (editalTotal ? " " + editalTotal : "")
+        );
+        line = (rebuilt && rebuilt.line) || ((lote ? lote + " " : "") + qtd + " " + und + " " + produto);
+      }
+      return {
+        lote: lote,
+        qtd: qtd || 1,
+        und: und,
+        produto: produto,
+        editalVunit: editalVunit,
+        editalTotal: editalTotal,
+        line: line
+      };
+    }
+    var parsed = utils.parseLinhaEdital(entry);
+    if (parsed) return parsed;
+    var raw = String(entry == null ? "" : entry).trim();
+    if (!raw) return null;
+    return { lote: "", qtd: 1, und: "UN", produto: raw, editalVunit: 0, editalTotal: 0, line: raw };
   };
 
   /**
@@ -640,11 +689,12 @@
         chunk = limparPagina(chunk);
         if (!chunk) return [];
 
-        var direto = utils.formatLinhaEdital(chunk);
-        if (direto && utils.isLinhaProdutoEdital(direto)) return [direto];
+        var direto = utils.parseLinhaEdital(chunk);
+        if (direto && utils.isLinhaProdutoEdital(direto.line)) return [direto];
 
         var starts = [];
-        var reStart = /(?:^|\s)(\d{1,5})\s+(\d{1,3}(?:\.\d{3})*,\d{3})\s+(UN|UND|UNI|UNID)\s+/gi;
+        // Aceita 10,000 | 100.000 | 100000
+        var reStart = /(?:^|\s)(\d{1,5})\s+(\d{1,3}(?:\.\d{3})+,\d{3}|\d{1,3}(?:\.\d{3})+|\d+(?:[.,]\d+)?)\s+(UN|UND|UNI|UNID)\s+/gi;
         var m;
         while ((m = reStart.exec(chunk)) !== null) {
           var pos = m.index;
@@ -664,8 +714,8 @@
         if (starts.length < 2) {
           if (starts.length === 1) {
             var solo = chunk.slice(starts[0]).trim();
-            var fs = utils.formatLinhaEdital(solo);
-            if (fs && utils.isLinhaProdutoEdital(fs)) return [fs];
+            var fs = utils.parseLinhaEdital(solo);
+            if (fs && utils.isLinhaProdutoEdital(fs.line)) return [fs];
           }
           return [];
         }
@@ -673,8 +723,8 @@
         var partes = cortarPorIndices(chunk, starts);
         var fmtParts = [];
         for (var i = 0; i < partes.length; i++) {
-          var f = utils.formatLinhaEdital(partes[i]);
-          if (f && utils.isLinhaProdutoEdital(f)) fmtParts.push(f);
+          var f = utils.parseLinhaEdital(partes[i]);
+          if (f && utils.isLinhaProdutoEdital(f.line)) fmtParts.push(f);
         }
         return fmtParts;
       }
@@ -691,16 +741,16 @@
 
       var seen = {};
       var out = [];
-      merged.forEach(function (l) {
-        l = String(l || "").replace(/\s+/g, " ").trim();
-        var fmt = utils.formatLinhaEdital(l);
-        if (!fmt || !utils.isLinhaProdutoEdital(fmt)) return;
-        if (!utils.sanitizar(fmt)) return;
-        if (/^(P[aá]gina|Total|Subtotal|Valor|Prefeitura|Estado|Munic[ií]pio)\b/i.test(fmt)) return;
-        var k = fmt.toLowerCase();
+      merged.forEach(function (entry) {
+        var it = utils.asCaptacaoItem(entry);
+        if (!it || !it.produto) return;
+        if (!utils.isLinhaProdutoEdital(it)) return;
+        if (!utils.sanitizar(it.line || it.produto)) return;
+        if (/^(P[aá]gina|Total|Subtotal|Valor|Prefeitura|Estado|Munic[ií]pio)\b/i.test(it.line || it.produto)) return;
+        var k = (it.lote + "|" + it.qtd + "|" + it.produto).toLowerCase();
         if (seen[k]) return;
         seen[k] = 1;
-        out.push(fmt);
+        out.push(it);
       });
       return out;
     },
@@ -758,7 +808,7 @@
               LICSYSTEM.state.captacaoLines = items;
               LICSYSTEM.state.capPage = 1;
               LICSYSTEM.captacao.render(items);
-              showAlert("pdfStatus","ok","Texto extraído: "+items.length+" linha(s) no formato qtd + UN + descrição (ex.: 100,000 UN Viga 5x15mt - Viga 5x15mt).");
+              showAlert("pdfStatus","ok","Texto extraído: "+items.length+" item(ns) com lote, quantidade, descrição e valores do edital.");
             });
           }).catch(function(err){
             showAlert("pdfStatus","error","Erro ao ler PDF: "+utils.escapeHtml(err.message));
@@ -775,12 +825,12 @@
       var kw = (el("pdfKeywords").value||"").split(",").map(function(s){return utils.fold(s).toLowerCase().trim();}).filter(Boolean);
       var body = el("captacaoBody");
       var data = lines || LICSYSTEM.state.captacaoLines || [];
-      var filtered = data.filter(function(l){
-        return utils.isLinhaProdutoEdital(l);
+      var filtered = data.map(function(l){ return utils.asCaptacaoItem(l); }).filter(function(it){
+        return it && utils.isLinhaProdutoEdital(it);
       });
       if(kw.length && !filterAll){
-        filtered = filtered.filter(function(l){
-          var t = utils.fold(l).toLowerCase();
+        filtered = filtered.filter(function(it){
+          var t = utils.fold(it.line || it.produto || "").toLowerCase();
           return kw.some(function(k){ return t.indexOf(k) !== -1; });
         });
       }
@@ -802,13 +852,13 @@
       var end = Math.min(start + size, total);
       var html="";
       for(var idx = start; idx < end; idx++){
-        var l = filtered[idx];
-        if(!utils.isLinhaProdutoEdital(l)) continue;
-        var linha = utils.formatLinhaEdital(l) || l;
+        var it = filtered[idx];
+        if(!it) continue;
+        var linha = it.line || ((it.lote ? it.lote + " " : "") + it.qtd + " " + (it.und||"UN") + " " + it.produto);
         var risco = utils.riscoMatch(linha);
         var flag = risco.length ? '<span class="risk-flag" title="Risco: '+utils.escapeHtml(risco.join(", "))+'">⚠</span>' : "";
         html+='<tr class="'+(risco.length?'risk-row':'')+'" data-item-idx="'+idx+'">'+
-          '<td><input type="checkbox" class="capChk" data-line="'+utils.escapeHtml(linha)+'" aria-label="Selecionar item '+(idx+1)+'"></td>'+
+          '<td><input type="checkbox" class="capChk" data-idx="'+idx+'" aria-label="Selecionar item '+(idx+1)+'"></td>'+
           '<td>'+(idx+1)+'</td>'+
           '<td>'+flag+utils.escapeHtml(linha)+'</td>'+
           '<td><button type="button" class="btn btn-ghost btn-sm capGoogle" data-q="'+utils.escapeHtml(utils.nomeProdutoEdital(linha))+'">🔎 Google</button></td>'+
@@ -857,12 +907,18 @@
       var checks = document.querySelectorAll(".capChk:checked");
       if(!checks.length){ showAlert("pdfStatus","warn","Selecione ao menos um item para exportar."); return; }
       showAlert("pdfStatus","info",'<span class="spinner"></span> Gerando PDF…');
+      var filtered = LICSYSTEM.state.capFiltered || [];
       utils.ensureJsPdf().then(function(){
         var jsPDF = window.jspdf.jsPDF;
         var doc = new jsPDF({orientation:"portrait"});
         return licsystemPdfHeader(doc,"Itens Selecionados do Edital").then(function(startY){
           var rows=[];
-          checks.forEach(function(c,i){ rows.push([i+1, c.getAttribute("data-line")]); });
+          checks.forEach(function(c,i){
+            var idx = Number(c.getAttribute("data-idx"));
+            var it = filtered[idx];
+            var line = it ? (it.line || it.produto || "") : (c.getAttribute("data-line") || "");
+            rows.push([i+1, line]);
+          });
           doc.autoTable({
             startY:startY, head:[["#","Item / Descrição"]], body:rows,
             styles:{fontSize:9,cellPadding:3},
@@ -879,10 +935,13 @@
     googleSelecionados:function(){
       var checks = document.querySelectorAll(".capChk:checked");
       if(!checks.length){ showAlert("pdfStatus","warn","Selecione ao menos um item."); return; }
+      var filtered = LICSYSTEM.state.capFiltered || [];
       var n=0;
       checks.forEach(function(c){
-        if(n>=8) return; // avoid opening too many tabs
-        var q = c.getAttribute("data-line");
+        if(n>=8) return;
+        var idx = Number(c.getAttribute("data-idx"));
+        var it = filtered[idx];
+        var q = it ? (it.produto || it.line || "") : (c.getAttribute("data-line") || "");
         window.open("https://www.google.com/search?q="+encodeURIComponent(q),"_blank");
         n++;
       });
@@ -890,12 +949,22 @@
 
     paraOrcamento:function(){
       var checks = document.querySelectorAll(".capChk:checked");
+      var filtered = LICSYSTEM.state.capFiltered || [];
       var lines;
-      if(checks.length){ lines=[]; checks.forEach(function(c){ lines.push(c.getAttribute("data-line")); }); }
-      else lines = LICSYSTEM.state.captacaoLines.slice();
+      if(checks.length){
+        lines=[];
+        checks.forEach(function(c){
+          var idx = Number(c.getAttribute("data-idx"));
+          var it = filtered[idx];
+          if(it) lines.push(it);
+          else if(c.getAttribute("data-line")) lines.push(c.getAttribute("data-line"));
+        });
+      } else {
+        lines = (LICSYSTEM.state.captacaoLines || []).map(function(l){ return utils.asCaptacaoItem(l); }).filter(Boolean);
+      }
       if(!lines.length){ showAlert("pdfStatus","warn","Nada para enviar. Extraia um edital primeiro."); return; }
       LICSYSTEM.orcamento.addFromLines(lines);
-      showAlert("pdfStatus","ok",lines.length+" linha(s) enviadas ao Orçamento.");
+      showAlert("pdfStatus","ok",lines.length+" item(ns) enviados ao Orçamento com lote, qtd e valores do edital.");
       if(window.__lsActivateView) window.__lsActivateView("orcamento");
     },
 
@@ -1142,25 +1211,41 @@
     addFromLines:function(lines){
       var added = 0;
       (lines || []).forEach(function(l){
-        var raw = String(l).trim();
-        if(!raw || !utils.sanitizar(raw)) return;
-        var parsed = utils.parseLinhaEdital(raw);
+        var itCap = utils.asCaptacaoItem(l);
+        if(!itCap) return;
+        var rawCheck = itCap.line || itCap.produto || "";
+        if(!rawCheck || !utils.sanitizar(rawCheck)) return;
+
         var item = LICSYSTEM.orcamento.emptyItem();
-        if(parsed){
-          item.lote = parsed.lote || "";
-          item.qtd = parsed.qtd || 1;
-          item.produto = parsed.produto;
-          item.editalVunit = parsed.editalVunit || 0;
-          item.editalTotal = parsed.editalTotal || 0;
-        } else {
-          var mLote = raw.match(/^(\d{1,5})\s*[\)\-–.]\s*(.+)$/);
-          if(mLote){
-            item.lote = mLote[1];
-            item.produto = mLote[2].trim();
-          } else {
-            item.produto = raw;
+        // Preferir campos já parseados do PDF (evita perder lote/qtd/preços)
+        if(itCap.produto && (itCap.qtd || itCap.editalVunit || itCap.lote || itCap.line)){
+          item.lote = itCap.lote || "";
+          item.qtd = Number(itCap.qtd) || 1;
+          item.produto = itCap.produto;
+          item.editalVunit = Number(itCap.editalVunit) || 0;
+          item.editalTotal = Number(itCap.editalTotal) || 0;
+          if(!item.editalTotal && item.editalVunit){
+            item.editalTotal = item.qtd * item.editalVunit;
           }
-          item.qtd = 1;
+        } else {
+          var raw = String(l).trim();
+          var parsed = utils.parseLinhaEdital(raw);
+          if(parsed){
+            item.lote = parsed.lote || "";
+            item.qtd = parsed.qtd || 1;
+            item.produto = parsed.produto;
+            item.editalVunit = parsed.editalVunit || 0;
+            item.editalTotal = parsed.editalTotal || 0;
+          } else {
+            var mLote = raw.match(/^(\d{1,5})\s*[\)\-–.]\s*(.+)$/);
+            if(mLote){
+              item.lote = mLote[1];
+              item.produto = mLote[2].trim();
+            } else {
+              item.produto = raw;
+            }
+            item.qtd = 1;
+          }
         }
         added++;
         if(!String(item.lote||"").trim()) item.lote = String(added);
