@@ -593,17 +593,17 @@
     width:100%;max-width:100%;max-height:min(70vh,780px);
   }
   .orc-table{
-    width:100%;min-width:980px;border-collapse:collapse;table-layout:fixed;
+    width:100%;min-width:1180px;border-collapse:collapse;table-layout:fixed;
     font-size:12.5px;
   }
-  .orc-table col.c-chk{width:40px}
-  .orc-table col.c-lote{width:64px}
-  .orc-table col.c-qtd{width:72px}
+  .orc-table col.c-chk{width:36px}
+  .orc-table col.c-lote{width:56px}
+  .orc-table col.c-qtd{width:56px}
   .orc-table col.c-desc{width:auto}
-  .orc-table col.c-money{width:104px}
-  .orc-table col.c-pct{width:64px}
-  .orc-table col.c-link{width:140px}
-  .orc-table col.c-actions{width:268px}
+  .orc-table col.c-money{width:88px}
+  .orc-table col.c-pct{width:52px}
+  .orc-table col.c-link{width:96px}
+  .orc-table col.c-actions{width:148px}
 
   .orc-table thead th{
     position:static;z-index:auto;
@@ -653,12 +653,24 @@
   }
   .orc-table .cell-total{font-weight:800}
   .orc-desc-wrap{display:flex;align-items:center;gap:4px;min-width:0;width:100%}
-  .orc-desc-wrap input{flex:1}
-  .orc-actions{display:flex;gap:4px;flex-wrap:nowrap;justify-content:flex-end;align-items:center}
+  .orc-desc-wrap input{flex:1;min-width:0}
+  .orc-table tbody td.td-link input{
+    padding:5px 6px;font-size:11px;
+  }
+  .orc-actions{
+    display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end;align-items:center;
+    max-width:148px;margin-left:auto;
+  }
+  .orc-actions .btn{
+    min-height:0;padding:3px 6px;font-size:10px;line-height:1.15;border-radius:6px;gap:0;
+  }
+  .orc-actions .orcGoogle,
+  .orc-actions .orcMl,
+  .orc-actions .orcDel{padding:3px 5px;flex-shrink:0}
   .orc-actions .orcCompensa,
   .orc-actions .orcNaoCompensa{
-    padding:5px 7px;font-size:10px;letter-spacing:.2px;white-space:nowrap;line-height:1.2;
-    border:1px solid transparent;
+    padding:3px 5px;font-size:9px;letter-spacing:.15px;white-space:nowrap;line-height:1.15;
+    border:1px solid transparent;font-weight:700;
   }
   .orc-actions .orcCompensa:not(.is-active){
     background:var(--ls-green-bg);color:var(--ls-green);border-color:#b6e3ca;
@@ -670,7 +682,7 @@
   }
   .orc-actions .orcNaoCompensa:not(.is-active):hover{background:#f7d4d4}
   .orc-actions .orcNaoCompensa.is-active{background:var(--ls-red);color:#fff;border-color:var(--ls-red)}
-  .orc-actions .orcDel{padding:4px 7px;opacity:.65;flex-shrink:0}
+  .orc-actions .orcDel{opacity:.65}
   .orc-actions .orcDel:hover{opacity:1}
   .orc-table tbody tr.orc-row-compensa td{background:#f0faf4}
   .orc-table tbody tr.orc-row-compensa:nth-child(even) td{background:#e8f6ee}

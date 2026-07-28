@@ -1801,12 +1801,12 @@
             '<td class="split-start"><input type="number" data-i="'+i+'" data-f="vunit" value="'+utils.escapeHtml(it.vunit)+'" step="0.01" min="0" title="Meu valor unitário"></td>'+
             '<td><input type="number" data-i="'+i+'" data-f="pct" value="'+utils.escapeHtml(it.pct)+'" step="0.1" title="Porcentagem"></td>'+
             '<td><span class="cell-total" data-meus-total="'+i+'">'+utils.formatBrl(totalMeus)+'</span></td>'+
-            '<td><input type="text" data-i="'+i+'" data-f="link" value="'+utils.escapeHtml(it.link||"")+'" placeholder="Link de acesso"></td>'+
-            '<td><div class="orc-actions">'+
+            '<td class="td-link"><input type="text" data-i="'+i+'" data-f="link" value="'+utils.escapeHtml(it.link||"")+'" placeholder="Link"></td>'+
+            '<td class="td-actions"><div class="orc-actions">'+
               '<button type="button" class="btn btn-ghost btn-sm orcGoogle" data-i="'+i+'" title="Google">G</button>'+
               '<button type="button" class="btn btn-ghost btn-sm orcMl" data-i="'+i+'" title="Mercado Livre">ML</button>'+
               '<button type="button" class="'+btnCompensaCls+'" data-i="'+i+'" title="Compensa">COMPENSA</button>'+
-              '<button type="button" class="'+btnNaoCls+'" data-i="'+i+'" title="Não compensa">NÃO COMPENSA</button>'+
+              '<button type="button" class="'+btnNaoCls+'" data-i="'+i+'" title="Não compensa">NÃO COMP.</button>'+
               '<button type="button" class="btn btn-ghost btn-sm orcDel" data-i="'+i+'" title="Remover">✕</button>'+
             '</div></td>'+
           '</tr>'
