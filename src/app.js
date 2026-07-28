@@ -1684,12 +1684,24 @@
     },
     load:function(){
       try{
-        var saved = JSON.parse(localStorage.getItem(ORC_KEY) || "null");
-        if((!saved || !Array.isArray(saved)) && ORC_KEY_LEGACY){
-          saved = JSON.parse(localStorage.getItem(ORC_KEY_LEGACY) || "null");
+        var raw = JSON.parse(localStorage.getItem(ORC_KEY) || "null");
+        if(raw == null && ORC_KEY_LEGACY){
+          raw = JSON.parse(localStorage.getItem(ORC_KEY_LEGACY) || "null");
         }
-        if(saved && Array.isArray(saved)){
-          LICSYSTEM.state.orcItems = saved.map(function(it){ return LICSYSTEM.orcamento.normalizeItem(it); });
+        var items = null;
+        // v2 object: { v, items, meta, page } — legacy: bare array
+        if(raw && Array.isArray(raw)){
+          items = raw;
+        } else if(raw && typeof raw === "object" && Array.isArray(raw.items)){
+          items = raw.items;
+          var meta = raw.meta || {};
+          LICSYSTEM.state.orcMetaNome = meta.nome != null ? String(meta.nome) : (LICSYSTEM.state.orcMetaNome || "");
+          LICSYSTEM.state.orcMetaNumero = meta.numero != null ? String(meta.numero) : (LICSYSTEM.state.orcMetaNumero || "");
+          LICSYSTEM.state.orcCatalogId = meta.catalogId != null ? meta.catalogId : (LICSYSTEM.state.orcCatalogId || null);
+          if(raw.page != null) LICSYSTEM.state.orcPage = Math.max(1, Number(raw.page) || 1);
+        }
+        if(items){
+          LICSYSTEM.state.orcItems = items.map(function(it){ return LICSYSTEM.orcamento.normalizeItem(it); });
         }
       }catch(e){}
       if(!LICSYSTEM.state.orcItems.length){
@@ -1699,9 +1711,57 @@
     },
     save:function(){
       try{
-        localStorage.setItem(ORC_KEY, JSON.stringify(LICSYSTEM.state.orcItems));
+        var payload = {
+          v: 2,
+          items: (LICSYSTEM.state.orcItems || []).map(function(it){
+            return LICSYSTEM.orcamento.normalizeItem(it);
+          }),
+          meta: {
+            nome: LICSYSTEM.state.orcMetaNome || "",
+            numero: LICSYSTEM.state.orcMetaNumero || "",
+            catalogId: LICSYSTEM.state.orcCatalogId || null
+          },
+          page: LICSYSTEM.state.orcPage || 1,
+          savedAt: Date.now()
+        };
+        localStorage.setItem(ORC_KEY, JSON.stringify(payload));
       }catch(e){
         console.warn("Orçamento: não foi possível salvar tudo no navegador (limite de armazenamento).", e);
+      }
+    },
+    scheduleSave:function(){
+      clearTimeout(LICSYSTEM.orcamento._saveTimer);
+      LICSYSTEM.orcamento._saveTimer = setTimeout(function(){
+        LICSYSTEM.orcamento._saveTimer = null;
+        LICSYSTEM.orcamento.save();
+        LICSYSTEM.state._orcDirty = false;
+      }, 400);
+    },
+    flushSave:function(){
+      clearTimeout(LICSYSTEM.orcamento._saveTimer);
+      LICSYSTEM.orcamento._saveTimer = null;
+      LICSYSTEM.orcamento.syncFromDom();
+      LICSYSTEM.orcamento.save();
+      LICSYSTEM.state._orcDirty = false;
+    },
+    /** Pull live input values into state (covers pending keystrokes before leave). */
+    syncFromDom:function(){
+      var body = el("orcBody");
+      if(!body) return;
+      var inputs = body.querySelectorAll("input[data-i][data-f]");
+      for(var n = 0; n < inputs.length; n++){
+        var inp = inputs[n];
+        var i = Number(inp.getAttribute("data-i"));
+        var f = inp.getAttribute("data-f");
+        var it = LICSYSTEM.state.orcItems[i];
+        if(!it || !f) continue;
+        if(f === "produto" || f === "link" || f === "lote") it[f] = inp.value;
+        else it[f] = Number(inp.value) || 0;
+        if(f === "qtd" || f === "editalVunit"){
+          if(Number(it.editalVunit) > 0){
+            it.editalTotal = (Number(it.qtd) || 0) * (Number(it.editalVunit) || 0);
+          }
+        }
       }
     },
     calcEditalTotal:function(it){
@@ -1791,8 +1851,8 @@
         buf.push(
           '<tr class="'+rowCls.join(" ")+'" data-item-idx="'+i+'">'+
             '<td class="td-chk"><input type="checkbox" class="orcChk" data-i="'+i+'" aria-label="Selecionar lote '+(it.lote||(i+1))+'"></td>'+
-            '<td><input type="text" data-i="'+i+'" data-f="lote" value="'+utils.escapeHtml(it.lote)+'" placeholder="Lote/Item" title="Lote ou Item do edital"></td>'+
-            '<td><input type="number" data-i="'+i+'" data-f="qtd" value="'+utils.escapeHtml(it.qtd)+'" step="1" min="0" title="Quantidade"></td>'+
+            '<td class="td-lote"><input type="text" class="orc-lote" data-i="'+i+'" data-f="lote" value="'+utils.escapeHtml(it.lote)+'" placeholder="—" title="Lote ou Item do edital"></td>'+
+            '<td class="td-qtd"><input type="number" class="orc-qtd" data-i="'+i+'" data-f="qtd" value="'+utils.escapeHtml(it.qtd)+'" step="1" min="0" title="Quantidade"></td>'+
             '<td><div class="orc-desc-wrap'+(risco.length?' risk-cell':'')+'">'+flag+
               '<input type="text" data-i="'+i+'" data-f="produto" value="'+utils.escapeHtml(it.produto)+'" placeholder="Descrição do edital">'+
             '</div></td>'+
@@ -1882,6 +1942,7 @@
       LICSYSTEM.state.orcMetaNumero = "";
       LICSYSTEM.state._orcDirty = true;
       LICSYSTEM.orcamento.render();
+      LICSYSTEM.orcamento.flushSave();
       LICSYSTEM.orcamento.updateMeta();
     },
 
@@ -2043,6 +2104,7 @@
       LICSYSTEM.state.orcCatalogId = entry.id;
       LICSYSTEM.state.orcMetaNome = nome;
       LICSYSTEM.state.orcMetaNumero = numero;
+      LICSYSTEM.orcamento.save();
       LICSYSTEM.orcamento.updateMeta();
       LICSYSTEM.orcamento.fecharModalSalvarCatalogo();
       if(typeof listarProdutos === "function") listarProdutos();
@@ -2331,11 +2393,7 @@
       }
       if(el("orcTotalGeral")) el("orcTotalGeral").textContent = utils.formatBrl(geralMeus);
       if(el("orcTotalEdital")) el("orcTotalEdital").textContent = utils.formatBrl(geralEdital);
-      clearTimeout(LICSYSTEM.orcamento._saveTimer);
-      LICSYSTEM.orcamento._saveTimer = setTimeout(function(){
-        LICSYSTEM.orcamento.save();
-        LICSYSTEM.state._orcDirty = false;
-      }, 400);
+      LICSYSTEM.orcamento.scheduleSave();
     }
   };
 
@@ -3254,7 +3312,13 @@
   LICSYSTEM.VIEW_TITLES = VIEW_TITLES;
 
   LICSYSTEM.onViewChange = function(view){
-    LICSYSTEM.state.currentView = view || "dashboard";
+    var prev = LICSYSTEM.state.currentView;
+    view = view || "dashboard";
+    // Ao sair do Orçamento: sincroniza inputs pendentes e grava (não limpa orcItems)
+    if(prev === "orcamento" && view !== "orcamento"){
+      try{ LICSYSTEM.orcamento.flushSave(); }catch(e){}
+    }
+    LICSYSTEM.state.currentView = view;
     // Não remonta telas pesadas a cada clique no menu
     if(view==="dashboard"){
       if(!LICSYSTEM.state._dashReady){
@@ -3263,9 +3327,9 @@
       }
     }
     if(view==="orcamento"){
-      if(LICSYSTEM.state._orcDirty || !LICSYSTEM.state._orcRendered){
-        LICSYSTEM.orcamento.render({ save:false });
-      }
+      // Remonta a partir do estado em memória (não zera orcItems; garante tabela após troca de aba)
+      LICSYSTEM.orcamento.render({ save:false });
+      LICSYSTEM.orcamento.updateMeta();
     }
     if(view==="cofre"){
       if(!LICSYSTEM.state._cofreRendered){
@@ -4978,6 +5042,19 @@
     LICSYSTEM.state._cofreRendered = false;
     LICSYSTEM.updateBell();
     LICSYSTEM.state.currentView = "dashboard";
+
+    // Flush orçamento ao fechar/ocultar a aba (debounce pendente não se perde)
+    if(!LICSYSTEM._orcPersistWired){
+      LICSYSTEM._orcPersistWired = true;
+      window.addEventListener("beforeunload", function(){
+        try{ LICSYSTEM.orcamento.flushSave(); }catch(e){}
+      });
+      document.addEventListener("visibilitychange", function(){
+        if(document.visibilityState === "hidden"){
+          try{ LICSYSTEM.orcamento.flushSave(); }catch(e){}
+        }
+      });
+    }
 
     // UI primeiro; pesado depois (não trava a abertura)
     requestAnimationFrame(function(){
