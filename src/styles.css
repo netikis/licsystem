@@ -19,7 +19,8 @@
     --shadow-lg:0 12px 34px rgba(21,38,66,.16);
   }
   *{box-sizing:border-box}
-  html,body{margin:0;padding:0;width:100%;max-width:100%;overflow-x:hidden}
+  /* overflow-x:hidden no body quebra position:sticky (some o topbar/botões ao rolar) */
+  html,body{margin:0;padding:0;width:100%;max-width:100%;height:100%;overflow:hidden}
   body{
     font-family:'Montserrat',system-ui,Arial,sans-serif;
     background:var(--ls-bg);
@@ -28,12 +29,15 @@
     -webkit-font-smoothing:antialiased;
   }
   /* ---------------- Layout ---------------- */
-  #app{display:flex;min-height:100vh;width:100%;max-width:100%;overflow-x:hidden}
+  #app{
+    display:flex;height:100vh;height:100dvh;width:100%;max-width:100%;
+    overflow:hidden;
+  }
   #sidebar{
     width:268px;max-width:100%;flex-shrink:0;
     background:linear-gradient(180deg,var(--ls-navy) 0%,var(--ls-navy-2) 100%);
     color:#fff;display:flex;flex-direction:column;
-    position:sticky;top:0;height:100vh;z-index:40;
+    height:100%;z-index:40;
     transition:transform .28s ease;
   }
   .brand{padding:22px 22px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
@@ -133,11 +137,19 @@
     font-family:inherit;cursor:pointer;
   }
   .btn-logout:hover{border-color:var(--ls-gold);background:#fffbeb}
-  #main{flex:1;min-width:0;width:100%;max-width:100%;display:flex;flex-direction:column}
+  #main{
+    flex:1;min-width:0;width:100%;max-width:100%;
+    display:flex;flex-direction:column;
+    height:100%;overflow:hidden;
+  }
+  #main > .content{
+    flex:1;min-height:0;overflow-x:clip;overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
   .topbar{
     display:flex;align-items:center;justify-content:space-between;gap:12px;
     padding:16px 26px;background:var(--ls-card);border-bottom:1px solid var(--ls-line);
-    position:sticky;top:0;z-index:20;width:100%;max-width:100%;
+    position:relative;z-index:20;width:100%;max-width:100%;flex-shrink:0;
   }
   .topbar-left{display:flex;align-items:center;gap:12px;min-width:0;flex:1}
   .topbar-titles{min-width:0}
@@ -655,9 +667,18 @@
   }
   .orc-table .foot-edital-value,
   .orc-table .foot-meus-value{
-    font-size:14px;font-weight:800;color:var(--ls-navy);white-space:nowrap;
+    font-size:13px;font-weight:800;color:var(--ls-navy);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;
   }
+  .orc-table .foot-edital-value span,
+  .orc-table .foot-meus-value span{display:inline-block;max-width:100%;vertical-align:bottom}
   .orc-table tfoot .split-start{border-left: var(--orc-split)}
+  /* Cabeçalho do card de orçamento fica visível (botões Excel/PDF/Catálogo/Proposta) */
+  #view-orcamento > .card > .card-head{
+    position:sticky;top:0;z-index:5;
+    background:var(--ls-card);padding-bottom:8px;margin-bottom:4px;
+    border-bottom:1px solid var(--ls-line);
+  }
 
   .orc-meta{
     display:flex;align-items:center;gap:10px;flex-wrap:wrap;
@@ -738,7 +759,7 @@
       box-shadow:var(--shadow-lg);
     }
     body.sidebar-open #sidebar{transform:translateX(0)}
-    body.sidebar-open{overflow:hidden}
+    #main{width:100%;max-width:100%}
     #sidebar-overlay{display:block}
     .sidebar-close{display:flex}
     .brand .logo{gap:10px}

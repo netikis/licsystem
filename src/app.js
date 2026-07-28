@@ -981,6 +981,7 @@
       var editalVunit = Number(it.editalVunit != null ? it.editalVunit : 0) || 0;
       var editalTotal = Number(it.editalTotal != null ? it.editalTotal : 0) || 0;
       if(!editalTotal && editalVunit) editalTotal = qtd * editalVunit;
+      if(!editalVunit && editalTotal && qtd) editalVunit = editalTotal / qtd;
       return {
         lote: it.lote != null && it.lote !== "" ? String(it.lote) : "",
         qtd: qtd,
@@ -1090,6 +1091,10 @@
         var it = items[i];
         var totalMeus = LICSYSTEM.orcamento.calcTotal(it);
         var totalEdital = LICSYSTEM.orcamento.calcEditalTotal(it);
+        var editalUnitShow = Number(it.editalVunit)||0;
+        if(!editalUnitShow && totalEdital > 0 && Number(it.qtd) > 0){
+          editalUnitShow = totalEdital / Number(it.qtd);
+        }
         var risco = utils.riscoMatch(it.produto);
         var flag = risco.length ? '<span class="risk-flag" title="Risco: '+utils.escapeHtml(risco.join(", "))+'">⚠</span>' : "";
         buf.push(
@@ -1100,7 +1105,7 @@
             '<td><div class="orc-desc-wrap'+(risco.length?' risk-cell':'')+'">'+flag+
               '<input type="text" data-i="'+i+'" data-f="produto" value="'+utils.escapeHtml(it.produto)+'" placeholder="Descrição do edital">'+
             '</div></td>'+
-            '<td><input type="number" data-i="'+i+'" data-f="editalVunit" value="'+utils.escapeHtml(it.editalVunit)+'" step="0.0001" min="0" title="Valor unitário do edital"></td>'+
+            '<td><input type="number" data-i="'+i+'" data-f="editalVunit" value="'+utils.escapeHtml(editalUnitShow)+'" step="0.0001" min="0" title="Valor unitário do edital"></td>'+
             '<td class="split-end"><span class="cell-ro" data-edital-total="'+i+'">'+utils.formatBrl(totalEdital)+'</span></td>'+
             '<td class="split-start"><input type="number" data-i="'+i+'" data-f="vunit" value="'+utils.escapeHtml(it.vunit)+'" step="0.01" min="0" title="Meu valor unitário"></td>'+
             '<td><input type="number" data-i="'+i+'" data-f="pct" value="'+utils.escapeHtml(it.pct)+'" step="0.1" title="Porcentagem"></td>'+
