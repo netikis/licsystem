@@ -267,38 +267,50 @@
           </div>
 
           <div class="orc-mirror">
-            <div class="orc-mirror-titles">
-              <div class="orc-pane-title edital">EDITAL</div>
-              <div class="orc-pane-title meus">MEUS PREÇOS</div>
-            </div>
-            <div class="orc-mirror-heads">
-              <div class="orc-head-edital">
-                <span class="col-chk"><input type="checkbox" id="orcCheckAll" title="Selecionar todos" /></span>
-                <span class="col-lote">Lote</span>
-                <span class="col-qtd">Qtd</span>
-                <span class="col-desc">Descrição</span>
-                <span class="col-money">V. Unitário</span>
-                <span class="col-money">V. Final</span>
-              </div>
-              <div class="orc-head-meus">
-                <span class="col-money">V. Unitário</span>
-                <span class="col-pct">%</span>
-                <span class="col-money">V. Final</span>
-                <span class="col-link">Link de Acesso</span>
-                <span class="col-actions">Ações</span>
-              </div>
-            </div>
-            <div id="orcBody" class="orc-mirror-body"></div>
-            <div class="orc-mirror-foot">
-              <div class="orc-foot-edital">
-                <span class="foot-label">TOTAL EDITAL</span>
-                <span id="orcTotalEdital" class="foot-value">R$ 0,00</span>
-              </div>
-              <div class="orc-foot-meus">
-                <span class="foot-label">TOTAL MEUS PREÇOS</span>
-                <span id="orcTotalGeral" class="foot-value">R$ 0,00</span>
-              </div>
-            </div>
+            <table class="orc-table" id="orcTable">
+              <colgroup>
+                <col class="c-chk" />
+                <col class="c-lote" />
+                <col class="c-qtd" />
+                <col class="c-desc" />
+                <col class="c-money" />
+                <col class="c-money" />
+                <col class="c-money" />
+                <col class="c-pct" />
+                <col class="c-money" />
+                <col class="c-link" />
+                <col class="c-actions" />
+              </colgroup>
+              <thead>
+                <tr class="orc-titles">
+                  <th colspan="6" class="orc-title-edital">EDITAL</th>
+                  <th colspan="5" class="orc-title-meus">MEUS PREÇOS</th>
+                </tr>
+                <tr class="orc-cols">
+                  <th class="col-chk"><input type="checkbox" id="orcCheckAll" title="Selecionar todos" /></th>
+                  <th>Lote</th>
+                  <th>Qtd</th>
+                  <th>Descrição</th>
+                  <th>V. Unitário</th>
+                  <th class="split-end">V. Final</th>
+                  <th class="split-start">V. Unitário</th>
+                  <th>%</th>
+                  <th>V. Final</th>
+                  <th>Link de Acesso</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="orcBody"></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="5" class="foot-edital-label">TOTAL EDITAL</td>
+                  <td class="foot-edital-value split-end"><span id="orcTotalEdital">R$ 0,00</span></td>
+                  <td colspan="2" class="foot-meus-label split-start">TOTAL MEUS PREÇOS</td>
+                  <td class="foot-meus-value"><span id="orcTotalGeral">R$ 0,00</span></td>
+                  <td colspan="2"></td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
           <div class="pager" id="orcPager" style="display:none">
             <div class="pager-info" id="orcPagerInfo"></div>
