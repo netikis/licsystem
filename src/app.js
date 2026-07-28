@@ -1805,8 +1805,8 @@
             '<td class="td-actions"><div class="orc-actions">'+
               '<button type="button" class="btn btn-ghost btn-sm orcGoogle" data-i="'+i+'" title="Google">G</button>'+
               '<button type="button" class="btn btn-ghost btn-sm orcMl" data-i="'+i+'" title="Mercado Livre">ML</button>'+
-              '<button type="button" class="'+btnCompensaCls+'" data-i="'+i+'" title="Compensa">COMPENSA</button>'+
-              '<button type="button" class="'+btnNaoCls+'" data-i="'+i+'" title="Não compensa">NÃO COMP.</button>'+
+              '<button type="button" class="'+btnCompensaCls+'" data-i="'+i+'" title="COMPENSA">(C)</button>'+
+              '<button type="button" class="'+btnNaoCls+'" data-i="'+i+'" title="NÃO COMPENSA">(N)</button>'+
               '<button type="button" class="btn btn-ghost btn-sm orcDel" data-i="'+i+'" title="Remover">✕</button>'+
             '</div></td>'+
           '</tr>'
