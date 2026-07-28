@@ -83,24 +83,37 @@
     return false;
   };
 
+  /** Prefixo opcional de lote/item no início da linha do edital. */
+  var RE_EDITAL_HEAD =
+    /^(?:(\d{1,5})\s+)?(\d{1,3}(?:\.\d{3})*,\d{3})\s+(UN|UND|UNI|UNID)\s+/i;
+
+  /** Remove preços no fim e devolve só a parte planilha + descrição. */
+  utils.stripPrecosEdital = function (line) {
+    return String(line == null ? "" : line)
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/\s+\d{1,3}(?:\.\d{3})*,\d{2,4}(?:\s+\d{1,3}(?:\.\d{3})*,\d{2})?\s*$/, "")
+      .trim();
+  };
+
   /** Linha completa: sem formato planilha ou descrição = especificação. */
   utils.isLinhaSpecEdital = function (line) {
-    var raw = String(line == null ? "" : line).replace(/\s+/g, " ").trim();
+    var raw = utils.stripPrecosEdital(line);
     if (!raw || raw.length < 4) return true;
 
-    var temPlanilha = /^\d{1,3}(?:\.\d{3})*,\d{3}\s+(UN|UND|UNI|UNID)\s+/i.test(raw);
+    var temPlanilha = RE_EDITAL_HEAD.test(raw);
     if (!temPlanilha) return true;
 
-    var m = raw.match(/^\d{1,3}(?:\.\d{3})*,\d{3}\s+(?:UN|UND|UNI|UNID)\s+(.+)$/i);
+    var m = raw.match(/^(?:\d{1,5}\s+)?\d{1,3}(?:\.\d{3})*,\d{3}\s+(?:UN|UND|UNI|UNID)\s+(.+)$/i);
     return utils.isTextoSpecEdital(m ? m[1] : raw);
   };
 
-  /** Só linhas válidas de produto (qtd + UN + descrição, sem bloco de especificação). */
+  /** Só linhas válidas de produto (lote opcional + qtd + UN + descrição). */
   utils.isLinhaProdutoEdital = function (line) {
     var fmt = utils.formatLinhaEdital(line);
     if (!fmt) return false;
     if (utils.isLinhaSpecEdital(fmt)) return false;
-    if (!/^\d{1,3}(?:\.\d{3})*,\d{3}\s+(UN|UND|UNI|UNID)\s+/i.test(fmt)) return false;
+    if (!RE_EDITAL_HEAD.test(utils.stripPrecosEdital(fmt))) return false;
     return true;
   };
 
@@ -126,41 +139,105 @@
     return left;
   };
 
+  /** Número BR: 10,000 | 1.234,56 | 38,1700 */
+  utils.parseBrNum = function (v) {
+    if (v == null || v === "") return 0;
+    if (typeof v === "number") return isFinite(v) ? v : 0;
+    var s = String(v).trim();
+    if (/^\d{1,3}(\.\d{3})+,\d+$/.test(s) || (s.indexOf(".") >= 0 && s.indexOf(",") >= 0)) {
+      s = s.replace(/\./g, "").replace(",", ".");
+    } else if (/^\d{1,3}(\.\d{3})+$/.test(s)) {
+      s = s.replace(/\./g, "");
+    } else if (/,\d+$/.test(s)) {
+      s = s.replace(/\./g, "").replace(",", ".");
+    } else {
+      s = s.replace(/[^0-9,.-]/g, "").replace(",", ".");
+    }
+    var n = parseFloat(s);
+    return isFinite(n) ? n : 0;
+  };
+
   /**
-   * Formato planilha do edital: "100,000 UN Viga 5x15mt - Viga 5x15mt"
-   * (sem código do item nem preços unitário/total).
+   * Extrai lote, qtd, descrição, valor unitário e valor final da linha do edital.
+   * Ex.: "117 10,000 UND ALICATE UNIVERSAL 8\" ... 38,1700 381,70"
    */
-  utils.formatLinhaEdital = function (raw) {
+  utils.parseLinhaEdital = function (raw) {
     var s = String(raw == null ? "" : raw).replace(/\s+/g, " ").trim();
     if (!s) return null;
 
-    var m = s.match(/^(\d{1,5})\s+(\d{1,3}(?:\.\d{3})*,\d{3})\s+(UN|UND|UNI|UNID)\s+(.+)$/i);
-    if (m) {
-      var desc = m[4]
-        .replace(/\s+\d{1,3}(?:\.\d{3})*,\d{2,4}\s+\d{1,3}(?:\.\d{3})*,\d{2}\s*$/, "")
-        .trim();
-      desc = utils.enxugarDescricaoEdital(desc);
-      if (desc.length < 2 || utils.isTextoSpecEdital(desc)) return null;
-      return m[2] + " " + m[3].toUpperCase() + " " + desc;
+    var editalVunit = 0, editalTotal = 0;
+    var priceRe = /\s+(\d{1,3}(?:\.\d{3})*,\d{2,4})\s+(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/;
+    var pm = s.match(priceRe);
+    if (pm) {
+      editalVunit = utils.parseBrNum(pm[1]);
+      editalTotal = utils.parseBrNum(pm[2]);
+      s = s.slice(0, pm.index).trim();
+    } else {
+      // só unitário no fim (4 casas): 38,1700
+      var onlyUnit = s.match(/\s+(\d{1,3}(?:\.\d{3})*,\d{3,4})\s*$/);
+      if (onlyUnit) {
+        editalVunit = utils.parseBrNum(onlyUnit[1]);
+        s = s.slice(0, onlyUnit.index).trim();
+      }
     }
 
-    m = s.match(/^(\d{1,3}(?:\.\d{3})*,\d{3})\s+(UN|UND|UNI|UNID)\s+(.+)$/i);
+    var lote = "", qtd = 1, desc = "", und = "UN";
+    var m = s.match(/^(\d{1,5})\s+(\d{1,3}(?:\.\d{3})*,\d{3}|\d+(?:[.,]\d+)?)\s+(UN|UND|UNI|UNID)\s+(.+)$/i);
     if (m) {
-      var desc2 = m[3]
-        .replace(/\s+\d{1,3}(?:\.\d{3})*,\d{2,4}\s+\d{1,3}(?:\.\d{3})*,\d{2}\s*$/, "")
-        .trim();
-      desc2 = utils.enxugarDescricaoEdital(desc2);
-      if (desc2.length < 2 || utils.isTextoSpecEdital(desc2)) return null;
-      return m[1] + " " + m[2].toUpperCase() + " " + desc2;
+      lote = m[1];
+      qtd = utils.parseBrNum(m[2]) || 1;
+      und = m[3].toUpperCase();
+      desc = utils.enxugarDescricaoEdital(m[4].trim());
+    } else {
+      m = s.match(/^(\d{1,3}(?:\.\d{3})*,\d{3}|\d+(?:[.,]\d+)?)\s+(UN|UND|UNI|UNID)\s+(.+)$/i);
+      if (!m) return null;
+      qtd = utils.parseBrNum(m[1]) || 1;
+      und = m[2].toUpperCase();
+      desc = utils.enxugarDescricaoEdital(m[3].trim());
+    }
+    if (!desc || desc.length < 2 || utils.isTextoSpecEdital(desc)) return null;
+    if (!editalTotal && editalVunit) editalTotal = qtd * editalVunit;
+
+    var qtdStr = (Math.round(qtd * 1000) / 1000).toLocaleString("pt-BR", {
+      minimumFractionDigits: 3,
+      maximumFractionDigits: 3
+    });
+    // Mantém o número do lote/item no início (ex.: "117 10,000 UND ...")
+    var line = (lote ? (lote + " ") : "") + qtdStr + " " + und + " " + desc;
+    if (editalVunit > 0) {
+      line += " " + editalVunit.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+      if (editalTotal > 0) {
+        line += " " + editalTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
     }
 
-    return null;
+    return {
+      lote: lote,
+      qtd: qtd,
+      und: und,
+      produto: desc,
+      editalVunit: editalVunit,
+      editalTotal: editalTotal,
+      line: line
+    };
+  };
+
+  /**
+   * Formato planilha do edital (texto). Mantém preços no fim quando existirem.
+   */
+  utils.formatLinhaEdital = function (raw) {
+    var parsed = utils.parseLinhaEdital(raw);
+    return parsed ? parsed.line : null;
   };
 
   /** Termo curto para busca (opcional): remove qtd/UN e pega trecho antes do " - ". */
   utils.nomeProdutoEdital = function (line) {
+    var parsed = utils.parseLinhaEdital(line);
+    if (parsed && parsed.produto) {
+      return parsed.produto.split(/\s+[-–]\s+/)[0].trim().toLowerCase();
+    }
     var fmt = utils.formatLinhaEdital(line) || String(line || "").trim();
-    var m = fmt.match(/^\d{1,3}(?:\.\d{3})*,\d{3}\s+(?:UN|UND|UNI|UNID)\s+(.+)$/i);
+    var m = fmt.match(/^(?:\d{1,5}\s+)?\d{1,3}(?:\.\d{3})*,\d{3}\s+(?:UN|UND|UNI|UNID)\s+(.+)$/i);
     if (m) {
       var d = m[1].split(/\s+[-–]\s+/)[0].trim();
       return d.toLowerCase();
@@ -408,7 +485,8 @@
     empresaPerfil: null
   };
 
-  var ORC_KEY = "licsystem_orcamento_v1";
+  var ORC_KEY = "licsystem_orcamento_v2";
+  var ORC_KEY_LEGACY = "licsystem_orcamento_v1";
   var COFRE_KEY = "licsystem_cofre_v1";
 
   /* risk dictionary */
@@ -561,7 +639,7 @@
         if (direto && utils.isLinhaProdutoEdital(direto)) return [direto];
 
         var starts = [];
-        var reStart = /(?:^|\s)(\d{3,5})\s+(\d{1,3}(?:\.\d{3})*,\d{3})\s+(UN|UND|UNI|UNID)\s+/gi;
+        var reStart = /(?:^|\s)(\d{1,5})\s+(\d{1,3}(?:\.\d{3})*,\d{3})\s+(UN|UND|UNI|UNID)\s+/gi;
         var m;
         while ((m = reStart.exec(chunk)) !== null) {
           var pos = m.index;
@@ -889,13 +967,42 @@
 
   /* ============================ ORÇAMENTO ============================ */
   LICSYSTEM.orcamento = {
+    emptyItem:function(){
+      return {lote:"", qtd:1, produto:"", editalVunit:0, editalTotal:0, vunit:0, pct:0, link:""};
+    },
+    normalizeItem:function(it){
+      it = it || {};
+      var qtd = Number(it.qtd); if(!isFinite(qtd) || qtd < 0) qtd = 1;
+      var editalVunit = Number(it.editalVunit != null ? it.editalVunit : 0) || 0;
+      var editalTotal = Number(it.editalTotal != null ? it.editalTotal : 0) || 0;
+      if(!editalTotal && editalVunit) editalTotal = qtd * editalVunit;
+      return {
+        lote: it.lote != null && it.lote !== "" ? String(it.lote) : "",
+        qtd: qtd,
+        produto: String(it.produto || it.descricao || ""),
+        editalVunit: editalVunit,
+        editalTotal: editalTotal,
+        vunit: Number(it.vunit) || 0,
+        pct: Number(it.pct) || 0,
+        link: String(it.link || "")
+      };
+    },
+    isEmptyRow:function(it){
+      if(!it) return true;
+      return !String(it.produto||"").trim() && !Number(it.vunit) && !Number(it.editalVunit) && !String(it.lote||"").trim();
+    },
     load:function(){
       try{
         var saved = JSON.parse(localStorage.getItem(ORC_KEY) || "null");
-        if(saved && Array.isArray(saved)) LICSYSTEM.state.orcItems = saved;
+        if((!saved || !Array.isArray(saved)) && ORC_KEY_LEGACY){
+          saved = JSON.parse(localStorage.getItem(ORC_KEY_LEGACY) || "null");
+        }
+        if(saved && Array.isArray(saved)){
+          LICSYSTEM.state.orcItems = saved.map(function(it){ return LICSYSTEM.orcamento.normalizeItem(it); });
+        }
       }catch(e){}
       if(!LICSYSTEM.state.orcItems.length){
-        LICSYSTEM.state.orcItems = [ {produto:"",qtd:1,vunit:0,pct:0,link:""} ];
+        LICSYSTEM.state.orcItems = [ LICSYSTEM.orcamento.emptyItem() ];
       }
     },
     save:function(){
@@ -904,6 +1011,11 @@
       }catch(e){
         console.warn("Orçamento: não foi possível salvar tudo no navegador (limite de armazenamento).", e);
       }
+    },
+    calcEditalTotal:function(it){
+      var stored = Number(it.editalTotal)||0;
+      if(stored > 0) return stored;
+      return (Number(it.qtd)||0) * (Number(it.editalVunit)||0);
     },
     calcTotal:function(it){
       var q=Number(it.qtd)||0, v=Number(it.vunit)||0, p=Number(it.pct)||0;
@@ -961,39 +1073,52 @@
       var start = (page - 1) * size;
       var end = Math.min(start + size, n);
 
-      // Total geral sempre de TODOS os itens (não só da página)
-      var geral = 0;
-      for(var g = 0; g < n; g++) geral += LICSYSTEM.orcamento.calcTotal(items[g]);
+      var geralMeus = 0, geralEdital = 0;
+      for(var g = 0; g < n; g++){
+        geralMeus += LICSYSTEM.orcamento.calcTotal(items[g]);
+        geralEdital += LICSYSTEM.orcamento.calcEditalTotal(items[g]);
+      }
 
       var buf = [];
       for(var i = start; i < end; i++){
         var it = items[i];
-        var total = LICSYSTEM.orcamento.calcTotal(it);
+        var totalMeus = LICSYSTEM.orcamento.calcTotal(it);
+        var totalEdital = LICSYSTEM.orcamento.calcEditalTotal(it);
         var risco = utils.riscoMatch(it.produto);
         var flag = risco.length ? '<span class="risk-flag" title="Risco: '+utils.escapeHtml(risco.join(", "))+'">⚠</span>' : "";
         buf.push(
-          '<tr class="'+(risco.length?'risk-row':'')+'" data-item-idx="'+i+'">'+
-          '<td><input type="checkbox" class="orcChk" data-i="'+i+'" aria-label="Selecionar item '+(i+1)+'"></td>'+
-          '<td>'+(i+1)+'</td>'+
-          '<td class="'+(risco.length?'risk-cell':'')+'">'+flag+'<input type="text" data-i="'+i+'" data-f="produto" value="'+utils.escapeHtml(it.produto)+'" placeholder="Descrição"></td>'+
-          '<td><input type="number" data-i="'+i+'" data-f="qtd" value="'+utils.escapeHtml(it.qtd)+'" step="1" min="0"></td>'+
-          '<td><input type="number" data-i="'+i+'" data-f="vunit" value="'+utils.escapeHtml(it.vunit)+'" step="0.01" min="0"></td>'+
-          '<td><input type="number" data-i="'+i+'" data-f="pct" value="'+utils.escapeHtml(it.pct)+'" step="0.1"></td>'+
-          '<td style="font-weight:700;color:var(--ls-navy)">'+utils.formatBrl(total)+'</td>'+
-          '<td><input type="text" data-i="'+i+'" data-f="link" value="'+utils.escapeHtml(it.link||"")+'" placeholder="URL"></td>'+
-          '<td><div class="btn-row" style="margin:0">'+
-            '<button type="button" class="btn btn-ghost btn-sm orcGoogle" data-i="'+i+'">G</button>'+
-            '<button type="button" class="btn btn-ghost btn-sm orcMl" data-i="'+i+'">ML</button></div></td>'+
-          '<td><button type="button" class="btn btn-ghost btn-sm orcDel" data-i="'+i+'">✕</button></td>'+
-          '</tr>'
+          '<div class="orc-item-row'+(risco.length?' risk-row':'')+'" data-item-idx="'+i+'">'+
+            '<div class="orc-side-edital">'+
+              '<span><input type="checkbox" class="orcChk" data-i="'+i+'" aria-label="Selecionar lote '+(it.lote||(i+1))+'"></span>'+
+              '<input type="text" data-i="'+i+'" data-f="lote" value="'+utils.escapeHtml(it.lote)+'" placeholder="Lote" title="Lote">'+
+              '<input type="number" data-i="'+i+'" data-f="qtd" value="'+utils.escapeHtml(it.qtd)+'" step="1" min="0" title="Quantidade">'+
+              '<div class="orc-desc-wrap'+(risco.length?' risk-cell':'')+'">'+flag+
+                '<input type="text" data-i="'+i+'" data-f="produto" value="'+utils.escapeHtml(it.produto)+'" placeholder="Descrição do edital">'+
+              '</div>'+
+              '<input type="number" data-i="'+i+'" data-f="editalVunit" value="'+utils.escapeHtml(it.editalVunit)+'" step="0.0001" min="0" title="Valor unitário do edital">'+
+              '<span class="cell-ro" data-edital-total="'+i+'">'+utils.formatBrl(totalEdital)+'</span>'+
+            '</div>'+
+            '<div class="orc-side-meus">'+
+              '<input type="number" data-i="'+i+'" data-f="vunit" value="'+utils.escapeHtml(it.vunit)+'" step="0.01" min="0" title="Meu valor unitário">'+
+              '<input type="number" data-i="'+i+'" data-f="pct" value="'+utils.escapeHtml(it.pct)+'" step="0.1" title="Porcentagem">'+
+              '<span class="cell-total" data-meus-total="'+i+'">'+utils.formatBrl(totalMeus)+'</span>'+
+              '<input type="text" data-i="'+i+'" data-f="link" value="'+utils.escapeHtml(it.link||"")+'" placeholder="Link de acesso">'+
+              '<div class="orc-actions">'+
+                '<button type="button" class="btn btn-ghost btn-sm orcGoogle" data-i="'+i+'" title="Google">G</button>'+
+                '<button type="button" class="btn btn-ghost btn-sm orcMl" data-i="'+i+'" title="Mercado Livre">ML</button>'+
+                '<button type="button" class="btn btn-ghost btn-sm orcDel" data-i="'+i+'" title="Remover">✕</button>'+
+              '</div>'+
+            '</div>'+
+          '</div>'
         );
       }
       if(!buf.length){
-        body.innerHTML = '<tr><td colspan="10" class="muted" style="text-align:center;padding:20px">Nenhum item nesta página.</td></tr>';
+        body.innerHTML = '<div class="orc-empty">Nenhum item nesta página. Importe o Excel do edital ou adicione uma linha.</div>';
       } else {
         body.innerHTML = buf.join("");
       }
-      el("orcTotalGeral").textContent = utils.formatBrl(geral);
+      if(el("orcTotalGeral")) el("orcTotalGeral").textContent = utils.formatBrl(geralMeus);
+      if(el("orcTotalEdital")) el("orcTotalEdital").textContent = utils.formatBrl(geralEdital);
       var all = el("orcCheckAll");
       if(all) all.checked = false;
       LICSYSTEM.state._orcDirty = false;
@@ -1002,20 +1127,40 @@
       if(opts.save !== false) LICSYSTEM.orcamento.save();
     },
     addLinha:function(){
-      LICSYSTEM.state.orcItems.push({produto:"",qtd:1,vunit:0,pct:0,link:""});
+      LICSYSTEM.state.orcItems.push(LICSYSTEM.orcamento.emptyItem());
       LICSYSTEM.state.orcPage = LICSYSTEM.orcamento.pageCount();
       LICSYSTEM.state._orcDirty = true;
       LICSYSTEM.orcamento.render();
     },
     addFromLines:function(lines){
+      var added = 0;
       (lines || []).forEach(function(l){
-        var desc = String(l).trim();
-        if(!desc || !utils.sanitizar(desc)) return;
-        LICSYSTEM.state.orcItems.push({produto:desc, qtd:1, vunit:0, pct:0, link:"", selected:false});
+        var raw = String(l).trim();
+        if(!raw || !utils.sanitizar(raw)) return;
+        var parsed = utils.parseLinhaEdital(raw);
+        var item = LICSYSTEM.orcamento.emptyItem();
+        if(parsed){
+          item.lote = parsed.lote || "";
+          item.qtd = parsed.qtd || 1;
+          item.produto = parsed.produto;
+          item.editalVunit = parsed.editalVunit || 0;
+          item.editalTotal = parsed.editalTotal || 0;
+        } else {
+          var mLote = raw.match(/^(\d{1,5})\s*[\)\-–.]\s*(.+)$/);
+          if(mLote){
+            item.lote = mLote[1];
+            item.produto = mLote[2].trim();
+          } else {
+            item.produto = raw;
+          }
+          item.qtd = 1;
+        }
+        added++;
+        if(!String(item.lote||"").trim()) item.lote = String(added);
+        LICSYSTEM.state.orcItems.push(item);
       });
-      // remove initial empty row if present
       LICSYSTEM.state.orcItems = LICSYSTEM.state.orcItems.filter(function(it,idx){
-        return !(idx===0 && !it.produto && !Number(it.vunit));
+        return !(idx===0 && LICSYSTEM.orcamento.isEmptyRow(it));
       });
       LICSYSTEM.state.orcPage = 1;
       LICSYSTEM.state._orcDirty = true;
@@ -1023,7 +1168,7 @@
     },
     limpar:function(){
       if(!confirm("Limpar toda a planilha de orçamento?")) return;
-      LICSYSTEM.state.orcItems = [ {produto:"",qtd:1,vunit:0,pct:0,link:""} ];
+      LICSYSTEM.state.orcItems = [ LICSYSTEM.orcamento.emptyItem() ];
       LICSYSTEM.state.orcPage = 1;
       LICSYSTEM.state._orcDirty = true;
       LICSYSTEM.orcamento.render();
@@ -1031,7 +1176,7 @@
 
     handleFile:function(file){
       if(!file) return;
-      showAlertOrc('<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Lendo planilha…',"info");
+      showAlertOrc('<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Lendo planilha do edital…',"info");
       utils.ensureXlsx().then(function(){
         var reader = new FileReader();
         reader.onload = function(){
@@ -1050,45 +1195,125 @@
       }
     },
     _restoreDrop:function(){
-      el("orcDrop").innerHTML='<span class="big">📊</span><b>Arraste um Excel/CSV aqui</b> ou clique para selecionar<br/><span class="small muted">Mapeamento automático de colunas (descrição, qtd, valor)</span><input type="file" id="orcFile" accept=".xlsx,.xls,.csv" style="display:none" />';
+      el("orcDrop").innerHTML='<span class="big">📊</span><b>Arraste Excel/CSV do edital aqui</b> ou clique para selecionar<br/><span class="small muted">Mapeia Lote, Quantidade, Descrição, Valor Unitário e Valor Final</span><input type="file" id="orcFile" accept=".xlsx,.xls,.csv" style="display:none" />';
       wireOrcFileInput();
     },
     _mapRows:function(rows){
       if(!rows || !rows.length){ LICSYSTEM.orcamento._restoreDrop(); return; }
-      // find header row heuristically
-      var header = rows[0].map(function(c){ return utils.fold(String(c)).toLowerCase().trim(); });
-      var colDesc=-1, colQtd=-1, colVal=-1;
+
+      // localiza linha de cabeçalho (até a 8ª)
+      var headerRow = 0, header = null;
+      for(var hr=0; hr<Math.min(8, rows.length); hr++){
+        var cand = (rows[hr] || []).map(function(c){ return utils.fold(String(c)).toLowerCase().trim(); });
+        var score = 0;
+        cand.forEach(function(h){
+          if(!h) return;
+          if(h.indexOf("descr")!==-1 || h.indexOf("produto")!==-1) score += 3;
+          if(h.indexOf("quant")!==-1 || h.indexOf("qtd")!==-1) score += 2;
+          if(h.indexOf("unit")!==-1 || h.indexOf("unitario")!==-1) score += 3;
+          if(h.indexOf("final")!==-1 || h.indexOf("total")!==-1) score += 2;
+          if(h==="item" || h.indexOf("lote")!==-1) score += 2;
+        });
+        if(score >= 4){ headerRow = hr; header = cand; break; }
+      }
+      if(!header) header = (rows[0] || []).map(function(c){ return utils.fold(String(c)).toLowerCase().trim(); });
+
+      var colLote=-1, colDesc=-1, colQtd=-1, colUnit=-1, colFinal=-1;
       header.forEach(function(h,i){
-        if(colDesc<0 && (h.indexOf("descr")!==-1 || h.indexOf("produto")!==-1 || h.indexOf("item")!==-1 || h.indexOf("especific")!==-1)) colDesc=i;
+        if(!h) return;
+        if(colLote<0 && (h==="item" || h.indexOf("lote")!==-1 || h.indexOf("nº")!==-1 || h.indexOf("n°")!==-1 || h==="n" || h.indexOf("numero")!==-1 || h.indexOf("codigo")!==-1)) colLote=i;
+        if(colDesc<0 && (h.indexOf("descr")!==-1 || h.indexOf("produto")!==-1 || h.indexOf("especific")!==-1)) colDesc=i;
         if(colQtd<0 && (h.indexOf("qtd")!==-1 || h.indexOf("quant")!==-1)) colQtd=i;
-        if(colVal<0 && (h.indexOf("valor")!==-1 || h.indexOf("preco")!==-1 || h.indexOf("unit")!==-1 || h.indexOf("custo")!==-1)) colVal=i;
       });
-      var startRow = 1;
-      if(colDesc<0){ colDesc=0; startRow=0; } // no header — assume first col desc
+      // prioriza "unitario" / "v. unit" antes de "valor" genérico
+      header.forEach(function(h,i){
+        if(!h) return;
+        if(colUnit<0 && (h.indexOf("unitario")!==-1 || h.indexOf("v. unit")!==-1 || h.indexOf("v unit")!==-1 || h==="vu" || (h.indexOf("unit")!==-1 && h.indexOf("final")===-1))) colUnit=i;
+      });
+      if(colUnit<0){
+        header.forEach(function(h,i){
+          if(!h) return;
+          if(h.indexOf("valor")!==-1 && h.indexOf("final")===-1 && h.indexOf("total")===-1 && i!==colQtd) colUnit=i;
+        });
+      }
+      header.forEach(function(h,i){
+        if(!h) return;
+        if(colFinal<0 && (h.indexOf("final")!==-1 || (h.indexOf("total")!==-1 && h.indexOf("unit")===-1 && i!==colUnit))) colFinal=i;
+      });
+
+      // fallback posicional clássico: Item | Qtd | UND | Descrição | V.Unit | V.Final
+      if(colDesc<0 && header.length >= 4){
+        colLote = colLote<0 ? 0 : colLote;
+        colQtd = colQtd<0 ? 1 : colQtd;
+        colDesc = 3;
+        if(header.length >= 6){
+          if(colUnit<0) colUnit = 4;
+          if(colFinal<0) colFinal = 5;
+        } else if(header.length >= 5 && colUnit<0){
+          colUnit = 4;
+        }
+      }
+
+      var startRow = headerRow + 1;
+      if(colDesc<0){ colDesc = 0; startRow = 0; }
+
       var added=0;
       for(var r=startRow;r<rows.length;r++){
-        var row = rows[r];
+        var row = rows[r] || [];
         var desc = String(row[colDesc]!=null?row[colDesc]:"").trim();
         if(!desc) continue;
-        // mesma BLACKLIST da captação — descarta cabeçalhos/metadados
         if(!utils.sanitizar(desc)) continue;
-        var qtd = colQtd>=0 ? parseNum(row[colQtd]) : 1;
-        var val = colVal>=0 ? parseNum(row[colVal]) : 0;
-        // cada linha Excel = um item individual (checkbox no render)
-        LICSYSTEM.state.orcItems.push({produto:desc, qtd:qtd||1, vunit:val||0, pct:0, link:"", selected:false});
+
+        var qtd = colQtd>=0 ? utils.parseBrNum(row[colQtd]) : 0;
+        var unit = colUnit>=0 ? utils.parseBrNum(row[colUnit]) : 0;
+        var fin = colFinal>=0 ? utils.parseBrNum(row[colFinal]) : 0;
+        var lote = colLote>=0 ? String(row[colLote]!=null?row[colLote]:"").trim() : "";
+
+        // se a descrição ainda carrega a linha completa do edital, extrai preços dela
+        var parsed = utils.parseLinhaEdital(desc);
+        if(parsed){
+          if(!lote && parsed.lote) lote = parsed.lote;
+          if(!qtd && parsed.qtd) qtd = parsed.qtd;
+          desc = parsed.produto || desc;
+          if(!unit && parsed.editalVunit) unit = parsed.editalVunit;
+          if(!fin && parsed.editalTotal) fin = parsed.editalTotal;
+        }
+
+        // às vezes o unitário vem numa célula à direita da descrição (sem cabeçalho claro)
+        if(!unit){
+          for(var c=0;c<row.length;c++){
+            if(c===colDesc || c===colQtd || c===colLote || c===colFinal) continue;
+            var maybe = utils.parseBrNum(row[c]);
+            var rawCell = String(row[c]==null?"":row[c]).trim();
+            if(maybe > 0 && /,\d{2,4}$/.test(rawCell.replace(/\s/g,"")) && maybe < 1e7){
+              // prefere 3–4 casas (unitário de edital) sobre inteiros de quantidade
+              if(/,\d{3,4}$/.test(rawCell.replace(/\s/g,"")) || maybe !== qtd){
+                unit = maybe;
+                break;
+              }
+            }
+          }
+        }
+
+        if(!qtd) qtd = 1;
+        if(!fin && unit) fin = qtd * unit;
+        if(!lote) lote = String(added+1);
+
+        var item = LICSYSTEM.orcamento.emptyItem();
+        item.lote = lote;
+        item.produto = desc;
+        item.qtd = qtd;
+        item.editalVunit = unit||0;
+        item.editalTotal = fin||0;
+        LICSYSTEM.state.orcItems.push(item);
         added++;
         if(added>=1000) break;
       }
       LICSYSTEM.state.orcItems = LICSYSTEM.state.orcItems.filter(function(it,idx){
-        return !(idx===0 && !it.produto && !Number(it.vunit));
+        return !(idx===0 && LICSYSTEM.orcamento.isEmptyRow(it));
       });
       LICSYSTEM.orcamento.render();
       LICSYSTEM.orcamento._restoreDrop();
-      function parseNum(v){
-        if(v==null) return 0;
-        var s=String(v).replace(/[^0-9,.-]/g,"").replace(/\.(?=\d{3}(\D|$))/g,"").replace(",",".");
-        var n=parseFloat(s); return isFinite(n)?n:0;
-      }
     },
 
     gerarProposta:function(){
@@ -1096,25 +1321,31 @@
       utils.ensureJsPdf().then(function(){
         var jsPDF = window.jspdf.jsPDF;
         var doc = new jsPDF({orientation:"landscape"});
-        return licsystemPdfHeader(doc,"Proposta Comercial", true).then(function(startY){
+        return licsystemPdfHeader(doc,"Proposta Comercial — Espelho Edital", true).then(function(startY){
           var y = startY;
-          if(LICSYSTEM.state.lastBdi){
-            doc.setFontSize(9); doc.setTextColor(90);
-            doc.text("BDI aplicado (último cruzamento): Margem "+LICSYSTEM.state.lastBdi.margem+"% | Imposto "+LICSYSTEM.state.lastBdi.imposto+"% | Custo Op. "+LICSYSTEM.state.lastBdi.custoOperacional+"%", 14, y);
-            y+=6;
-          }
-          var rows=[], geral=0;
-          LICSYSTEM.state.orcItems.forEach(function(it,i){
-            if(!it.produto) return;
-            var total=LICSYSTEM.orcamento.calcTotal(it); geral+=total;
-            rows.push([i+1, it.produto, it.qtd, utils.formatBrl(it.vunit), it.pct+"%", utils.formatBrl(total)]);
+          var rows=[], geralMeus=0, geralEdital=0;
+          LICSYSTEM.state.orcItems.forEach(function(it){
+            if(!it.produto && !it.lote) return;
+            var meus=LICSYSTEM.orcamento.calcTotal(it);
+            var edital=LICSYSTEM.orcamento.calcEditalTotal(it);
+            geralMeus+=meus; geralEdital+=edital;
+            rows.push([
+              it.lote || "",
+              it.produto || "",
+              it.qtd,
+              utils.formatBrl(it.editalVunit),
+              utils.formatBrl(edital),
+              utils.formatBrl(it.vunit),
+              (it.pct||0)+"%",
+              utils.formatBrl(meus)
+            ]);
           });
           doc.autoTable({
             startY:y+2,
-            head:[["#","Descrição","Qtd","V. Unit","Margem","Total"]],
+            head:[["Lote","Descrição","Qtd","Edital V.Unit","Edital Final","Meu V.Unit","%","Meu Final"]],
             body:rows,
-            foot:[["","","","","TOTAL GERAL", utils.formatBrl(geral)]],
-            styles:{fontSize:9,cellPadding:3},
+            foot:[["","","","","TOTAL EDITAL", utils.formatBrl(geralEdital),"TOTAL MEUS", utils.formatBrl(geralMeus)]],
+            styles:{fontSize:8,cellPadding:2.5},
             headStyles:{fillColor:[21,38,66],textColor:255},
             footStyles:{fillColor:[201,162,39],textColor:[21,38,66],fontStyle:"bold"},
             alternateRowStyles:{fillColor:[248,250,253]}
@@ -1126,19 +1357,30 @@
 
     onEdit:function(i,f,val){
       var it=LICSYSTEM.state.orcItems[i]; if(!it) return;
-      if(f==="produto"||f==="link") it[f]=val;
+      if(f==="produto"||f==="link"||f==="lote") it[f]=val;
       else it[f]=Number(val)||0;
+
+      if(f==="qtd" || f==="editalVunit"){
+        if(Number(it.editalVunit) > 0){
+          it.editalTotal = (Number(it.qtd)||0) * (Number(it.editalVunit)||0);
+        }
+      }
+
       LICSYSTEM.state._orcDirty = true;
-      // Atualiza só o total da linha + geral (não remonta 2000 linhas)
-      var row = document.querySelector('#orcBody tr[data-item-idx="'+i+'"]');
-      if(row && row.cells && row.cells[6]){
-        row.cells[6].textContent = utils.formatBrl(LICSYSTEM.orcamento.calcTotal(it));
+      var row = document.querySelector('#orcBody [data-item-idx="'+i+'"]');
+      if(row){
+        var edCell = row.querySelector('[data-edital-total="'+i+'"]');
+        var meCell = row.querySelector('[data-meus-total="'+i+'"]');
+        if(edCell) edCell.textContent = utils.formatBrl(LICSYSTEM.orcamento.calcEditalTotal(it));
+        if(meCell) meCell.textContent = utils.formatBrl(LICSYSTEM.orcamento.calcTotal(it));
       }
-      var geral = 0;
+      var geralMeus = 0, geralEdital = 0;
       for(var k=0;k<LICSYSTEM.state.orcItems.length;k++){
-        geral += LICSYSTEM.orcamento.calcTotal(LICSYSTEM.state.orcItems[k]);
+        geralMeus += LICSYSTEM.orcamento.calcTotal(LICSYSTEM.state.orcItems[k]);
+        geralEdital += LICSYSTEM.orcamento.calcEditalTotal(LICSYSTEM.state.orcItems[k]);
       }
-      if(el("orcTotalGeral")) el("orcTotalGeral").textContent = utils.formatBrl(geral);
+      if(el("orcTotalGeral")) el("orcTotalGeral").textContent = utils.formatBrl(geralMeus);
+      if(el("orcTotalEdital")) el("orcTotalEdital").textContent = utils.formatBrl(geralEdital);
       clearTimeout(LICSYSTEM.orcamento._saveTimer);
       LICSYSTEM.orcamento._saveTimer = setTimeout(function(){
         LICSYSTEM.orcamento.save();
@@ -1898,7 +2140,7 @@
     });
     on("orcBody","click", function(e){
       var del = e.target.closest(".orcDel");
-      if(del){ var i=Number(del.getAttribute("data-i")); LICSYSTEM.state.orcItems.splice(i,1); if(!LICSYSTEM.state.orcItems.length) LICSYSTEM.state.orcItems.push({produto:"",qtd:1,vunit:0,pct:0,link:""}); LICSYSTEM.orcamento.render(); return; }
+      if(del){ var i=Number(del.getAttribute("data-i")); LICSYSTEM.state.orcItems.splice(i,1); if(!LICSYSTEM.state.orcItems.length) LICSYSTEM.state.orcItems.push(LICSYSTEM.orcamento.emptyItem()); LICSYSTEM.orcamento.render(); return; }
       var g = e.target.closest(".orcGoogle");
       if(g){ var it=LICSYSTEM.state.orcItems[Number(g.getAttribute("data-i"))]; if(it&&it.produto) window.open("https://www.google.com/search?q="+encodeURIComponent(it.produto),"_blank"); return; }
       var ml = e.target.closest(".orcMl");
