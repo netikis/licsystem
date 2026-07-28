@@ -238,6 +238,8 @@
   .btn-gold:hover{box-shadow:0 6px 16px rgba(201,162,39,.4)}
   .btn-green{background:var(--ls-green);color:#fff}
   .btn-green:hover{background:#17864b}
+  .btn-red{background:var(--ls-red);color:#fff}
+  .btn-red:hover{background:#b82f2f}
   .btn-ghost{background:#fff;color:var(--ls-navy);border:1px solid var(--ls-line)}
   .btn-ghost:hover{border-color:var(--ls-gold)}
   .btn-sm{padding:6px 10px;font-size:12px;border-radius:8px}
@@ -601,15 +603,15 @@
   .orc-table col.c-money{width:104px}
   .orc-table col.c-pct{width:64px}
   .orc-table col.c-link{width:140px}
-  .orc-table col.c-actions{width:118px}
+  .orc-table col.c-actions{width:268px}
 
   .orc-table thead th{
-    position:sticky;z-index:2;
+    position:static;z-index:auto;
     font-weight:700;letter-spacing:.3px;text-align:left;
     padding:8px 8px;vertical-align:middle;
   }
   .orc-table thead tr.orc-titles th{
-    top:0;font-size:12px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;
+    font-size:12px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;
     padding:10px 14px;
   }
   .orc-title-edital{background:var(--ls-navy);color:#fff}
@@ -618,7 +620,7 @@
     border-left: var(--orc-split);
   }
   .orc-table thead tr.orc-cols th{
-    top:38px;background:var(--ls-navy-2);color:#fff;font-size:11px;
+    background:var(--ls-navy-2);color:#fff;font-size:11px;
     border-bottom:1px solid rgba(255,255,255,.08);
   }
   .orc-table thead .col-chk{text-align:center}
@@ -652,14 +654,37 @@
   .orc-table .cell-total{font-weight:800}
   .orc-desc-wrap{display:flex;align-items:center;gap:4px;min-width:0;width:100%}
   .orc-desc-wrap input{flex:1}
-  .orc-actions{display:flex;gap:4px;flex-wrap:nowrap;justify-content:flex-end}
+  .orc-actions{display:flex;gap:4px;flex-wrap:nowrap;justify-content:flex-end;align-items:center}
+  .orc-actions .orcCompensa,
+  .orc-actions .orcNaoCompensa{
+    padding:5px 7px;font-size:10px;letter-spacing:.2px;white-space:nowrap;line-height:1.2;
+    border:1px solid transparent;
+  }
+  .orc-actions .orcCompensa:not(.is-active){
+    background:var(--ls-green-bg);color:var(--ls-green);border-color:#b6e3ca;
+  }
+  .orc-actions .orcCompensa:not(.is-active):hover{background:#d4f0e2}
+  .orc-actions .orcCompensa.is-active{background:var(--ls-green);color:#fff;border-color:var(--ls-green)}
+  .orc-actions .orcNaoCompensa:not(.is-active){
+    background:var(--ls-red-bg);color:var(--ls-red);border-color:#f2c4c4;
+  }
+  .orc-actions .orcNaoCompensa:not(.is-active):hover{background:#f7d4d4}
+  .orc-actions .orcNaoCompensa.is-active{background:var(--ls-red);color:#fff;border-color:var(--ls-red)}
+  .orc-actions .orcDel{padding:4px 7px;opacity:.65;flex-shrink:0}
+  .orc-actions .orcDel:hover{opacity:1}
+  .orc-table tbody tr.orc-row-compensa td{background:#f0faf4}
+  .orc-table tbody tr.orc-row-compensa:nth-child(even) td{background:#e8f6ee}
+  .orc-table tbody tr.orc-row-compensa:hover td{background:#dff3e8}
+  .orc-table tbody tr.orc-row-nao-compensa td{background:#fdf4f4}
+  .orc-table tbody tr.orc-row-nao-compensa:nth-child(even) td{background:#fbeaea}
+  .orc-table tbody tr.orc-row-nao-compensa:hover td{background:#f8e0e0}
   .orc-empty{
     text-align:center;padding:28px 16px;color:var(--ls-muted);font-size:13px;
   }
 
   .orc-table tfoot td{
     padding:12px 10px;background:#f7f9fc;border-top:1px solid var(--ls-line);
-    position:sticky;bottom:0;z-index:2;
+    position:static;z-index:auto;
   }
   .orc-table .foot-edital-label,
   .orc-table .foot-meus-label{

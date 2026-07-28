@@ -1654,7 +1654,7 @@
   /* ============================ ORÇAMENTO ============================ */
   LICSYSTEM.orcamento = {
     emptyItem:function(){
-      return {lote:"", qtd:1, produto:"", editalVunit:0, editalTotal:0, vunit:0, pct:0, link:""};
+      return {lote:"", qtd:1, produto:"", editalVunit:0, editalTotal:0, vunit:0, pct:0, link:"", compensa:null};
     },
     normalizeItem:function(it){
       it = it || {};
@@ -1663,6 +1663,9 @@
       var editalTotal = Number(it.editalTotal != null ? it.editalTotal : 0) || 0;
       if(!editalTotal && editalVunit) editalTotal = qtd * editalVunit;
       if(!editalVunit && editalTotal && qtd) editalVunit = editalTotal / qtd;
+      var compensa = null;
+      if(it.compensa === true || it.compensa === "true" || it.statusCompensa === "compensa") compensa = true;
+      else if(it.compensa === false || it.compensa === "false" || it.statusCompensa === "nao") compensa = false;
       return {
         lote: it.lote != null && it.lote !== "" ? String(it.lote) : "",
         qtd: qtd,
@@ -1671,7 +1674,8 @@
         editalTotal: editalTotal,
         vunit: Number(it.vunit) || 0,
         pct: Number(it.pct) || 0,
-        link: String(it.link || "")
+        link: String(it.link || ""),
+        compensa: compensa
       };
     },
     isEmptyRow:function(it){
@@ -1778,8 +1782,14 @@
         }
         var risco = utils.riscoMatch(it.produto);
         var flag = risco.length ? '<span class="risk-flag" title="Risco: '+utils.escapeHtml(risco.join(", "))+'">⚠</span>' : "";
+        var rowCls = [];
+        if(risco.length) rowCls.push("risk-row");
+        if(it.compensa === true) rowCls.push("orc-row-compensa");
+        else if(it.compensa === false) rowCls.push("orc-row-nao-compensa");
+        var btnCompensaCls = "btn btn-sm orcCompensa"+(it.compensa === true ? " is-active" : "");
+        var btnNaoCls = "btn btn-sm orcNaoCompensa"+(it.compensa === false ? " is-active" : "");
         buf.push(
-          '<tr class="'+(risco.length?'risk-row':'')+'" data-item-idx="'+i+'">'+
+          '<tr class="'+rowCls.join(" ")+'" data-item-idx="'+i+'">'+
             '<td class="td-chk"><input type="checkbox" class="orcChk" data-i="'+i+'" aria-label="Selecionar lote '+(it.lote||(i+1))+'"></td>'+
             '<td><input type="text" data-i="'+i+'" data-f="lote" value="'+utils.escapeHtml(it.lote)+'" placeholder="Lote/Item" title="Lote ou Item do edital"></td>'+
             '<td><input type="number" data-i="'+i+'" data-f="qtd" value="'+utils.escapeHtml(it.qtd)+'" step="1" min="0" title="Quantidade"></td>'+
@@ -1795,6 +1805,8 @@
             '<td><div class="orc-actions">'+
               '<button type="button" class="btn btn-ghost btn-sm orcGoogle" data-i="'+i+'" title="Google">G</button>'+
               '<button type="button" class="btn btn-ghost btn-sm orcMl" data-i="'+i+'" title="Mercado Livre">ML</button>'+
+              '<button type="button" class="'+btnCompensaCls+'" data-i="'+i+'" title="Compensa">COMPENSA</button>'+
+              '<button type="button" class="'+btnNaoCls+'" data-i="'+i+'" title="Não compensa">NÃO COMPENSA</button>'+
               '<button type="button" class="btn btn-ghost btn-sm orcDel" data-i="'+i+'" title="Remover">✕</button>'+
             '</div></td>'+
           '</tr>'
@@ -3095,6 +3107,26 @@
     on("orcBody","click", function(e){
       var del = e.target.closest(".orcDel");
       if(del){ var i=Number(del.getAttribute("data-i")); LICSYSTEM.state.orcItems.splice(i,1); if(!LICSYSTEM.state.orcItems.length) LICSYSTEM.state.orcItems.push(LICSYSTEM.orcamento.emptyItem()); LICSYSTEM.orcamento.render(); return; }
+      var yes = e.target.closest(".orcCompensa");
+      if(yes){
+        var iy = Number(yes.getAttribute("data-i"));
+        var ity = LICSYSTEM.state.orcItems[iy];
+        if(ity){
+          ity.compensa = (ity.compensa === true) ? null : true;
+          LICSYSTEM.orcamento.render();
+        }
+        return;
+      }
+      var no = e.target.closest(".orcNaoCompensa");
+      if(no){
+        var ino = Number(no.getAttribute("data-i"));
+        var itn = LICSYSTEM.state.orcItems[ino];
+        if(itn){
+          itn.compensa = (itn.compensa === false) ? null : false;
+          LICSYSTEM.orcamento.render();
+        }
+        return;
+      }
       var g = e.target.closest(".orcGoogle");
       if(g){ var it=LICSYSTEM.state.orcItems[Number(g.getAttribute("data-i"))]; if(it&&it.produto) window.open("https://www.google.com/search?q="+encodeURIComponent(it.produto),"_blank"); return; }
       var ml = e.target.closest(".orcMl");
