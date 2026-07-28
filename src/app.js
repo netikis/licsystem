@@ -83,17 +83,40 @@
     return false;
   };
 
-  /** Prefixo opcional de lote/item no início da linha do edital.
-   *  Aceita qtd: 10,000 | 100.000 | 100000 */
-  var RE_EDITAL_HEAD =
-    /^(?:(\d{1,5})\s+)?(\d{1,3}(?:\.\d{3})+,\d{3}|\d{1,3}(?:\.\d{3})+|\d+(?:[.,]\d+)?)\s+(UN|UND|UNI|UNID)\s+/i;
+  /** Unidades comuns em editais (THEO / compras). */
+  var EDITAL_UNDS =
+    "UN|UND|UNI|UNID|LT|L|BL|BAL|GAL|KG|MT|M|M2|M3|PC|PÇ|CX|PAR|CJ|KIT|PCT|RL|BD|SC|GL|JOGO|PAR|SV|HR|VB|DZ";
+
+  /**
+   * Prefixo de item:
+   * - clássico: [lote] qtd UN descrição
+   * - THEO: lote UN descrição  (quantidade vem no rodapé de preços)
+   */
+  var RE_EDITAL_HEAD = new RegExp(
+    "^(?:(\\d{1,5})\\s+)?(?:(\\d{1,3}(?:\\.\\d{3})+,\\d{3}|\\d{1,3}(?:\\.\\d{3})+|\\d+(?:[.,]\\d+)?)\\s+)?(" +
+      EDITAL_UNDS +
+      ")\\s+",
+    "i"
+  );
+  var RE_EDITAL_THEO_HEAD = new RegExp(
+    "^(\\d{1,5})\\s+(" + EDITAL_UNDS + ")\\s+(.+)$",
+    "i"
+  );
 
   /** Remove preços no fim e devolve só a parte planilha + descrição. */
   utils.stripPrecosEdital = function (line) {
     return String(line == null ? "" : line)
       .replace(/\s+/g, " ")
       .trim()
-      .replace(/\s+(\d{1,3}(?:\.\d{3})*,\d{2,4}|\d+[.,]\d{2,4})(?:\s+(\d{1,3}(?:\.\d{3})*,\d{2}|\d+[.,]\d{2}))?\s*$/, "")
+      // THEO colado: 5,0600 506,00100,000
+      .replace(
+        /\s+(\d{1,3}(?:\.\d{3})*,\d{3,4}|\d+,\d{3,4})\s+(\d{1,3}(?:\.\d{3})*,\d{2})(\d{1,3}(?:\.\d{3})*,\d{3}|\d+,\d{3})\s*$/,
+        ""
+      )
+      .replace(
+        /\s+(\d{1,3}(?:\.\d{3})*,\d{2,4}|\d+[.,]\d{2,4})(?:\s+(\d{1,3}(?:\.\d{3})*,\d{2}|\d+[.,]\d{2}))?\s*$/,
+        ""
+      )
       .trim();
   };
 
@@ -102,24 +125,41 @@
     var raw = utils.stripPrecosEdital(line);
     if (!raw || raw.length < 4) return true;
 
-    var temPlanilha = RE_EDITAL_HEAD.test(raw);
+    var temPlanilha = RE_EDITAL_HEAD.test(raw) || RE_EDITAL_THEO_HEAD.test(raw);
     if (!temPlanilha) return true;
 
-    var m = raw.match(/^(?:\d{1,5}\s+)?(?:\d{1,3}(?:\.\d{3})+,\d{3}|\d{1,3}(?:\.\d{3})+|\d+(?:[.,]\d+)?)\s+(?:UN|UND|UNI|UNID)\s+(.+)$/i);
-    return utils.isTextoSpecEdital(m ? m[1] : raw);
+    var m =
+      raw.match(RE_EDITAL_THEO_HEAD) ||
+      raw.match(
+        new RegExp(
+          "^(?:\\d{1,5}\\s+)?(?:\\d{1,3}(?:\\.\\d{3})+,\\d{3}|\\d{1,3}(?:\\.\\d{3})+|\\d+(?:[.,]\\d+)?)\\s+(?:" +
+            EDITAL_UNDS +
+            ")\\s+(.+)$",
+          "i"
+        )
+      );
+    return utils.isTextoSpecEdital(m ? m[m.length - 1] : raw);
   };
 
-  /** Só linhas válidas de produto (lote opcional + qtd + UN + descrição). */
+  /** Só linhas válidas de produto. */
   utils.isLinhaProdutoEdital = function (line) {
     if (line && typeof line === "object") {
       var it = utils.asCaptacaoItem(line);
-      if (!it || !it.produto) return false;
-      return utils.isLinhaProdutoEdital(it.line || ((it.lote ? it.lote + " " : "") + it.qtd + " UN " + it.produto));
+      if (!it || !it.produto || it.produto.length < 2) return false;
+      if (utils.isTextoSpecEdital(it.produto)) return false;
+      // Objeto já parseado (PDF THEO ou clássico)
+      if (String(it.lote || "").trim() || Number(it.qtd) > 0 || Number(it.editalVunit) > 0) {
+        return true;
+      }
+      return utils.isLinhaProdutoEdital(
+        it.line || (it.lote ? it.lote + " " : "") + it.qtd + " UN " + it.produto
+      );
     }
     var fmt = utils.formatLinhaEdital(line);
     if (!fmt) return false;
     if (utils.isLinhaSpecEdital(fmt)) return false;
-    if (!RE_EDITAL_HEAD.test(utils.stripPrecosEdital(fmt))) return false;
+    var head = utils.stripPrecosEdital(fmt);
+    if (!RE_EDITAL_HEAD.test(head) && !RE_EDITAL_THEO_HEAD.test(head)) return false;
     return true;
   };
 
@@ -165,8 +205,13 @@
 
   /**
    * Extrai lote, qtd, descrição, valor unitário e valor final da linha do edital (PDF).
-   * Ex.: "117 10,000 UND ALICATE UNIVERSAL 8\" ... 38,1700 381,70"
-   * Ex.: "100,000 UN Abraçadeira..." | "100.000 UN Abraçadeira..."
+   *
+   * Formato THEO (Pinhalão / compras): 
+   *   "1 UN Abraçadeira ... 5,0600 506,00100,000"
+   *   → lote=1, UN, desc, unit=5,06, total=506,00, qtd=100,000 (total+qtd colados)
+   *
+   * Formato clássico:
+   *   "117 10,000 UND ALICATE ... 38,1700 381,70"
    */
   utils.parseLinhaEdital = function (raw) {
     var s = String(raw == null ? "" : raw)
@@ -175,9 +220,112 @@
       .trim();
     if (!s) return null;
 
-    var editalVunit = 0, editalTotal = 0;
-    // preços no fim: unitário (2–4 casas) + total (2 casas); aceita 1.234,56 e 145.000,00
-    var priceRe = /\s+(\d{1,3}(?:\.\d{3})*,\d{2,4}|\d+[.,]\d{2,4})\s+(\d{1,3}(?:\.\d{3})*,\d{2}|\d+[.,]\d{2})\s*$/;
+    function pack(lote, qtd, und, desc, editalVunit, editalTotal) {
+      desc = utils.enxugarDescricaoEdital(String(desc || "").trim());
+      if (!desc || desc.length < 2) return null;
+      qtd = Number(qtd) || 0;
+      editalVunit = Number(editalVunit) || 0;
+      editalTotal = Number(editalTotal) || 0;
+      if (!editalTotal && editalVunit && qtd) editalTotal = qtd * editalVunit;
+      if (!qtd) qtd = 1;
+      var qtdStr = (Math.round(qtd * 1000) / 1000).toLocaleString("pt-BR", {
+        minimumFractionDigits: 3,
+        maximumFractionDigits: 3
+      });
+      var line =
+        (lote ? lote + " " : "") +
+        qtdStr +
+        " " +
+        und +
+        " " +
+        desc;
+      if (editalVunit > 0) {
+        line +=
+          " " +
+          editalVunit.toLocaleString("pt-BR", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 4
+          });
+        if (editalTotal > 0) {
+          line +=
+            " " +
+            editalTotal.toLocaleString("pt-BR", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            });
+        }
+      }
+      return {
+        lote: lote || "",
+        qtd: qtd,
+        und: und || "UN",
+        produto: desc,
+        editalVunit: editalVunit,
+        editalTotal: editalTotal,
+        line: line
+      };
+    }
+
+    // --- Formato THEO: preços no fim (unitário + total colado na qtd) ---
+    // Ex.: 5,0600 506,00100,000  |  14,5300 1.453,00100,000  |  48,2600 1.447,8030,000
+    var theoFoot = s.match(
+      /(\d{1,3}(?:\.\d{3})*,\d{3,4}|\d+,\d{3,4})\s+(\d{1,3}(?:\.\d{3})*,\d{2})(\d{1,3}(?:\.\d{3})*,\d{3}|\d+,\d{3})\s*$/
+    );
+    var theoUnit = 0,
+      theoTotal = 0,
+      theoQtd = 0;
+    if (theoFoot) {
+      theoUnit = utils.parseBrNum(theoFoot[1]);
+      theoTotal = utils.parseBrNum(theoFoot[2]);
+      theoQtd = utils.parseBrNum(theoFoot[3]);
+      s = s.slice(0, theoFoot.index).trim();
+    } else {
+      // THEO com espaço entre total e qtd
+      var theoFootSp = s.match(
+        /(\d{1,3}(?:\.\d{3})*,\d{3,4}|\d+,\d{3,4})\s+(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})\s+(\d{1,3}(?:\.\d{3})*,\d{3}|\d+,\d{3})\s*$/
+      );
+      if (theoFootSp) {
+        theoUnit = utils.parseBrNum(theoFootSp[1]);
+        theoTotal = utils.parseBrNum(theoFootSp[2]);
+        theoQtd = utils.parseBrNum(theoFootSp[3]);
+        s = s.slice(0, theoFootSp.index).trim();
+      }
+    }
+
+    var mTheo = s.match(new RegExp("^(\\d{1,5})\\s+(" + EDITAL_UNDS + ")\\s+(.+)$", "i"));
+    if (mTheo && (theoQtd > 0 || theoUnit > 0 || theoTotal > 0 || !/^\d+[.,]\d+\s+(UN|UND)\b/i.test(mTheo[3]))) {
+      // Evita confundir com clássico "100,000 UN desc" (sem lote) — nesse caso mTheo não casa com lote.
+      // Se o 2º token é unidade de medida (UN/LT/GAL…) e há descrição textual, é THEO.
+      var undTheo = mTheo[2].toUpperCase();
+      var descTheo = mTheo[3].trim();
+      // Clássico sem lote começa com qtd numérica + UN — já coberto abaixo.
+      // Se descTheo começa com número tipo qtd, pode ser clássico mal capturado; só aceite THEO se und é unidade curta.
+      if (!/^\d{1,3}([.,]\d{3})*\s+(UN|UND|UNI|UNID)\b/i.test(descTheo)) {
+        var got = pack(mTheo[1], theoQtd || 0, undTheo, descTheo, theoUnit, theoTotal);
+        if (got) return got;
+      }
+    }
+
+    // Sem rodapé THEO, mas cabeçalho "12 UN Descrição..." (qtd ausente → 1 até achar preços)
+    if (mTheo && !theoFoot) {
+      var undOnly = mTheo[2].toUpperCase();
+      var descOnly = mTheo[3].trim();
+      if (!/^\d+[.,]\d+\s+/i.test(descOnly)) {
+        var got2 = pack(mTheo[1], 0, undOnly, descOnly, 0, 0);
+        if (got2) return got2;
+      }
+    }
+
+    // --- Formato clássico: preços unitário + total no fim ---
+    s = String(raw == null ? "" : raw)
+      .replace(/[\u00A0\u202F\u2007\u2009\u200A\u2008]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    var editalVunit = 0,
+      editalTotal = 0;
+    var priceRe =
+      /\s+(\d{1,3}(?:\.\d{3})*,\d{2,4}|\d+[.,]\d{2,4})\s+(\d{1,3}(?:\.\d{3})*,\d{2}|\d+[.,]\d{2})\s*$/;
     var pm = s.match(priceRe);
     if (pm) {
       editalVunit = utils.parseBrNum(pm[1]);
@@ -191,48 +339,19 @@
       }
     }
 
-    // qtd: 10,000 (3 casas) | 100.000 (milhar BR) | 100000 | 10,5
     var QTD = "(\\d{1,3}(?:\\.\\d{3})+,\\d{3}|\\d{1,3}(?:\\.\\d{3})+|\\d+(?:[.,]\\d+)?)";
-    var UND = "(UN|UND|UNI|UNID)";
-    var lote = "", qtd = 1, desc = "", und = "UN";
+    var UND = "(" + EDITAL_UNDS + ")";
     var m = s.match(new RegExp("^(\\d{1,5})\\s+" + QTD + "\\s+" + UND + "\\s+(.+)$", "i"));
     if (m) {
-      lote = m[1];
-      qtd = utils.parseBrNum(m[2]) || 1;
-      und = m[3].toUpperCase();
-      desc = utils.enxugarDescricaoEdital(m[4].trim());
-    } else {
-      m = s.match(new RegExp("^" + QTD + "\\s+" + UND + "\\s+(.+)$", "i"));
-      if (!m) return null;
-      qtd = utils.parseBrNum(m[1]) || 1;
-      und = m[2].toUpperCase();
-      desc = utils.enxugarDescricaoEdital(m[3].trim());
+      return pack(m[1], utils.parseBrNum(m[2]), m[3].toUpperCase(), m[4], editalVunit, editalTotal);
     }
-    // Não rejeitar aqui por isTextoSpecEdital — o filtro fica em isLinhaProdutoEdital/splitEdital.
-    if (!desc || desc.length < 2) return null;
-    if (!editalTotal && editalVunit) editalTotal = qtd * editalVunit;
-
-    var qtdStr = (Math.round(qtd * 1000) / 1000).toLocaleString("pt-BR", {
-      minimumFractionDigits: 3,
-      maximumFractionDigits: 3
-    });
-    var line = (lote ? (lote + " ") : "") + qtdStr + " " + und + " " + desc;
-    if (editalVunit > 0) {
-      line += " " + editalVunit.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
-      if (editalTotal > 0) {
-        line += " " + editalTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      }
+    m = s.match(new RegExp("^" + QTD + "\\s+" + UND + "\\s+(.+)$", "i"));
+    if (m) {
+      return pack("", utils.parseBrNum(m[1]), m[2].toUpperCase(), m[3], editalVunit, editalTotal);
     }
 
-    return {
-      lote: lote,
-      qtd: qtd,
-      und: und,
-      produto: desc,
-      editalVunit: editalVunit,
-      editalTotal: editalTotal,
-      line: line
-    };
+    // Última chance THEO no raw original (já tentado acima)
+    return null;
   };
 
   /** Normaliza item da Captação (string antiga ou objeto parseado). */
@@ -658,7 +777,7 @@
       sel.innerHTML = html;
     },
 
-    // Planilha do edital: uma linha = "100,000 UN Viga 5x15mt - Viga 5x15mt"
+    // Planilha do edital PDF (THEO / clássico)
     splitEdital: function (text) {
       function limparPagina(s) {
         return String(s || "")
@@ -666,6 +785,42 @@
           .replace(/\u00A0/g, " ")
           .replace(/[\t ]+/g, " ")
           .trim();
+      }
+
+      function pushParsed(list, chunk) {
+        var f = utils.parseLinhaEdital(chunk);
+        if (f && utils.isLinhaProdutoEdital(f)) list.push(f);
+      }
+
+      /**
+       * PDF THEO: itens quebrados em várias linhas
+       *   "1 UN Abraçadeira..."
+       *   "continuação descrição"
+       *   "5,0600 506,00100,000"
+       * Junta pelo início "N UNIDADE ".
+       */
+      function splitTheoBlocks(full) {
+        var t = limparPagina(full).replace(/\r\n?/g, "\n");
+        var reStart = new RegExp(
+          "(^|\\n)\\s*(\\d{1,5})\\s+(" + EDITAL_UNDS + ")\\s+",
+          "gi"
+        );
+        var starts = [];
+        var m;
+        while ((m = reStart.exec(t)) !== null) {
+          var pos = m.index + (m[1] ? m[1].length : 0);
+          // ignora números de página / processo colados sem unidade real
+          starts.push(pos);
+        }
+        if (starts.length < 2) return [];
+
+        var out = [];
+        for (var i = 0; i < starts.length; i++) {
+          var end = i + 1 < starts.length ? starts[i + 1] : t.length;
+          var chunk = t.slice(starts[i], end).replace(/\s+/g, " ").trim();
+          pushParsed(out, chunk);
+        }
+        return out;
       }
 
       function cortarPorIndices(chunk, starts) {
@@ -684,17 +839,21 @@
         return out;
       }
 
-      /** Só quebra onde começa novo item: código + qtd + UN/UND */
+      /** Clássico: quebra onde começa novo item código + qtd + UN */
       function splitChunkPlanilha(chunk) {
         chunk = limparPagina(chunk);
         if (!chunk) return [];
 
         var direto = utils.parseLinhaEdital(chunk);
-        if (direto && utils.isLinhaProdutoEdital(direto.line)) return [direto];
+        if (direto && utils.isLinhaProdutoEdital(direto)) return [direto];
 
         var starts = [];
-        // Aceita 10,000 | 100.000 | 100000
-        var reStart = /(?:^|\s)(\d{1,5})\s+(\d{1,3}(?:\.\d{3})+,\d{3}|\d{1,3}(?:\.\d{3})+|\d+(?:[.,]\d+)?)\s+(UN|UND|UNI|UNID)\s+/gi;
+        var reStart = new RegExp(
+          "(?:^|\\s)(\\d{1,5})\\s+(\\d{1,3}(?:\\.\\d{3})+,\\d{3}|\\d{1,3}(?:\\.\\d{3})+|\\d+(?:[.,]\\d+)?)\\s+(" +
+            EDITAL_UNDS +
+            ")\\s+",
+          "gi"
+        );
         var m;
         while ((m = reStart.exec(chunk)) !== null) {
           var pos = m.index;
@@ -715,20 +874,38 @@
           if (starts.length === 1) {
             var solo = chunk.slice(starts[0]).trim();
             var fs = utils.parseLinhaEdital(solo);
-            if (fs && utils.isLinhaProdutoEdital(fs.line)) return [fs];
+            if (fs && utils.isLinhaProdutoEdital(fs)) return [fs];
           }
           return [];
         }
 
         var partes = cortarPorIndices(chunk, starts);
         var fmtParts = [];
-        for (var i = 0; i < partes.length; i++) {
-          var f = utils.parseLinhaEdital(partes[i]);
-          if (f && utils.isLinhaProdutoEdital(f.line)) fmtParts.push(f);
-        }
+        for (var i = 0; i < partes.length; i++) pushParsed(fmtParts, partes[i]);
         return fmtParts;
       }
 
+      // 1) Tenta formato THEO (mais comum nos editais Pinhalão / compras)
+      var theo = splitTheoBlocks(text);
+      if (theo.length >= 2) {
+        var seenT = {};
+        var outT = [];
+        theo.forEach(function (it) {
+          var item = utils.asCaptacaoItem(it);
+          if (!item || !item.produto) return;
+          if (!utils.isLinhaProdutoEdital(item)) return;
+          if (!utils.sanitizar(item.line || item.produto)) return;
+          if (/^(P[aá]gina|Total|Subtotal|Valor|Prefeitura|Estado|Munic[ií]pio|Especifica|ANEXO|RELA)\b/i.test(item.produto))
+            return;
+          var k = (item.lote + "|" + item.qtd + "|" + item.produto).toLowerCase();
+          if (seenT[k]) return;
+          seenT[k] = 1;
+          outT.push(item);
+        });
+        if (outT.length >= 2) return outT;
+      }
+
+      // 2) Fallback clássico linha a linha
       var t = limparPagina(text).replace(/\r\n?/g, "\n");
       var rawLines = t.split(/\n+/);
       var merged = [];
@@ -746,7 +923,8 @@
         if (!it || !it.produto) return;
         if (!utils.isLinhaProdutoEdital(it)) return;
         if (!utils.sanitizar(it.line || it.produto)) return;
-        if (/^(P[aá]gina|Total|Subtotal|Valor|Prefeitura|Estado|Munic[ií]pio)\b/i.test(it.line || it.produto)) return;
+        if (/^(P[aá]gina|Total|Subtotal|Valor|Prefeitura|Estado|Munic[ií]pio)\b/i.test(it.line || it.produto))
+          return;
         var k = (it.lote + "|" + it.qtd + "|" + it.produto).toLowerCase();
         if (seen[k]) return;
         seen[k] = 1;
@@ -963,8 +1141,11 @@
         lines = (LICSYSTEM.state.captacaoLines || []).map(function(l){ return utils.asCaptacaoItem(l); }).filter(Boolean);
       }
       if(!lines.length){ showAlert("pdfStatus","warn","Nada para enviar. Extraia um edital primeiro."); return; }
+      // Substitui a planilha (evita misturar import antigo quebrado no localStorage)
+      LICSYSTEM.state.orcItems = [];
+      LICSYSTEM.state.orcPage = 1;
       LICSYSTEM.orcamento.addFromLines(lines);
-      showAlert("pdfStatus","ok",lines.length+" item(ns) enviados ao Orçamento com lote, qtd e valores do edital.");
+      showAlert("pdfStatus","ok",lines.length+" item(ns) enviados ao Orçamento com lote, qtd, descrição e valores do edital.");
       if(window.__lsActivateView) window.__lsActivateView("orcamento");
     },
 
@@ -1213,40 +1394,31 @@
       (lines || []).forEach(function(l){
         var itCap = utils.asCaptacaoItem(l);
         if(!itCap) return;
+
+        // Se a descrição ainda carrega "100,000 UN ..." ou linha THEO, reparseia
+        var dirty =
+          /^\d{1,3}([.,]\d{3})*\s+(UN|UND|UNI|UNID)\b/i.test(itCap.produto || "") ||
+          (/^\d{1,5}\s+(UN|UND|UNI|UNID|LT|BL|GAL)\b/i.test(itCap.produto || "") &&
+            !(Number(itCap.editalVunit) > 0));
+        if (dirty || (!itCap.editalVunit && itCap.line)) {
+          var again = utils.parseLinhaEdital(itCap.line || itCap.produto);
+          if (again) itCap = again;
+        }
+
         var rawCheck = itCap.line || itCap.produto || "";
         if(!rawCheck || !utils.sanitizar(rawCheck)) return;
 
         var item = LICSYSTEM.orcamento.emptyItem();
-        // Preferir campos já parseados do PDF (evita perder lote/qtd/preços)
-        if(itCap.produto && (itCap.qtd || itCap.editalVunit || itCap.lote || itCap.line)){
-          item.lote = itCap.lote || "";
-          item.qtd = Number(itCap.qtd) || 1;
-          item.produto = itCap.produto;
-          item.editalVunit = Number(itCap.editalVunit) || 0;
-          item.editalTotal = Number(itCap.editalTotal) || 0;
-          if(!item.editalTotal && item.editalVunit){
-            item.editalTotal = item.qtd * item.editalVunit;
-          }
-        } else {
-          var raw = String(l).trim();
-          var parsed = utils.parseLinhaEdital(raw);
-          if(parsed){
-            item.lote = parsed.lote || "";
-            item.qtd = parsed.qtd || 1;
-            item.produto = parsed.produto;
-            item.editalVunit = parsed.editalVunit || 0;
-            item.editalTotal = parsed.editalTotal || 0;
-          } else {
-            var mLote = raw.match(/^(\d{1,5})\s*[\)\-–.]\s*(.+)$/);
-            if(mLote){
-              item.lote = mLote[1];
-              item.produto = mLote[2].trim();
-            } else {
-              item.produto = raw;
-            }
-            item.qtd = 1;
-          }
+        item.lote = itCap.lote != null && String(itCap.lote).trim() !== "" ? String(itCap.lote) : "";
+        item.qtd = Number(itCap.qtd) || 1;
+        item.produto = String(itCap.produto || "").trim();
+        item.editalVunit = Number(itCap.editalVunit) || 0;
+        item.editalTotal = Number(itCap.editalTotal) || 0;
+        if(!item.editalTotal && item.editalVunit){
+          item.editalTotal = item.qtd * item.editalVunit;
         }
+        if(!item.produto) return;
+
         added++;
         if(!String(item.lote||"").trim()) item.lote = String(added);
         LICSYSTEM.state.orcItems.push(item);
