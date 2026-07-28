@@ -482,7 +482,10 @@
       volumeMensal: [0,0,0,0,0,0]
     },
     captacaoLines: [],
-    empresaPerfil: null
+    empresaPerfil: null,
+    orcCatalogId: null,
+    orcMetaNome: "",
+    orcMetaNumero: ""
   };
 
   var ORC_KEY = "licsystem_orcamento_v2";
@@ -1004,6 +1007,7 @@
       if(!LICSYSTEM.state.orcItems.length){
         LICSYSTEM.state.orcItems = [ LICSYSTEM.orcamento.emptyItem() ];
       }
+      LICSYSTEM.orcamento.updateMeta();
     },
     save:function(){
       try{
@@ -1170,8 +1174,204 @@
       if(!confirm("Limpar toda a planilha de orçamento?")) return;
       LICSYSTEM.state.orcItems = [ LICSYSTEM.orcamento.emptyItem() ];
       LICSYSTEM.state.orcPage = 1;
+      LICSYSTEM.state.orcCatalogId = null;
+      LICSYSTEM.state.orcMetaNome = "";
+      LICSYSTEM.state.orcMetaNumero = "";
       LICSYSTEM.state._orcDirty = true;
       LICSYSTEM.orcamento.render();
+      LICSYSTEM.orcamento.updateMeta();
+    },
+
+    updateMeta:function(){
+      var box = el("orcMeta");
+      if(!box) return;
+      var nome = LICSYSTEM.state.orcMetaNome || "";
+      var numero = LICSYSTEM.state.orcMetaNumero || "";
+      if(!nome && !numero){
+        box.style.display = "none";
+        box.innerHTML = "";
+        return;
+      }
+      box.style.display = "flex";
+      box.innerHTML =
+        '<span class="tag">Catálogo</span>'+
+        (numero ? '<span><b>Nº</b> '+utils.escapeHtml(numero)+'</span>' : '')+
+        (nome ? '<span><b>Nome</b> '+utils.escapeHtml(nome)+'</span>' : '')+
+        (LICSYSTEM.state.orcCatalogId ? '<span class="small muted">salvo — edite e clique em Salvar no Catálogo para atualizar</span>' : '');
+    },
+
+    exportarExcel:function(){
+      var items = (LICSYSTEM.state.orcItems || []).filter(function(it){
+        return !LICSYSTEM.orcamento.isEmptyRow(it);
+      });
+      if(!items.length){ showAlert("orcAlert","warn","Planilha vazia — nada para exportar."); return; }
+      utils.ensureXlsx().then(function(){
+        var rows = [[
+          "Lote","Qtd","Descrição",
+          "Edital V. Unitário","Edital V. Final",
+          "Meu V. Unitário","%","Meu V. Final","Link"
+        ]];
+        items.forEach(function(it){
+          rows.push([
+            it.lote || "",
+            Number(it.qtd)||0,
+            it.produto || "",
+            Number(it.editalVunit)||0,
+            LICSYSTEM.orcamento.calcEditalTotal(it),
+            Number(it.vunit)||0,
+            Number(it.pct)||0,
+            LICSYSTEM.orcamento.calcTotal(it),
+            it.link || ""
+          ]);
+        });
+        var ws = XLSX.utils.aoa_to_sheet(rows);
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Orcamento");
+        var nome = (LICSYSTEM.state.orcMetaNumero || LICSYSTEM.state.orcMetaNome || "orcamento")
+          .toString().replace(/[^\w\-]+/g,"_").slice(0,40);
+        XLSX.writeFile(wb, nome + "-licsystem.xlsx");
+        showAlert("orcAlert","ok","Excel exportado com "+items.length+" item(ns).");
+      }).catch(function(err){
+        showAlert("orcAlert","error","Falha ao exportar Excel: "+utils.escapeHtml(err.message||err));
+      });
+    },
+
+    exportarPdf:function(){
+      LICSYSTEM.orcamento.gerarProposta();
+    },
+
+    abrirModalSalvarCatalogo:function(){
+      var items = (LICSYSTEM.state.orcItems || []).filter(function(it){
+        return !LICSYSTEM.orcamento.isEmptyRow(it);
+      });
+      if(!items.length){
+        showAlert("orcAlert","warn","Monte o orçamento antes de salvar no catálogo.");
+        return;
+      }
+      var ov = el("orcSaveOverlay");
+      if(!ov) return;
+      hideAlert("orcSaveAlert");
+      if(el("orcSaveNome")) el("orcSaveNome").value = LICSYSTEM.state.orcMetaNome || "";
+      if(el("orcSaveNumero")) el("orcSaveNumero").value = LICSYSTEM.state.orcMetaNumero || "";
+      ov.classList.add("open");
+      ov.setAttribute("aria-hidden","false");
+      setTimeout(function(){ if(el("orcSaveNome")) el("orcSaveNome").focus(); }, 30);
+    },
+
+    fecharModalSalvarCatalogo:function(){
+      var ov = el("orcSaveOverlay");
+      if(!ov) return;
+      ov.classList.remove("open");
+      ov.setAttribute("aria-hidden","true");
+      hideAlert("orcSaveAlert");
+    },
+
+    confirmarSalvarCatalogo:function(){
+      var nome = ((el("orcSaveNome") && el("orcSaveNome").value) || "").trim();
+      var numero = ((el("orcSaveNumero") && el("orcSaveNumero").value) || "").trim();
+      if(!nome){
+        showAlert("orcSaveAlert","warn","Informe o nome da licitação.");
+        if(el("orcSaveNome")) el("orcSaveNome").focus();
+        return;
+      }
+      if(!numero){
+        showAlert("orcSaveAlert","warn","Informe o número da licitação.");
+        if(el("orcSaveNumero")) el("orcSaveNumero").focus();
+        return;
+      }
+
+      var itens = (LICSYSTEM.state.orcItems || [])
+        .filter(function(it){ return !LICSYSTEM.orcamento.isEmptyRow(it); })
+        .map(function(it){ return LICSYSTEM.orcamento.normalizeItem(it); });
+      if(!itens.length){
+        showAlert("orcSaveAlert","warn","Nenhum item válido para salvar.");
+        return;
+      }
+
+      var totalMeus = 0, totalEdital = 0;
+      itens.forEach(function(it){
+        totalMeus += LICSYSTEM.orcamento.calcTotal(it);
+        totalEdital += LICSYSTEM.orcamento.calcEditalTotal(it);
+      });
+
+      LICSYSTEM.catalogo.load();
+      var agora = new Date().toISOString();
+      var editId = LICSYSTEM.state.orcCatalogId;
+      var entry = null;
+
+      if(editId){
+        for(var i=0;i<LICSYSTEM.catalogo.items.length;i++){
+          if(LICSYSTEM.catalogo.items[i].id === editId){
+            entry = LICSYSTEM.catalogo.items[i];
+            break;
+          }
+        }
+      }
+
+      if(entry && entry.tipo === "orcamento"){
+        entry.nome = nome;
+        entry.numero = numero;
+        entry.sku = numero;
+        entry.marca = "Orçamento";
+        entry.preco = totalMeus;
+        entry.totalEdital = totalEdital;
+        entry.itens = itens;
+        entry.qtdItens = itens.length;
+        entry.atualizadoEm = agora;
+      } else {
+        entry = {
+          id: "orc_" + Date.now() + "_" + Math.floor(Math.random()*1000),
+          tipo: "orcamento",
+          nome: nome,
+          numero: numero,
+          sku: numero,
+          marca: "Orçamento",
+          preco: totalMeus,
+          totalEdital: totalEdital,
+          itens: itens,
+          qtdItens: itens.length,
+          criadoEm: agora,
+          atualizadoEm: agora
+        };
+        LICSYSTEM.catalogo.items.push(entry);
+      }
+
+      LICSYSTEM.catalogo.saveLocal();
+      LICSYSTEM.state.orcCatalogId = entry.id;
+      LICSYSTEM.state.orcMetaNome = nome;
+      LICSYSTEM.state.orcMetaNumero = numero;
+      LICSYSTEM.orcamento.updateMeta();
+      LICSYSTEM.orcamento.fecharModalSalvarCatalogo();
+      if(typeof listarProdutos === "function") listarProdutos();
+      showAlert("orcAlert","ok","Orçamento salvo no Catálogo: <b>"+utils.escapeHtml(nome)+"</b> ("+utils.escapeHtml(numero)+") — "+itens.length+" item(ns).");
+    },
+
+    abrirDoCatalogo:function(id){
+      LICSYSTEM.catalogo.load();
+      var item = null;
+      for(var i=0;i<LICSYSTEM.catalogo.items.length;i++){
+        if(LICSYSTEM.catalogo.items[i].id === id){ item = LICSYSTEM.catalogo.items[i]; break; }
+      }
+      if(!item || item.tipo !== "orcamento"){
+        showAlert("catalogoAlert","warn","Este registro não é um orçamento salvo.");
+        return;
+      }
+      var itens = Array.isArray(item.itens) ? item.itens.map(function(it){
+        return LICSYSTEM.orcamento.normalizeItem(it);
+      }) : [];
+      if(!itens.length) itens = [ LICSYSTEM.orcamento.emptyItem() ];
+
+      LICSYSTEM.state.orcItems = itens;
+      LICSYSTEM.state.orcPage = 1;
+      LICSYSTEM.state.orcCatalogId = item.id;
+      LICSYSTEM.state.orcMetaNome = item.nome || "";
+      LICSYSTEM.state.orcMetaNumero = item.numero || item.sku || "";
+      LICSYSTEM.state._orcDirty = true;
+      LICSYSTEM.orcamento.save();
+      LICSYSTEM.orcamento.render();
+      LICSYSTEM.orcamento.updateMeta();
+      showAlert("orcAlert","ok","Orçamento reaberto: <b>"+utils.escapeHtml(item.nome||"")+"</b> — continue editando e salve de novo no catálogo quando quiser.");
+      if(window.__lsActivateView) window.__lsActivateView("orcamento");
     },
 
     handleFile:function(file){
@@ -2125,6 +2325,22 @@
     on("btnAddLinha","click", LICSYSTEM.orcamento.addLinha);
     on("btnLimparOrc","click", LICSYSTEM.orcamento.limpar);
     on("btnPropostaOrc","click", LICSYSTEM.orcamento.gerarProposta);
+    on("btnExportOrcExcel","click", LICSYSTEM.orcamento.exportarExcel);
+    on("btnExportOrcPdf","click", LICSYSTEM.orcamento.exportarPdf);
+    on("btnSalvarOrcCatalogo","click", LICSYSTEM.orcamento.abrirModalSalvarCatalogo);
+    on("btnOrcSaveCancel","click", LICSYSTEM.orcamento.fecharModalSalvarCatalogo);
+    on("btnOrcSaveConfirm","click", LICSYSTEM.orcamento.confirmarSalvarCatalogo);
+    on("orcSaveOverlay","click", function(e){
+      if(e.target === el("orcSaveOverlay")) LICSYSTEM.orcamento.fecharModalSalvarCatalogo();
+    });
+    ["orcSaveNome","orcSaveNumero"].forEach(function(id){
+      on(id, "keydown", function(e){
+        if(e.key === "Enter"){
+          e.preventDefault();
+          LICSYSTEM.orcamento.confirmarSalvarCatalogo();
+        }
+      });
+    });
     on("orcPrev","click", function(){ LICSYSTEM.orcamento.goPage(-1); });
     on("orcNext","click", function(){ LICSYSTEM.orcamento.goPage(1); });
     on("capPrev","click", function(){ LICSYSTEM.captacao.goPage(-1); });
@@ -2655,6 +2871,13 @@
         if(LICSYSTEM.catalogo.items[i].id === id){ item = LICSYSTEM.catalogo.items[i]; break; }
       }
       if(!item) return;
+
+      // Orçamento salvo → reabre a planilha completa
+      if(item.tipo === "orcamento"){
+        LICSYSTEM.orcamento.abrirDoCatalogo(id);
+        return;
+      }
+
       if(el("catEditId")) el("catEditId").value = item.id;
       if(el("catNome")) el("catNome").value = item.nome || "";
       if(el("catSku")) el("catSku").value = item.sku || "";
@@ -2670,13 +2893,24 @@
     },
 
     excluir: function(id){
-      if(!id || !confirm("Excluir este produto do catálogo?")) return;
+      if(!id) return;
       LICSYSTEM.catalogo.load();
+      var item = null;
+      for(var i=0;i<LICSYSTEM.catalogo.items.length;i++){
+        if(LICSYSTEM.catalogo.items[i].id === id){ item = LICSYSTEM.catalogo.items[i]; break; }
+      }
+      var label = item && item.tipo === "orcamento"
+        ? "Excluir este orçamento salvo do catálogo?"
+        : "Excluir este produto do catálogo?";
+      if(!confirm(label)) return;
       LICSYSTEM.catalogo.items = LICSYSTEM.catalogo.items.filter(function(it){ return it.id !== id; });
       LICSYSTEM.catalogo.saveLocal();
-      // TODO Firestore: await firebase.firestore().collection('catalogo').doc(id).delete()
+      if(item && item.tipo === "orcamento" && LICSYSTEM.state.orcCatalogId === id){
+        LICSYSTEM.state.orcCatalogId = null;
+        LICSYSTEM.orcamento.updateMeta();
+      }
       listarProdutos();
-      showAlert("catalogoAlert","ok","Produto excluído.");
+      showAlert("catalogoAlert","ok", item && item.tipo === "orcamento" ? "Orçamento excluído." : "Produto excluído.");
       if((el("catEditId")||{}).value === id) LICSYSTEM.catalogo.limparForm();
     }
   };
@@ -2759,31 +2993,41 @@
 
     if(q){
       list = list.filter(function(it){
-        var blob = utils.fold([it.nome, it.sku, it.marca].join(" ")).toLowerCase();
+        var blob = utils.fold([it.nome, it.sku, it.marca, it.numero, it.tipo].join(" ")).toLowerCase();
         return blob.indexOf(q) !== -1;
       });
     }
 
     list.sort(function(a,b){
+      var ta = a.tipo === "orcamento" ? 0 : 1;
+      var tb = b.tipo === "orcamento" ? 0 : 1;
+      if(ta !== tb) return ta - tb;
       return String(a.nome||"").localeCompare(String(b.nome||""), "pt-BR", { sensitivity:"base" });
     });
 
     if(!list.length){
       body.innerHTML = '<tr><td colspan="5" class="muted" style="text-align:center;padding:24px">'+(
-        q ? "Nenhum produto correspondente à busca." : "Nenhum produto cadastrado."
+        q ? "Nenhum item correspondente à busca." : "Nenhum produto ou orçamento cadastrado."
       )+'</td></tr>';
       return;
     }
 
     var html = "";
     list.forEach(function(it){
-      html += '<tr data-id="'+utils.escapeHtml(it.id)+'">'+
-        '<td>'+utils.escapeHtml(it.sku || "—")+'</td>'+
-        '<td>'+utils.escapeHtml(it.nome || "")+'</td>'+
-        '<td>'+utils.escapeHtml(it.marca || "—")+'</td>'+
+      var isOrc = it.tipo === "orcamento";
+      var codigo = isOrc ? (it.numero || it.sku || "—") : (it.sku || "—");
+      var desc = utils.escapeHtml(it.nome || "");
+      if(isOrc){
+        desc += ' <span class="cat-tipo-orc">Orçamento'+(it.qtdItens ? ' · '+it.qtdItens+' itens' : '')+'</span>';
+      }
+      var tipo = isOrc ? "Orçamento salvo" : (it.marca || "—");
+      html += '<tr data-id="'+utils.escapeHtml(it.id)+'"'+(isOrc?' class="cat-row-orc"':'')+'>'+
+        '<td>'+utils.escapeHtml(codigo)+'</td>'+
+        '<td>'+desc+'</td>'+
+        '<td>'+utils.escapeHtml(tipo)+'</td>'+
         '<td style="font-weight:700;color:var(--ls-navy)">'+utils.formatBrl(Number(it.preco)||0)+'</td>'+
         '<td><div class="cat-actions">'+
-          '<button type="button" class="btn btn-ghost btn-sm catEdit" data-id="'+utils.escapeHtml(it.id)+'">✎ Editar</button>'+
+          '<button type="button" class="btn btn-ghost btn-sm catEdit" data-id="'+utils.escapeHtml(it.id)+'">'+(isOrc?'✎ Abrir':'✎ Editar')+'</button>'+
           '<button type="button" class="btn btn-ghost btn-sm catDel" data-id="'+utils.escapeHtml(it.id)+'">✕</button>'+
         '</div></td>'+
       '</tr>';
