@@ -83,9 +83,52 @@
     return false;
   };
 
-  /** Unidades comuns em editais (THEO / compras). */
+  /** Unidades comuns em editais (THEO / compras / portais municipais). */
   var EDITAL_UNDS =
-    "UN|UND|UNI|UNID|LT|L|BL|BAL|GAL|KG|MT|M|M2|M3|PC|PÇ|CX|PAR|CJ|KIT|PCT|RL|BD|SC|GL|JOGO|PAR|SV|HR|VB|DZ";
+    "UNID|UND|UNI|UN|QUILO|METRO|ROLO|BARRA|LT|L|BL|BAL|GAL|KG|MT|M³|M²|M3|M2|M|PC|PÇ|CX|PAR|CJ|KIT|PCT|RL|BD|SC|GL|JOGO|PAR|SV|HR|VB|DZ";
+
+  /** Cotas textuais (Castro / portais): Exclusivo ME/EPP/MEI | Ampla Concorrência */
+  var EDITAL_COTAS_TXT =
+    "Exclusivo(?:\\s+ME\\/?EPP\\/?MEI)?|Ampla(?:\\s+Concorr[eê]ncia)?";
+
+  /**
+   * Localiza par unitário+total no texto (inclusive no meio da descrição, comum em PDF
+   * com quebra de página). Prefere o par em que total ≈ qtd × unitário.
+   */
+  utils.findEditalPricePair = function (str, qtdHint) {
+    str = String(str == null ? "" : str);
+    var re =
+      /\s+(\d{1,3}(?:\.\d{3})*,\d{2,4}|\d+[.,]\d{2,4})\s+(\d{1,3}(?:\.\d{3})*,\d{2}|\d+[.,]\d{2})(?=\s|$)/g;
+    var best = null;
+    var m;
+    var qtd = Number(qtdHint) || 0;
+    while ((m = re.exec(str)) !== null) {
+      var u = utils.parseBrNum(m[1]);
+      var t = utils.parseBrNum(m[2]);
+      if (!(u > 0) || !(t > 0)) continue;
+      var score = 5;
+      if (qtd > 0) {
+        var expect = qtd * u;
+        var rel = Math.abs(expect - t) / Math.max(Math.abs(t), Math.abs(expect), 1);
+        if (rel <= 0.015) score = 100;
+        else if (rel <= 0.05) score = 70;
+        else if (rel <= 0.12) score = 30;
+        else score = 2;
+      }
+      if (!best || score > best.score || (score === best.score && m.index >= best.index)) {
+        best = {
+          unit: u,
+          total: t,
+          index: m.index,
+          len: m[0].length,
+          score: score
+        };
+      }
+    }
+    if (!best) return null;
+    if (qtd > 0 && best.score < 30) return null;
+    return best;
+  };
 
   /**
    * Prefixo de item:
@@ -210,9 +253,14 @@
    *   "1 UN Abraçadeira ... 5,0600 506,00100,000"
    *   → lote=1, UN, desc, unit=5,06, total=506,00, qtd=100,000 (total+qtd colados)
    *
-   * Formato portal (ITEM + Cotas opcional):
+   * Formato portal (ITEM + Cotas numérica/hífen):
    *   "12 1 100,000 UN ABC123 Produto - Desc 15,50 1.550,00"
    *   "12 - 20 UN Broca madeira 5,00 100,00"
+   *
+   * Formato portal cotas textuais (Castro / quadro resumo):
+   *   "1 Exclusivo ME/EPP/MEI 30 QUILO 36.535 ARAME ... 19,20 576,00"
+   *   "8 Ampla Concorrência 200 UND 80.856 BRAÇO ... 520,00 104.000,00"
+   *   Cotas e Cód NÃO são lote nem quantidade.
    *
    * Formato clássico (ITEM|LOTE):
    *   "117 10,000 UND ALICATE ... 38,1700 381,70"
@@ -370,11 +418,56 @@
 
     var UND = "(" + EDITAL_UNDS + ")";
     var QTD = "(\\d{1,3}(?:\\.\\d{3})+,\\d{3}|\\d{1,3}(?:\\.\\d{3})+|\\d+(?:[.,]\\d+)?)";
+    // Cód municipal: 36.535 | 1.139 | 661 (não confundir com qtd/lote)
+    var COD_OPT = "(?:((?:\\d{1,3}(?:\\.\\d{3})+|\\d{1,6}))\\s+)?";
+
+    // Portal Castro: ITEM + Cotas textuais + QTDE + UND + [CÓD] + DESCRIÇÃO
+    // Ex.: "1 Exclusivo ME/EPP/MEI 30 QUILO 36.535 ARAME GALVANIZADO 14-AWG"
+    var m = s.match(
+      new RegExp(
+        "^(\\d{1,5})\\s+(?:" +
+          EDITAL_COTAS_TXT +
+          ")\\s+" +
+          QTD +
+          "\\s+" +
+          UND +
+          "\\s+" +
+          COD_OPT +
+          "(.+)$",
+        "i"
+      )
+    );
+    if (m) {
+      var qtdC = utils.parseBrNum(m[2]) || theoQtd;
+      var descC = String(m[5] || "").trim();
+      var vuC = editalVunit;
+      var vtC = editalTotal;
+      if (!vuC && !vtC) {
+        var midP = utils.findEditalPricePair(descC, qtdC);
+        if (midP) {
+          vuC = midP.unit;
+          vtC = midP.total;
+          descC = (descC.slice(0, midP.index) + " " + descC.slice(midP.index + midP.len))
+            .replace(/\s+/g, " ")
+            .trim();
+        }
+      }
+      // Remove restos de cabeçalho de página colados na descrição
+      descC = descC
+        .replace(
+          /\bMunic[ií]pio de Castro\b[\s\S]*?(?:licitacao\.castro@gmail\.com|www\.castro\.pr\.gov\.br|E-mail:\s*\S+)/gi,
+          " "
+        )
+        .replace(/\bE-mail:\s*\S+/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      return pack(m[1], qtdC, m[3].toUpperCase(), descC, vuC, vtC);
+    }
 
     // Portal: ITEM COTAS QTDE UND [CÓD] DESCRIÇÃO
     // Ex.: "12 1 100,000 UN ABC123 Abraçadeira" | "12 - 20 UN Broca madeira"
     // Cód opcional: token alfanumérico com ao menos 1 dígito (não engole a descrição)
-    var m = s.match(
+    m = s.match(
       new RegExp(
         "^(\\d{1,5})\\s+(\\d+|[-–])\\s+" +
           QTD +
@@ -831,11 +924,21 @@
       sel.innerHTML = html;
     },
 
-    // Planilha do edital PDF (THEO / clássico)
+    // Planilha do edital PDF (THEO / portal Castro / clássico)
     splitEdital: function (text) {
       function limparPagina(s) {
         return String(s || "")
           .replace(/\bP[aá]gina\s*:\s*\d+\s*\/\s*\d+/gi, "\n")
+          // Cabeçalho repetido (Castro / prefeituras) entre itens
+          .replace(
+            /Munic[ií]pio de Castro[\s\S]*?(?:licitacao\.castro@gmail\.com|www\.castro\.pr\.gov\.br)/gi,
+            "\n"
+          )
+          .replace(
+            /Item\s+Cotas\s+Qtde\s+Und\s+C[oó]d[\s\S]{0,120}?Valor\s+M[aá]ximo\s+Total/gi,
+            "\n"
+          )
+          .replace(/\bSoma:\s*[\d.,]+/gi, "\n")
           .replace(/\u00A0/g, " ")
           .replace(/[\t ]+/g, " ")
           .trim();
@@ -844,6 +947,28 @@
       function pushParsed(list, chunk) {
         var f = utils.parseLinhaEdital(chunk);
         if (f && utils.isLinhaProdutoEdital(f)) list.push(f);
+      }
+
+      function dedupeCaptacao(list) {
+        var seen = {};
+        var out = [];
+        list.forEach(function (it) {
+          var item = utils.asCaptacaoItem(it);
+          if (!item || !item.produto) return;
+          if (!utils.isLinhaProdutoEdital(item)) return;
+          if (!utils.sanitizar(item.line || item.produto)) return;
+          if (
+            /^(P[aá]gina|Total|Subtotal|Valor|Prefeitura|Estado|Munic[ií]pio|Especifica|ANEXO|RELA|Destaco)\b/i.test(
+              item.produto
+            )
+          )
+            return;
+          var k = (item.lote + "|" + item.qtd + "|" + item.produto).toLowerCase();
+          if (seen[k]) return;
+          seen[k] = 1;
+          out.push(item);
+        });
+        return out;
       }
 
       /**
@@ -872,6 +997,51 @@
         for (var i = 0; i < starts.length; i++) {
           var end = i + 1 < starts.length ? starts[i + 1] : t.length;
           var chunk = t.slice(starts[i], end).replace(/\s+/g, " ").trim();
+          pushParsed(out, chunk);
+        }
+        return out;
+      }
+
+      /**
+       * Portal Castro / cotas textuais (itens multilinha):
+       *   "1 Exclusivo\nME/EPP/MEI 30 QUILO 36.535 ARAME... 19,20 576,00"
+       * Junta pelo início "N Exclusivo|Ampla" + qtd + und.
+       */
+      function splitCastroBlocks(full) {
+        var t = limparPagina(full).replace(/\r\n?/g, "\n");
+        var flat = t.replace(/\s+/g, " ").trim();
+        if (!flat) return [];
+
+        var QTD_RE =
+          "(\\d{1,3}(?:\\.\\d{3})+,\\d{3}|\\d{1,3}(?:\\.\\d{3})+|\\d+(?:[.,]\\d+)?)";
+        var reStart = new RegExp(
+          "(?:^|\\s)(\\d{1,5})\\s+(?:" +
+            EDITAL_COTAS_TXT +
+            ")\\s+" +
+            QTD_RE +
+            "\\s+(" +
+            EDITAL_UNDS +
+            ")\\s+",
+          "gi"
+        );
+        var starts = [];
+        var m;
+        while ((m = reStart.exec(flat)) !== null) {
+          var pos = m.index;
+          if (m[0].charAt(0) === " " || m[0].charAt(0) === "\t") pos = m.index + 1;
+          starts.push(pos);
+        }
+        if (starts.length < 2) return [];
+
+        var out = [];
+        for (var i = 0; i < starts.length; i++) {
+          var end = i + 1 < starts.length ? starts[i + 1] : flat.length;
+          var chunk = flat.slice(starts[i], end).trim();
+          // Remove rodapé / notas coladas após o último preço do item
+          chunk = chunk
+            .replace(/\s+Soma:[\s\S]*$/i, "")
+            .replace(/\s+Destaco:[\s\S]*$/i, "")
+            .trim();
           pushParsed(out, chunk);
         }
         return out;
@@ -906,6 +1076,24 @@
         var starts = [];
         var portalRanges = [];
         var m;
+
+        // Portal Castro: ITEM + Cotas textuais + QTDE + UND
+        var reCastro = new RegExp(
+          "(?:^|\\s)(\\d{1,5})\\s+(?:" +
+            EDITAL_COTAS_TXT +
+            ")\\s+" +
+            QTD_RE +
+            "\\s+(" +
+            EDITAL_UNDS +
+            ")\\s+",
+          "gi"
+        );
+        while ((m = reCastro.exec(chunk)) !== null) {
+          var posC = m.index;
+          if (m[0].charAt(0) === " " || m[0].charAt(0) === "\t") posC = m.index + 1;
+          starts.push(posC);
+          portalRanges.push({ start: posC, end: m.index + m[0].length });
+        }
 
         // Portal: ITEM COTAS QTDE UND  (evita tratar Cotas como início de item)
         var rePortal = new RegExp(
@@ -961,27 +1149,35 @@
         return fmtParts;
       }
 
-      // 1) Tenta formato THEO (mais comum nos editais Pinhalão / compras)
+      var rawText = String(text || "");
+      var castroHint = /Exclusivo\s+ME\/?EPP\/?MEI|Ampla\s+Concorr/i.test(rawText);
+
+      // 1) Portal Castro / cotas textuais (prioritário quando o PDF tem esse quadro)
+      if (castroHint) {
+        var castroFirst = splitCastroBlocks(text);
+        if (castroFirst.length >= 2) {
+          var outCF = dedupeCaptacao(castroFirst);
+          if (outCF.length >= 2) return outCF;
+        }
+      }
+
+      // 2) Formato THEO (Pinhalão / compras)
       var theo = splitTheoBlocks(text);
       if (theo.length >= 2) {
-        var seenT = {};
-        var outT = [];
-        theo.forEach(function (it) {
-          var item = utils.asCaptacaoItem(it);
-          if (!item || !item.produto) return;
-          if (!utils.isLinhaProdutoEdital(item)) return;
-          if (!utils.sanitizar(item.line || item.produto)) return;
-          if (/^(P[aá]gina|Total|Subtotal|Valor|Prefeitura|Estado|Munic[ií]pio|Especifica|ANEXO|RELA)\b/i.test(item.produto))
-            return;
-          var k = (item.lote + "|" + item.qtd + "|" + item.produto).toLowerCase();
-          if (seenT[k]) return;
-          seenT[k] = 1;
-          outT.push(item);
-        });
+        var outT = dedupeCaptacao(theo);
         if (outT.length >= 2) return outT;
       }
 
-      // 2) Fallback clássico linha a linha
+      // 3) Portal Castro (fallback se o hint falhou)
+      if (!castroHint) {
+        var castro = splitCastroBlocks(text);
+        if (castro.length >= 2) {
+          var outC = dedupeCaptacao(castro);
+          if (outC.length >= 2) return outC;
+        }
+      }
+
+      // 4) Fallback clássico linha a linha
       var t = limparPagina(text).replace(/\r\n?/g, "\n");
       var rawLines = t.split(/\n+/);
       var merged = [];
@@ -992,21 +1188,7 @@
         for (var p = 0; p < parts.length; p++) merged.push(parts[p]);
       }
 
-      var seen = {};
-      var out = [];
-      merged.forEach(function (entry) {
-        var it = utils.asCaptacaoItem(entry);
-        if (!it || !it.produto) return;
-        if (!utils.isLinhaProdutoEdital(it)) return;
-        if (!utils.sanitizar(it.line || it.produto)) return;
-        if (/^(P[aá]gina|Total|Subtotal|Valor|Prefeitura|Estado|Munic[ií]pio)\b/i.test(it.line || it.produto))
-          return;
-        var k = (it.lote + "|" + it.qtd + "|" + it.produto).toLowerCase();
-        if (seen[k]) return;
-        seen[k] = 1;
-        out.push(it);
-      });
-      return out;
+      return dedupeCaptacao(merged);
     },
 
     extrair:function(){
