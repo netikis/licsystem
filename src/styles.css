@@ -673,12 +673,7 @@
   .orc-table .foot-edital-value span,
   .orc-table .foot-meus-value span{display:inline-block;max-width:100%;vertical-align:bottom}
   .orc-table tfoot .split-start{border-left: var(--orc-split)}
-  /* Cabeçalho do card de orçamento fica visível (botões Excel/PDF/Catálogo/Proposta) */
-  #view-orcamento > .card > .card-head{
-    position:sticky;top:0;z-index:5;
-    background:var(--ls-card);padding-bottom:8px;margin-bottom:4px;
-    border-bottom:1px solid var(--ls-line);
-  }
+  /* card-head do orçamento NÃO fica sticky — cobria a tabela ao rolar */
 
   .orc-meta{
     display:flex;align-items:center;gap:10px;flex-wrap:wrap;
