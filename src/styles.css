@@ -593,7 +593,7 @@
     width:100%;max-width:100%;max-height:min(70vh,780px);
   }
   .orc-table{
-    width:100%;min-width:1460px;border-collapse:collapse;table-layout:fixed;
+    width:100%;min-width:1490px;border-collapse:collapse;table-layout:fixed;
     font-size:12.5px;
   }
   .orc-table col.c-chk{width:36px}
@@ -601,7 +601,7 @@
   .orc-table col.c-qtd{width:76px}
   .orc-table col.c-desc{width:auto}
   .orc-table col.c-money{width:120px}
-  .orc-table col.c-pct{width:52px}
+  .orc-table col.c-pct{width:76px}
   .orc-table col.c-link{width:96px}
   .orc-table col.c-actions{width:220px}
 
@@ -625,7 +625,8 @@
   }
   .orc-table thead .col-chk,
   .orc-table thead .col-lote,
-  .orc-table thead .col-qtd{text-align:center;padding-left:4px;padding-right:4px}
+  .orc-table thead .col-qtd,
+  .orc-table thead .col-pct{text-align:center;padding-left:4px;padding-right:4px}
   .orc-table .split-end{border-right:0}
   .orc-table .split-start{border-left: var(--orc-split)}
 
@@ -639,7 +640,8 @@
   .orc-table tbody tr.risk-row td:first-child{box-shadow:inset 3px 0 0 var(--ls-red)}
   .orc-table tbody td.td-chk{text-align:center}
   .orc-table tbody td.td-lote,
-  .orc-table tbody td.td-qtd{padding:6px 5px;text-align:center}
+  .orc-table tbody td.td-qtd,
+  .orc-table tbody td.td-pct{padding:6px 5px;text-align:center}
   .orc-table tbody td.split-start{border-left: var(--orc-split)}
 
   .orc-table tbody input[type="text"],
@@ -662,6 +664,19 @@
   }
   .orc-table tbody input.orc-qtd::-webkit-outer-spin-button,
   .orc-table tbody input.orc-qtd::-webkit-inner-spin-button{
+    -webkit-appearance:none;margin:0;
+  }
+  /* % — coluna ~76px; input legível p/ 12,50 / 100; sem spinners */
+  .orc-table tbody input.orc-pct{
+    display:block;width:100%;min-width:56px;max-width:100%;
+    margin:0 auto;text-align:center;
+    padding:6px 8px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;
+    border-radius:8px;line-height:1.2;
+    -moz-appearance:textfield;
+    appearance:textfield;
+  }
+  .orc-table tbody input.orc-pct::-webkit-outer-spin-button,
+  .orc-table tbody input.orc-pct::-webkit-inner-spin-button{
     -webkit-appearance:none;margin:0;
   }
   .orc-table tbody input:focus{
