@@ -1784,8 +1784,9 @@
       if(stored > 0) return stored;
       return (Number(it.qtd)||0) * (Number(it.editalVunit)||0);
     },
+    /** MEUS PREÇOS V. Final: always qtdEstoque (0 → R$ 0,00), never edital qtd. */
     calcTotal:function(it){
-      var q=Number(it.qtd)||0, v=Number(it.vunit)||0, p=Number(it.pct)||0;
+      var q=Number(it.qtdEstoque)||0, v=Number(it.vunit)||0, p=Number(it.pct)||0;
       return q*v*(1+p/100);
     },
     pageCount:function(){
