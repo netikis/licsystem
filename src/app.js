@@ -603,6 +603,18 @@
     return n.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
   };
 
+  /** Normalize pasted URLs (add https:// when missing). Returns "" if not usable. */
+  utils.normalizeHttpUrl = function(raw){
+    var s = String(raw || "").trim();
+    if(!s) return "";
+    if(/^https?:\/\//i.test(s)) return s;
+    // Domain-like: example.com, www.x.com/path, subdomain.site.gov.br/...
+    if(/^(www\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+([\/?#].*)?$/i.test(s)){
+      return "https://" + s;
+    }
+    return "";
+  };
+
   // dynamic script injection (async, never blocks UI)
   var _loaded = {};
   utils.loadScript = function(src){
@@ -1848,6 +1860,8 @@
         else if(it.compensa === false) rowCls.push("orc-row-nao-compensa");
         var btnCompensaCls = "btn btn-sm orcCompensa"+(it.compensa === true ? " is-active" : "");
         var btnNaoCls = "btn btn-sm orcNaoCompensa"+(it.compensa === false ? " is-active" : "");
+        var hasLink = !!(String(it.link || "").trim());
+        var btnLinkCls = "btn btn-ghost btn-sm orcOpenLink"+(hasLink ? " is-ready" : "");
         buf.push(
           '<tr class="'+rowCls.join(" ")+'" data-item-idx="'+i+'">'+
             '<td class="td-chk"><input type="checkbox" class="orcChk" data-i="'+i+'" aria-label="Selecionar lote '+(it.lote||(i+1))+'"></td>'+
@@ -1856,15 +1870,16 @@
             '<td><div class="orc-desc-wrap'+(risco.length?' risk-cell':'')+'">'+flag+
               '<input type="text" data-i="'+i+'" data-f="produto" value="'+utils.escapeHtml(it.produto)+'" placeholder="Descrição do edital">'+
             '</div></td>'+
-            '<td><input type="number" data-i="'+i+'" data-f="editalVunit" value="'+utils.escapeHtml(editalUnitShow)+'" step="0.0001" min="0" title="Valor unitário do edital"></td>'+
-            '<td class="split-end"><span class="cell-ro" data-edital-total="'+i+'">'+utils.formatBrl(totalEdital)+'</span></td>'+
-            '<td class="split-start"><input type="number" data-i="'+i+'" data-f="vunit" value="'+utils.escapeHtml(it.vunit)+'" step="0.01" min="0" title="Meu valor unitário"></td>'+
+            '<td class="td-money"><input type="number" data-i="'+i+'" data-f="editalVunit" value="'+utils.escapeHtml(editalUnitShow)+'" step="0.0001" min="0" title="Valor unitário do edital"></td>'+
+            '<td class="td-money split-end"><span class="cell-ro" data-edital-total="'+i+'">'+utils.formatBrl(totalEdital)+'</span></td>'+
+            '<td class="td-money split-start"><input type="number" data-i="'+i+'" data-f="vunit" value="'+utils.escapeHtml(it.vunit)+'" step="0.01" min="0" title="Meu valor unitário"></td>'+
             '<td><input type="number" data-i="'+i+'" data-f="pct" value="'+utils.escapeHtml(it.pct)+'" step="0.1" title="Porcentagem"></td>'+
-            '<td><span class="cell-total" data-meus-total="'+i+'">'+utils.formatBrl(totalMeus)+'</span></td>'+
+            '<td class="td-money"><span class="cell-total" data-meus-total="'+i+'">'+utils.formatBrl(totalMeus)+'</span></td>'+
             '<td class="td-link"><input type="text" data-i="'+i+'" data-f="link" value="'+utils.escapeHtml(it.link||"")+'" placeholder="Link"></td>'+
             '<td class="td-actions"><div class="orc-actions">'+
               '<button type="button" class="btn btn-ghost btn-sm orcGoogle" data-i="'+i+'" title="Google">G</button>'+
               '<button type="button" class="btn btn-ghost btn-sm orcMl" data-i="'+i+'" title="Mercado Livre">ML</button>'+
+              '<button type="button" class="'+btnLinkCls+'" data-i="'+i+'" title="'+(hasLink?"Abrir link de acesso":"Cole um link no campo Link de Acesso")+'"'+(hasLink?"":" disabled")+'>LINK</button>'+
               '<button type="button" class="'+btnCompensaCls+'" data-i="'+i+'" title="COMPENSA">(C)</button>'+
               '<button type="button" class="'+btnNaoCls+'" data-i="'+i+'" title="NÃO COMPENSA">(N)</button>'+
               '<button type="button" class="btn btn-ghost btn-sm orcDel" data-i="'+i+'" title="Remover">✕</button>'+
@@ -2385,6 +2400,15 @@
         var meCell = row.querySelector('[data-meus-total="'+i+'"]');
         if(edCell) edCell.textContent = utils.formatBrl(LICSYSTEM.orcamento.calcEditalTotal(it));
         if(meCell) meCell.textContent = utils.formatBrl(LICSYSTEM.orcamento.calcTotal(it));
+        if(f==="link"){
+          var linkBtn = row.querySelector(".orcOpenLink");
+          if(linkBtn){
+            var ready = !!(String(val || "").trim());
+            linkBtn.disabled = !ready;
+            linkBtn.classList.toggle("is-ready", ready);
+            linkBtn.title = ready ? "Abrir link de acesso" : "Cole um link no campo Link de Acesso";
+          }
+        }
       }
       var geralMeus = 0, geralEdital = 0;
       for(var k=0;k<LICSYSTEM.state.orcItems.length;k++){
@@ -3189,6 +3213,15 @@
       if(g){ var it=LICSYSTEM.state.orcItems[Number(g.getAttribute("data-i"))]; if(it&&it.produto) window.open("https://www.google.com/search?q="+encodeURIComponent(it.produto),"_blank"); return; }
       var ml = e.target.closest(".orcMl");
       if(ml){ var it2=LICSYSTEM.state.orcItems[Number(ml.getAttribute("data-i"))]; if(it2&&it2.produto) window.open("https://lista.mercadolivre.com.br/"+encodeURIComponent(it2.produto),"_blank"); return; }
+      var openL = e.target.closest(".orcOpenLink");
+      if(openL){
+        var itL = LICSYSTEM.state.orcItems[Number(openL.getAttribute("data-i"))];
+        if(itL){
+          var url = utils.normalizeHttpUrl(itL.link);
+          if(url) window.open(url, "_blank", "noopener,noreferrer");
+        }
+        return;
+      }
     });
     wireOrcFileInput();
 
