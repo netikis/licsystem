@@ -275,7 +275,8 @@
                 <col class="c-desc" />
                 <col class="c-money" />
                 <col class="c-money" />
-                <col class="c-money" />
+                <col class="c-qtd-estoque" />
+                <col class="c-money-meus" />
                 <col class="c-pct" />
                 <col class="c-money" />
                 <col class="c-link" />
@@ -284,7 +285,7 @@
               <thead>
                 <tr class="orc-titles">
                   <th colspan="6" class="orc-title-edital">EDITAL</th>
-                  <th colspan="5" class="orc-title-meus">MEUS PREÇOS</th>
+                  <th colspan="6" class="orc-title-meus">MEUS PREÇOS</th>
                 </tr>
                 <tr class="orc-cols">
                   <th class="col-chk"><input type="checkbox" id="orcCheckAll" title="Selecionar todos" /></th>
@@ -293,7 +294,8 @@
                   <th>Descrição</th>
                   <th>V. Unitário</th>
                   <th class="split-end">V. Final</th>
-                  <th class="split-start">V. Unitário</th>
+                  <th class="col-qtd split-start" title="Quantidade em estoque / posso entregar">Qtd</th>
+                  <th>V. Unitário</th>
                   <th class="col-pct">%</th>
                   <th>V. Final</th>
                   <th>Link de Acesso</th>
@@ -305,7 +307,7 @@
                 <tr>
                   <td colspan="5" class="foot-edital-label">TOTAL EDITAL</td>
                   <td class="foot-edital-value split-end"><span id="orcTotalEdital">R$ 0,00</span></td>
-                  <td colspan="2" class="foot-meus-label split-start">TOTAL MEUS PREÇOS</td>
+                  <td colspan="3" class="foot-meus-label split-start">TOTAL MEUS PREÇOS</td>
                   <td class="foot-meus-value"><span id="orcTotalGeral">R$ 0,00</span></td>
                   <td colspan="2"></td>
                 </tr>
