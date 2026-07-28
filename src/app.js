@@ -332,7 +332,9 @@
   };
 
   utils.hasFirebaseConfig = function(){
-    return !!(window.LICSYSTEMFirebase && typeof window.LICSYSTEMFirebase.ensureAuth === "function");
+    if(!(window.LICSYSTEMFirebase && typeof window.LICSYSTEMFirebase.ensureAuth === "function")) return false;
+    var cfg = utils.getFirebaseConfig();
+    return !!(cfg && cfg.apiKey && cfg.projectId);
   };
 
   var _fbInit = null;
@@ -1091,33 +1093,29 @@
         var risco = utils.riscoMatch(it.produto);
         var flag = risco.length ? '<span class="risk-flag" title="Risco: '+utils.escapeHtml(risco.join(", "))+'">⚠</span>' : "";
         buf.push(
-          '<div class="orc-item-row'+(risco.length?' risk-row':'')+'" data-item-idx="'+i+'">'+
-            '<div class="orc-side-edital">'+
-              '<span><input type="checkbox" class="orcChk" data-i="'+i+'" aria-label="Selecionar lote '+(it.lote||(i+1))+'"></span>'+
-              '<input type="text" data-i="'+i+'" data-f="lote" value="'+utils.escapeHtml(it.lote)+'" placeholder="Lote" title="Lote">'+
-              '<input type="number" data-i="'+i+'" data-f="qtd" value="'+utils.escapeHtml(it.qtd)+'" step="1" min="0" title="Quantidade">'+
-              '<div class="orc-desc-wrap'+(risco.length?' risk-cell':'')+'">'+flag+
-                '<input type="text" data-i="'+i+'" data-f="produto" value="'+utils.escapeHtml(it.produto)+'" placeholder="Descrição do edital">'+
-              '</div>'+
-              '<input type="number" data-i="'+i+'" data-f="editalVunit" value="'+utils.escapeHtml(it.editalVunit)+'" step="0.0001" min="0" title="Valor unitário do edital">'+
-              '<span class="cell-ro" data-edital-total="'+i+'">'+utils.formatBrl(totalEdital)+'</span>'+
-            '</div>'+
-            '<div class="orc-side-meus">'+
-              '<input type="number" data-i="'+i+'" data-f="vunit" value="'+utils.escapeHtml(it.vunit)+'" step="0.01" min="0" title="Meu valor unitário">'+
-              '<input type="number" data-i="'+i+'" data-f="pct" value="'+utils.escapeHtml(it.pct)+'" step="0.1" title="Porcentagem">'+
-              '<span class="cell-total" data-meus-total="'+i+'">'+utils.formatBrl(totalMeus)+'</span>'+
-              '<input type="text" data-i="'+i+'" data-f="link" value="'+utils.escapeHtml(it.link||"")+'" placeholder="Link de acesso">'+
-              '<div class="orc-actions">'+
-                '<button type="button" class="btn btn-ghost btn-sm orcGoogle" data-i="'+i+'" title="Google">G</button>'+
-                '<button type="button" class="btn btn-ghost btn-sm orcMl" data-i="'+i+'" title="Mercado Livre">ML</button>'+
-                '<button type="button" class="btn btn-ghost btn-sm orcDel" data-i="'+i+'" title="Remover">✕</button>'+
-              '</div>'+
-            '</div>'+
-          '</div>'
+          '<tr class="'+(risco.length?'risk-row':'')+'" data-item-idx="'+i+'">'+
+            '<td class="td-chk"><input type="checkbox" class="orcChk" data-i="'+i+'" aria-label="Selecionar lote '+(it.lote||(i+1))+'"></td>'+
+            '<td><input type="text" data-i="'+i+'" data-f="lote" value="'+utils.escapeHtml(it.lote)+'" placeholder="Lote" title="Lote"></td>'+
+            '<td><input type="number" data-i="'+i+'" data-f="qtd" value="'+utils.escapeHtml(it.qtd)+'" step="1" min="0" title="Quantidade"></td>'+
+            '<td><div class="orc-desc-wrap'+(risco.length?' risk-cell':'')+'">'+flag+
+              '<input type="text" data-i="'+i+'" data-f="produto" value="'+utils.escapeHtml(it.produto)+'" placeholder="Descrição do edital">'+
+            '</div></td>'+
+            '<td><input type="number" data-i="'+i+'" data-f="editalVunit" value="'+utils.escapeHtml(it.editalVunit)+'" step="0.0001" min="0" title="Valor unitário do edital"></td>'+
+            '<td class="split-end"><span class="cell-ro" data-edital-total="'+i+'">'+utils.formatBrl(totalEdital)+'</span></td>'+
+            '<td class="split-start"><input type="number" data-i="'+i+'" data-f="vunit" value="'+utils.escapeHtml(it.vunit)+'" step="0.01" min="0" title="Meu valor unitário"></td>'+
+            '<td><input type="number" data-i="'+i+'" data-f="pct" value="'+utils.escapeHtml(it.pct)+'" step="0.1" title="Porcentagem"></td>'+
+            '<td><span class="cell-total" data-meus-total="'+i+'">'+utils.formatBrl(totalMeus)+'</span></td>'+
+            '<td><input type="text" data-i="'+i+'" data-f="link" value="'+utils.escapeHtml(it.link||"")+'" placeholder="Link de acesso"></td>'+
+            '<td><div class="orc-actions">'+
+              '<button type="button" class="btn btn-ghost btn-sm orcGoogle" data-i="'+i+'" title="Google">G</button>'+
+              '<button type="button" class="btn btn-ghost btn-sm orcMl" data-i="'+i+'" title="Mercado Livre">ML</button>'+
+              '<button type="button" class="btn btn-ghost btn-sm orcDel" data-i="'+i+'" title="Remover">✕</button>'+
+            '</div></td>'+
+          '</tr>'
         );
       }
       if(!buf.length){
-        body.innerHTML = '<div class="orc-empty">Nenhum item nesta página. Importe o Excel do edital ou adicione uma linha.</div>';
+        body.innerHTML = '<tr><td colspan="11" class="orc-empty">Nenhum item nesta página. Importe o Excel do edital ou adicione uma linha.</td></tr>';
       } else {
         body.innerHTML = buf.join("");
       }
@@ -4036,8 +4034,13 @@
         "auth/operation-not-allowed": "Ative o provedor E-mail/senha no Firebase Console → Authentication.",
         "auth/too-many-requests": "Muitas tentativas. Aguarde e tente de novo.",
         "auth/network-request-failed": "Falha de rede. Verifique a conexão.",
-        "auth/unauthorized-domain": "Domínio não autorizado. Em Authentication → Settings, adicione licsystem.vercel.app."
+        "auth/unauthorized-domain": "Domínio não autorizado. Em Authentication → Settings → Authorized domains, adicione localhost.",
+        "auth/requests-from-referer-http://localhost:5173-are-blocked.": "API Key bloqueando localhost. No Google Cloud → Credenciais → restrições HTTP, inclua http://localhost/*",
+        "auth/requests-from-referer-http://localhost:5174-are-blocked.": "API Key bloqueando localhost. No Google Cloud → Credenciais → restrições HTTP, inclua http://localhost/*"
       };
+      if(code && /requests-from-referer/i.test(code)){
+        return "Firebase bloqueou este endereço local (referer). Use http://localhost:5173 e, no Google Cloud → APIs e serviços → Credenciais → sua API Key, em restrições de site HTTP, adicione: http://localhost/* e http://127.0.0.1/*";
+      }
       return map[code] || ((err && err.message) ? err.message : "Falha na autenticação.");
     },
 
@@ -4064,7 +4067,13 @@
 
     login: function(email, pass){
       return utils.ensureFirebaseAuth().then(function(fb){
-        return fb.auth().signInWithEmailAndPassword(email, pass);
+        var authCall = fb.auth().signInWithEmailAndPassword(email, pass);
+        var timeout = new Promise(function(_, reject){
+          setTimeout(function(){
+            reject(new Error("Tempo esgotado ao validar no Firebase. Verifique a internet e se o domínio localhost está autorizado no Firebase Authentication → Settings → Authorized domains."));
+          }, 20000);
+        });
+        return Promise.race([authCall, timeout]);
       });
     },
 
@@ -4092,15 +4101,37 @@
         showAlert("authAlert","warn","A senha deve ter no mínimo 6 caracteres.");
         return;
       }
+      if(!utils.hasFirebaseConfig()){
+        showAlert("authAlert","error",
+          "Firebase não configurado neste PC. Crie o arquivo <b>.env</b> com as chaves VITE_FIREBASE_* e reinicie <code>npm run dev</code>."
+        );
+        return;
+      }
       var btn = el("authSubmit");
       if(btn){ btn.disabled = true; btn.textContent = "Aguarde…"; }
       showAlert("authAlert","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Validando…');
 
-      LICSYSTEM.auth.login(email, pass).then(function(){
+      LICSYSTEM.auth.login(email, pass).then(function(cred){
         hideAlert("authAlert");
         if(el("authPass")) el("authPass").value = "";
+        var user = cred && cred.user ? cred.user : (cred || null);
+        if(user){
+          LICSYSTEM.auth.unlock(user);
+          if(!LICSYSTEM.auth._booted){
+            LICSYSTEM.auth._booted = true;
+            // garante app montado mesmo se onAuthStateChanged atrasar
+            if(typeof LICSYSTEM.auth._onReady === "function"){
+              LICSYSTEM.auth._onReady(user);
+              LICSYSTEM.auth._onReady = null;
+            }
+          }
+        }
       }).catch(function(err){
-        showAlert("authAlert","error", utils.escapeHtml(LICSYSTEM.auth.mapError(err)));
+        var msg = LICSYSTEM.auth.mapError(err);
+        if(/firebase-config-vazio|não configurado|Firebase não configurado/i.test(String((err && err.message) || ""))){
+          msg = "Firebase não configurado. Preencha o .env (VITE_FIREBASE_*) e reinicie o servidor local.";
+        }
+        showAlert("authAlert","error", utils.escapeHtml(msg));
       }).then(function(){
         if(btn){ btn.disabled = false; btn.textContent = "Entrar"; }
       });
@@ -4118,6 +4149,14 @@
     start: function(onReady){
       LICSYSTEM.auth.wire();
       LICSYSTEM.auth.lock();
+      LICSYSTEM.auth._onReady = onReady;
+
+      if(!utils.hasFirebaseConfig()){
+        showAlert("authAlert","warn",
+          "Firebase local sem chaves. Crie/atualize o <b>.env</b> e reinicie <code>npm run dev</code>."
+        );
+        return Promise.reject(new Error("firebase-config-vazio"));
+      }
 
       return utils.ensureFirebaseAuth().then(function(fb){
         return new Promise(function(resolve){
@@ -4127,7 +4166,10 @@
               LICSYSTEM.auth.unlock(user);
               if(!LICSYSTEM.auth._booted){
                 LICSYSTEM.auth._booted = true;
-                if(typeof onReady === "function") onReady(user);
+                if(typeof LICSYSTEM.auth._onReady === "function"){
+                  LICSYSTEM.auth._onReady(user);
+                  LICSYSTEM.auth._onReady = null;
+                }
               }
             } else {
               LICSYSTEM.state.authUser = null;
@@ -4146,7 +4188,7 @@
         try{ if(typeof msg !== "string") msg = JSON.stringify(msg); }catch(e){ msg = String(err); }
         showAlert("authAlert","error",
           "Não foi possível carregar o Firebase Auth: "+utils.escapeHtml(msg)+
-          "<br/><span class=\"small\">Confira FIREBASE_* nas Environment Variables da Vercel e se /api/firebase-config responde. Depois faça Redeploy.</span>"
+          "<br/><span class=\"small\">Confira o arquivo .env (VITE_FIREBASE_*) e reinicie o Vite. No Firebase, Authorization domains deve incluir <b>localhost</b>.</span>"
         );
         throw err;
       });

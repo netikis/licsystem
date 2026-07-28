@@ -572,112 +572,93 @@
   .dropzone.drag{border-color:var(--ls-gold);background:var(--ls-yellow-bg);color:var(--ls-navy)}
   .dropzone .big{font-size:30px;display:block;margin-bottom:8px}
 
-  /* ---------------- Orçamento espelho EDITAL | MEUS PREÇOS ---------------- */
+  /* ---------------- Orçamento espelho EDITAL | MEUS PREÇOS (tabela) ---------------- */
   .orc-mirror{
-    --orc-edital: 34px 52px 64px minmax(140px, 2.2fr) 96px 96px;
-    --orc-meus: 96px 56px 96px minmax(110px, 1.3fr) 112px;
-    --orc-cols: var(--orc-edital) var(--orc-meus);
-    border:1px solid var(--ls-line);border-radius:14px;overflow:hidden;background:#fff;
-    width:100%;max-width:100%;
+    --orc-split: 3px solid #0f1c30;
+    border:1px solid var(--ls-line);border-radius:14px;overflow:auto;background:#fff;
+    width:100%;max-width:100%;max-height:min(70vh,780px);
   }
-  .orc-mirror-titles,
-  .orc-mirror-heads,
-  .orc-item-row,
-  .orc-mirror-foot{
-    display:grid;
-    grid-template-columns: var(--orc-cols);
-    align-items:center;
-    width:100%;
-    scrollbar-gutter: stable;
+  .orc-table{
+    width:100%;min-width:980px;border-collapse:collapse;table-layout:fixed;
+    font-size:12.5px;
   }
-  .orc-pane-title{
-    padding:10px 14px;font-size:12px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;
+  .orc-table col.c-chk{width:40px}
+  .orc-table col.c-lote{width:64px}
+  .orc-table col.c-qtd{width:72px}
+  .orc-table col.c-desc{width:auto}
+  .orc-table col.c-money{width:104px}
+  .orc-table col.c-pct{width:64px}
+  .orc-table col.c-link{width:140px}
+  .orc-table col.c-actions{width:118px}
+
+  .orc-table thead th{
+    position:sticky;z-index:2;
+    font-weight:700;letter-spacing:.3px;text-align:left;
+    padding:8px 8px;vertical-align:middle;
   }
-  .orc-pane-title.edital{
-    grid-column: 1 / 7;
-    background:var(--ls-navy);color:#fff;
+  .orc-table thead tr.orc-titles th{
+    top:0;font-size:12px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;
+    padding:10px 14px;
   }
-  .orc-pane-title.meus{
-    grid-column: 7 / 12;
+  .orc-title-edital{background:var(--ls-navy);color:#fff}
+  .orc-title-meus{
     background:linear-gradient(135deg,var(--ls-gold),var(--ls-gold-soft));color:var(--ls-navy);
-    border-left:2px solid var(--ls-gold);
+    border-left: var(--orc-split);
   }
-  .orc-head-edital,.orc-head-meus,
-  .orc-side-edital,.orc-side-meus{
-    display:contents;
+  .orc-table thead tr.orc-cols th{
+    top:38px;background:var(--ls-navy-2);color:#fff;font-size:11px;
+    border-bottom:1px solid rgba(255,255,255,.08);
   }
-  .orc-mirror-heads > .orc-head-edital > *,
-  .orc-mirror-heads > .orc-head-meus > *,
-  .orc-item-row > .orc-side-edital > *,
-  .orc-item-row > .orc-side-meus > *{
-    min-width:0;
+  .orc-table thead .col-chk{text-align:center}
+  .orc-table .split-end{border-right:0}
+  .orc-table .split-start{border-left: var(--orc-split)}
+
+  .orc-table tbody td{
+    padding:6px 6px;vertical-align:middle;
+    border-bottom:1px solid var(--ls-line);
+    background:#fff;
   }
-  .orc-mirror-heads{
-    background:var(--ls-navy-2);color:#fff;font-size:11px;font-weight:700;letter-spacing:.3px;
-    padding:0;
-  }
-  .orc-mirror-heads span{
-    padding:8px 6px;
-    display:flex;align-items:center;
-  }
-  .orc-mirror-heads .col-chk{justify-content:center;padding-left:10px}
-  .orc-mirror-heads .col-actions{justify-content:flex-end;padding-right:10px}
-  .orc-mirror-heads .orc-head-meus > span:first-child{
-    border-left:2px solid var(--ls-gold);
-    padding-left:8px;
-  }
-  .orc-mirror-body{max-height:min(62vh,720px);overflow:auto;scrollbar-gutter:stable}
-  .orc-item-row{
-    border-bottom:1px solid var(--ls-line);min-height:52px;
-    padding:6px 0;
-  }
-  .orc-item-row:nth-child(even){background:#fafbfd}
-  .orc-item-row:hover{background:#f3f6fb}
-  .orc-item-row.risk-row{box-shadow:inset 3px 0 0 var(--ls-red)}
-  .orc-item-row > .orc-side-edital > *:first-child{
-    display:flex;align-items:center;justify-content:center;padding-left:10px;
-  }
-  .orc-item-row > .orc-side-meus > *:first-child{
-    border-left:2px solid #f0e2a8;
-    padding-left:8px;
-  }
-  .orc-item-row input{
+  .orc-table tbody tr:nth-child(even) td{background:#fafbfd}
+  .orc-table tbody tr:hover td{background:#f3f6fb}
+  .orc-table tbody tr.risk-row td:first-child{box-shadow:inset 3px 0 0 var(--ls-red)}
+  .orc-table tbody td.td-chk{text-align:center}
+  .orc-table tbody td.split-start{border-left: var(--orc-split)}
+
+  .orc-table tbody input[type="text"],
+  .orc-table tbody input[type="number"]{
     width:100%;min-width:0;padding:6px 8px;font-size:12px;
     border:1px solid var(--ls-line);border-radius:8px;font-family:inherit;background:#fff;
     box-sizing:border-box;
   }
-  .orc-item-row input:focus{
+  .orc-table tbody input:focus{
     outline:0;border-color:var(--ls-gold);box-shadow:0 0 0 3px rgba(201,162,39,.15);
   }
-  .orc-item-row .cell-ro,
-  .orc-item-row .cell-total{
+  .orc-table .cell-ro,
+  .orc-table .cell-total{
     font-size:12.5px;font-weight:700;color:var(--ls-navy);white-space:nowrap;
-    padding:0 6px;
   }
-  .orc-item-row .cell-total{font-weight:800}
-  .orc-desc-wrap{display:flex;align-items:center;gap:4px;min-width:0;width:100%;padding:0 2px}
+  .orc-table .cell-total{font-weight:800}
+  .orc-desc-wrap{display:flex;align-items:center;gap:4px;min-width:0;width:100%}
   .orc-desc-wrap input{flex:1}
-  .orc-actions{
-    display:flex;gap:4px;flex-wrap:nowrap;justify-content:flex-end;
-    padding-right:8px;
-  }
+  .orc-actions{display:flex;gap:4px;flex-wrap:nowrap;justify-content:flex-end}
   .orc-empty{
-    grid-column:1 / -1;text-align:center;padding:28px 16px;color:var(--ls-muted);font-size:13px;
+    text-align:center;padding:28px 16px;color:var(--ls-muted);font-size:13px;
   }
-  .orc-mirror-foot{
-    border-top:1px solid var(--ls-line);background:#f7f9fc;
+
+  .orc-table tfoot td{
+    padding:12px 10px;background:#f7f9fc;border-top:1px solid var(--ls-line);
+    position:sticky;bottom:0;z-index:2;
   }
-  .orc-foot-edital{
-    grid-column:1 / 7;
-    display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:12px 14px;
+  .orc-table .foot-edital-label,
+  .orc-table .foot-meus-label{
+    text-align:right;font-size:12px;font-weight:700;color:var(--ls-navy);
   }
-  .orc-foot-meus{
-    grid-column:7 / 12;
-    display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:12px 14px;
-    border-left:2px solid #f0e2a8;
+  .orc-table .foot-edital-value,
+  .orc-table .foot-meus-value{
+    font-size:14px;font-weight:800;color:var(--ls-navy);white-space:nowrap;
   }
-  .foot-label{font-size:12px;font-weight:700;color:var(--ls-navy)}
-  .foot-value{font-size:14px;font-weight:800;color:var(--ls-navy)}
+  .orc-table tfoot .split-start{border-left: var(--orc-split)}
+
   .orc-meta{
     display:flex;align-items:center;gap:10px;flex-wrap:wrap;
     margin:0 0 12px;padding:10px 12px;border-radius:10px;
@@ -703,37 +684,6 @@
   .orc-save-card h3{margin:0 0 6px;font-size:17px;color:var(--ls-navy)}
   .orc-save-card p{margin:0 0 14px;font-size:13px;color:var(--ls-muted)}
   .orc-save-card .btn-row{justify-content:flex-end;margin-top:16px}
-
-  @media (max-width:1100px){
-    .orc-mirror{
-      --orc-edital: 34px 48px 56px minmax(120px, 1.6fr) 88px 88px;
-      --orc-meus: 88px 50px 88px minmax(90px, 1fr) 104px;
-    }
-  }
-  @media (max-width:900px){
-    .orc-mirror-titles,
-    .orc-mirror-heads,
-    .orc-item-row,
-    .orc-mirror-foot{
-      grid-template-columns: 1fr;
-    }
-    .orc-pane-title.edital,
-    .orc-pane-title.meus,
-    .orc-foot-edital,
-    .orc-foot-meus{grid-column:1 / -1;border-left:0}
-    .orc-head-edital,.orc-head-meus,
-    .orc-side-edital,.orc-side-meus{
-      display:grid;
-      grid-template-columns: var(--orc-edital);
-      gap:6px;padding:8px 10px;
-    }
-    .orc-head-meus,.orc-side-meus{
-      grid-template-columns: var(--orc-meus);
-      border-top:2px solid #f0e2a8;
-    }
-    .orc-item-row > .orc-side-meus > *:first-child,
-    .orc-mirror-heads .orc-head-meus > span:first-child{border-left:0;padding-left:6px}
-  }
 
   /* ---------------- Cruzamento result ---------------- */
   .result-item{border:1px solid var(--ls-line);border-radius:14px;padding:16px;margin-bottom:12px;background:#fff;width:100%;max-width:100%;box-sizing:border-box}
