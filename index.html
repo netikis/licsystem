@@ -252,40 +252,48 @@
               <button class="btn btn-gold" id="btnPropostaOrc">📑 Gerar Proposta Comercial PDF</button>
             </div>
           </div>
-          <div class="desc">Total = Qtd × V. Unit × (1 + %/100). A margem vem apenas dos campos editados. Exibe <b>100 itens por página</b> para não sobrecarregar o navegador.</div>
+          <div class="desc">Espelho do edital: à esquerda os dados importados; à direita seus preços na mesma linha do lote. <b>Meu total</b> = Qtd × V. Unit × (1 + %/100).</div>
 
           <div class="dropzone" id="orcDrop" style="margin-bottom:16px">
             <span class="big">📊</span>
-            <b>Arraste um Excel/CSV aqui</b> ou clique para selecionar<br/>
-            <span class="small muted">Mapeamento automático de colunas (descrição, qtd, valor)</span>
+            <b>Arraste Excel/CSV do edital aqui</b> ou clique para selecionar<br/>
+            <span class="small muted">Mapeia Lote, Quantidade, Descrição, Valor Unitário e Valor Final</span>
             <input type="file" id="orcFile" accept=".xlsx,.xls,.csv" style="display:none" />
           </div>
 
-          <div class="tbl-wrap">
-            <table id="orcTable">
-              <thead>
-                <tr>
-                  <th style="width:36px"><input type="checkbox" id="orcCheckAll" title="Selecionar todos" /></th>
-                  <th style="width:40px">#</th>
-                  <th>Produto / Descrição</th>
-                  <th style="width:80px">Qtd</th>
-                  <th style="width:120px">V. Unit (R$)</th>
-                  <th style="width:80px">Margem %</th>
-                  <th style="width:130px">Total (R$)</th>
-                  <th style="width:130px">Link</th>
-                  <th style="width:120px">Pesquisa</th>
-                  <th style="width:50px"></th>
-                </tr>
-              </thead>
-              <tbody id="orcBody"></tbody>
-              <tfoot>
-                <tr>
-                  <td colspan="6" style="text-align:right;font-weight:700;color:var(--ls-navy)">TOTAL GERAL</td>
-                  <td id="orcTotalGeral" style="font-weight:800;color:var(--ls-navy)">R$ 0,00</td>
-                  <td colspan="3"></td>
-                </tr>
-              </tfoot>
-            </table>
+          <div class="orc-mirror">
+            <div class="orc-mirror-titles">
+              <div class="orc-pane-title edital">EDITAL</div>
+              <div class="orc-pane-title meus">MEUS PREÇOS</div>
+            </div>
+            <div class="orc-mirror-heads">
+              <div class="orc-head-edital">
+                <span class="col-chk"><input type="checkbox" id="orcCheckAll" title="Selecionar todos" /></span>
+                <span class="col-lote">Lote</span>
+                <span class="col-qtd">Qtd</span>
+                <span class="col-desc">Descrição</span>
+                <span class="col-money">V. Unitário</span>
+                <span class="col-money">V. Final</span>
+              </div>
+              <div class="orc-head-meus">
+                <span class="col-money">V. Unitário</span>
+                <span class="col-pct">%</span>
+                <span class="col-money">V. Final</span>
+                <span class="col-link">Link de Acesso</span>
+                <span class="col-actions">Ações</span>
+              </div>
+            </div>
+            <div id="orcBody" class="orc-mirror-body"></div>
+            <div class="orc-mirror-foot">
+              <div class="orc-foot-edital">
+                <span class="foot-label">TOTAL EDITAL</span>
+                <span id="orcTotalEdital" class="foot-value">R$ 0,00</span>
+              </div>
+              <div class="orc-foot-meus">
+                <span class="foot-label">TOTAL MEUS PREÇOS</span>
+                <span id="orcTotalGeral" class="foot-value">R$ 0,00</span>
+              </div>
+            </div>
           </div>
           <div class="pager" id="orcPager" style="display:none">
             <div class="pager-info" id="orcPagerInfo"></div>
