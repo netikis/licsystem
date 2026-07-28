@@ -103,6 +103,11 @@
     var m;
     var qtd = Number(qtdHint) || 0;
     while ((m = re.exec(str)) !== null) {
+      // Ignora Cód municipal (18.223) colado antes do unitário
+      if (/^\d{1,3}(\.\d{3})+$/.test(m[1])) {
+        re.lastIndex = m.index + 1;
+        continue;
+      }
       var u = utils.parseBrNum(m[1]);
       var t = utils.parseBrNum(m[2]);
       if (!(u > 0) || !(t > 0)) continue;
@@ -189,11 +194,11 @@
     if (line && typeof line === "object") {
       var it = utils.asCaptacaoItem(line);
       if (!it || !it.produto || it.produto.length < 2) return false;
+      // Item já estruturado (lote/qtd/preço do PDF): não descartar por desc começar com "com/do/..."
+      // (comum quando pdf.js parte a descrição entre linhas).
+      if (String(it.lote || "").trim() && Number(it.qtd) > 0) return true;
+      if (Number(it.editalVunit) > 0 && Number(it.qtd) > 0) return true;
       if (utils.isTextoSpecEdital(it.produto)) return false;
-      // Objeto já parseado (PDF THEO ou clássico)
-      if (String(it.lote || "").trim() || Number(it.qtd) > 0 || Number(it.editalVunit) > 0) {
-        return true;
-      }
       return utils.isLinhaProdutoEdital(
         it.line || (it.lote ? it.lote + " " : "") + it.qtd + " UN " + it.produto
       );
@@ -452,10 +457,14 @@
             .trim();
         }
       }
-      // Remove restos de cabeçalho de página colados na descrição
+      // Remove restos de cabeçalho/rodapé de página colados na descrição
       descC = descC
         .replace(
-          /\bMunic[ií]pio de Castro\b[\s\S]*?(?:licitacao\.castro@gmail\.com|www\.castro\.pr\.gov\.br|E-mail:\s*\S+)/gi,
+          /Munic[ií]pio de Castro\s+Diretoria de Suprimentos/gi,
+          " "
+        )
+        .replace(
+          /Pra[cç]a\s+Pedro\s+Kaled[\s\S]{0,220}?(?:licitacao\.castro@gmail\.com|www\.castro\.pr\.gov\.br)/gi,
           " "
         )
         .replace(/\bE-mail:\s*\S+/gi, " ")
@@ -929,11 +938,22 @@
       function limparPagina(s) {
         return String(s || "")
           .replace(/\bP[aá]gina\s*:\s*\d+\s*\/\s*\d+/gi, "\n")
-          // Cabeçalho repetido (Castro / prefeituras) entre itens
+          // Cabeçalho curto (NÃO atravessar a página até o rodapé — isso apagava todos os itens)
           .replace(
-            /Munic[ií]pio de Castro[\s\S]*?(?:licitacao\.castro@gmail\.com|www\.castro\.pr\.gov\.br)/gi,
+            /Munic[ií]pio de Castro\s*(?:\r?\n|\s)+Diretoria de Suprimentos/gi,
             "\n"
           )
+          // Rodapé Castro (endereço + CNPJ + site/e-mail) — janela limitada
+          .replace(
+            /Pra[cç]a\s+Pedro\s+Kaled[\s\S]{0,220}?(?:licitacao\.castro@gmail\.com|www\.castro\.pr\.gov\.br)/gi,
+            "\n"
+          )
+          .replace(
+            /CNPJ\s+[\d.\/-]+[\s\S]{0,160}?(?:licitacao\.castro@gmail\.com|www\.castro\.pr\.gov\.br)/gi,
+            "\n"
+          )
+          .replace(/\bE-mail:\s*\S+/gi, "\n")
+          .replace(/\bSite:\s*www\.castro\.pr\.gov\.br/gi, "\n")
           .replace(
             /Item\s+Cotas\s+Qtde\s+Und\s+C[oó]d[\s\S]{0,120}?Valor\s+M[aá]ximo\s+Total/gi,
             "\n"
@@ -1003,9 +1023,129 @@
       }
 
       /**
-       * Portal Castro / cotas textuais (itens multilinha):
-       *   "1 Exclusivo\nME/EPP/MEI 30 QUILO 36.535 ARAME... 19,20 576,00"
-       * Junta pelo início "N Exclusivo|Ampla" + qtd + und.
+       * Corta texto após o último par unitário+total, ignorando falsos pares em que o
+       * 1º número é Cód municipal (ex.: 18.223 24,28) — isso engolia o total real.
+       */
+      function cutAfterLastEditalPrices(chunk) {
+        chunk = String(chunk || "");
+        var re =
+          /(\d{1,3}(?:\.\d{3})*,\d{2,4}|\d+[.,]\d{2,4})\s+(\d{1,3}(?:\.\d{3})*,\d{2}|\d+[.,]\d{2})(?=\s|$)/g;
+        var last = null;
+        var m;
+        while ((m = re.exec(chunk)) !== null) {
+          // Cód tipo 18.223 / 36.535 (milhar com ponto, sem centavos)
+          if (/^\d{1,3}(\.\d{3})+$/.test(m[1])) {
+            // Libera o 2º número p/ formar o par real (ex.: 24,28 1.092,60)
+            re.lastIndex = m.index + 1;
+            continue;
+          }
+          last = m;
+        }
+        if (!last) return chunk.trim();
+        return chunk.slice(0, last.index + last[0].length).trim();
+      }
+
+      /**
+       * pdf.js (Captação) frequentemente emite a coluna Cotas antes do Item:
+       *   "Exclusivo\n1 ME/EPP/MEI 30 QUILO ..."
+       *   "Exclusivo\n2 ARMAÇÃO 1 X 1\nME/EPP/MEI 45 UND ..."
+       *   "Exclusivo BLOCOS...\n5 ME/EPP/MEI 50 UND ..."
+       *   "Ampla\n8 Concorrência 200 UND ..."
+       * Reescreve para o formato canônico: "N Exclusivo ME/EPP/MEI QTD UND ..."
+       */
+      function normalizeCastroItemChunk(chunk) {
+        chunk = String(chunk || "")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (!chunk) return "";
+
+        if (/^\d{1,5}\s+(?:Exclusivo|Ampla)\b/i.test(chunk)) return chunk;
+
+        var QTD =
+          "(\\d{1,3}(?:\\.\\d{3})+,\\d{3}|\\d{1,3}(?:\\.\\d{3})+|\\d+(?:[.,]\\d+)?)";
+        var UND = "(" + EDITAL_UNDS + ")";
+        var COD = "((?:\\d{1,3}(?:\\.\\d{3})+|\\d{1,6}))";
+        var m;
+        var qtd;
+        var und;
+        var cod;
+        var rest;
+        var descExtra;
+        var qm;
+
+        function packCotas(itemNo, cotasLabel, body, extraDesc) {
+          qm = body.match(
+            new RegExp("^" + QTD + "\\s+" + UND + "\\s+(?:" + COD + "\\s+)?([\\s\\S]+)$", "i")
+          );
+          if (qm) {
+            qtd = qm[1];
+            und = qm[2].toUpperCase();
+            cod = qm[3] || "";
+            rest = String(qm[4] || "").trim();
+            descExtra = String(extraDesc || "").trim();
+            if (descExtra) {
+              // Evita duplicar se a descrição já veio no restante
+              var foldExtra = utils.fold(descExtra).toLowerCase().slice(0, 24);
+              var foldRest = utils.fold(rest).toLowerCase();
+              if (foldExtra && foldRest.indexOf(foldExtra) === -1) {
+                rest = (descExtra + " " + rest).replace(/\s+/g, " ").trim();
+              }
+            }
+            return (
+              itemNo +
+              " " +
+              cotasLabel +
+              " " +
+              qtd +
+              " " +
+              und +
+              " " +
+              (cod ? cod + " " : "") +
+              rest
+            ).replace(/\s+/g, " ").trim();
+          }
+          return (
+            itemNo +
+            " " +
+            cotasLabel +
+            (extraDesc ? " " + extraDesc : "") +
+            " " +
+            body
+          )
+            .replace(/\s+/g, " ")
+            .trim();
+        }
+
+        // Exclusivo N ME/EPP/MEI ...
+        m = chunk.match(/^Exclusivo\s+(\d{1,5})\s+ME\/?EPP\/?MEI\s+(.+)$/i);
+        if (m) return packCotas(m[1], "Exclusivo ME/EPP/MEI", m[2], "");
+
+        // Exclusivo N <desc> ME/EPP/MEI ...
+        m = chunk.match(/^Exclusivo\s+(\d{1,5})\s+(.+?)\s+ME\/?EPP\/?MEI\s+(.+)$/i);
+        if (m) return packCotas(m[1], "Exclusivo ME/EPP/MEI", m[3], m[2]);
+
+        // Exclusivo <desc> N ME/EPP/MEI ...
+        m = chunk.match(/^Exclusivo\s+(.+?)\s+(\d{1,5})\s+ME\/?EPP\/?MEI\s+(.+)$/i);
+        if (m) return packCotas(m[2], "Exclusivo ME/EPP/MEI", m[3], m[1]);
+
+        // Ampla N Concorrência ...
+        m = chunk.match(/^Ampla\s+(\d{1,5})\s+Concorr[eê]ncia\s+(.+)$/i);
+        if (m) return packCotas(m[1], "Ampla Concorrência", m[2], "");
+
+        // Ampla N <desc> Concorrência ...  |  Ampla <desc> N Concorrência ...
+        m = chunk.match(/^Ampla\s+(\d{1,5})\s+(.+?)\s+Concorr[eê]ncia\s+(.+)$/i);
+        if (m) return packCotas(m[1], "Ampla Concorrência", m[3], m[2]);
+
+        m = chunk.match(/^Ampla\s+(.+?)\s+(\d{1,5})\s+Concorr[eê]ncia\s+(.+)$/i);
+        if (m) return packCotas(m[2], "Ampla Concorrência", m[3], m[1]);
+
+        return chunk;
+      }
+
+      /**
+       * Portal Castro / cotas textuais (itens multilinha).
+       * Aceita layout canônico "N Exclusivo ME/EPP..." e o layout pdf.js
+       * "Exclusivo\\nN ME/EPP..." / "Ampla\\nN Concorrência...".
        */
       function splitCastroBlocks(full) {
         var t = limparPagina(full).replace(/\r\n?/g, "\n");
@@ -1014,7 +1154,11 @@
 
         var QTD_RE =
           "(\\d{1,3}(?:\\.\\d{3})+,\\d{3}|\\d{1,3}(?:\\.\\d{3})+|\\d+(?:[.,]\\d+)?)";
-        var reStart = new RegExp(
+        var starts = [];
+        var m;
+
+        // 1) Layout canônico: N Exclusivo|Ampla ... QTD UND
+        var reCanonical = new RegExp(
           "(?:^|\\s)(\\d{1,5})\\s+(?:" +
             EDITAL_COTAS_TXT +
             ")\\s+" +
@@ -1024,14 +1168,35 @@
             ")\\s+",
           "gi"
         );
-        var starts = [];
-        var m;
-        while ((m = reStart.exec(flat)) !== null) {
-          var pos = m.index;
-          if (m[0].charAt(0) === " " || m[0].charAt(0) === "\t") pos = m.index + 1;
-          starts.push(pos);
+        while ((m = reCanonical.exec(flat)) !== null) {
+          var posCan = m.index;
+          if (m[0].charAt(0) === " " || m[0].charAt(0) === "\t") posCan = m.index + 1;
+          starts.push(posCan);
         }
+
+        // 2) Layout pdf.js: cotas (Exclusivo|Ampla) antes do número do item
+        if (starts.length < 2) {
+          var rePdfJs = /(?:^|\s)(Exclusivo|Ampla)\b/gi;
+          while ((m = rePdfJs.exec(flat)) !== null) {
+            var posPj = m.index;
+            if (m[0].charAt(0) === " " || m[0].charAt(0) === "\t") posPj = m.index + 1;
+            starts.push(posPj);
+          }
+        }
+
         if (starts.length < 2) return [];
+
+        // índices únicos ordenados
+        starts.sort(function (a, b) {
+          return a - b;
+        });
+        var uniqStarts = [];
+        for (var u = 0; u < starts.length; u++) {
+          if (!uniqStarts.length || starts[u] - uniqStarts[uniqStarts.length - 1] > 8) {
+            uniqStarts.push(starts[u]);
+          }
+        }
+        starts = uniqStarts;
 
         var out = [];
         for (var i = 0; i < starts.length; i++) {
@@ -1042,6 +1207,11 @@
             .replace(/\s+Soma:[\s\S]*$/i, "")
             .replace(/\s+Destaco:[\s\S]*$/i, "")
             .trim();
+
+          // Corta lixo após o último par de preços reais (não confundir Cód 18.223 com unitário)
+          chunk = cutAfterLastEditalPrices(chunk);
+
+          chunk = normalizeCastroItemChunk(chunk);
           pushParsed(out, chunk);
         }
         return out;
@@ -1150,7 +1320,10 @@
       }
 
       var rawText = String(text || "");
-      var castroHint = /Exclusivo\s+ME\/?EPP\/?MEI|Ampla\s+Concorr/i.test(rawText);
+      // Layout canônico OU pdf.js (Exclusivo/Ampla em linha separada do ME/EPP ou Concorrência)
+      var castroHint =
+        /Exclusivo\s+ME\/?EPP\/?MEI|Ampla\s+Concorr/i.test(rawText) ||
+        /Exclusivo[\s\S]{0,80}ME\/?EPP\/?MEI|Ampla[\s\S]{0,80}Concorr/i.test(rawText);
 
       // 1) Portal Castro / cotas textuais (prioritário quando o PDF tem esse quadro)
       if (castroHint) {
