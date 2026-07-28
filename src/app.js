@@ -1666,11 +1666,13 @@
   /* ============================ ORÇAMENTO ============================ */
   LICSYSTEM.orcamento = {
     emptyItem:function(){
-      return {lote:"", qtd:1, produto:"", editalVunit:0, editalTotal:0, vunit:0, pct:0, link:"", compensa:null};
+      return {lote:"", qtd:1, qtdEstoque:0, produto:"", editalVunit:0, editalTotal:0, vunit:0, pct:0, link:"", compensa:null};
     },
     normalizeItem:function(it){
       it = it || {};
       var qtd = Number(it.qtd); if(!isFinite(qtd) || qtd < 0) qtd = 1;
+      var qtdEstoque = Number(it.qtdEstoque != null ? it.qtdEstoque : (it.estoque != null ? it.estoque : 0));
+      if(!isFinite(qtdEstoque) || qtdEstoque < 0) qtdEstoque = 0;
       var editalVunit = Number(it.editalVunit != null ? it.editalVunit : 0) || 0;
       var editalTotal = Number(it.editalTotal != null ? it.editalTotal : 0) || 0;
       if(!editalTotal && editalVunit) editalTotal = qtd * editalVunit;
@@ -1681,6 +1683,7 @@
       return {
         lote: it.lote != null && it.lote !== "" ? String(it.lote) : "",
         qtd: qtd,
+        qtdEstoque: qtdEstoque,
         produto: String(it.produto || it.descricao || ""),
         editalVunit: editalVunit,
         editalTotal: editalTotal,
@@ -1872,7 +1875,8 @@
             '</div></td>'+
             '<td class="td-money"><input type="number" data-i="'+i+'" data-f="editalVunit" value="'+utils.escapeHtml(editalUnitShow)+'" step="0.0001" min="0" title="Valor unitário do edital"></td>'+
             '<td class="td-money split-end"><span class="cell-ro" data-edital-total="'+i+'">'+utils.formatBrl(totalEdital)+'</span></td>'+
-            '<td class="td-money split-start"><input type="number" data-i="'+i+'" data-f="vunit" value="'+utils.escapeHtml(it.vunit)+'" step="0.01" min="0" title="Meu valor unitário"></td>'+
+            '<td class="td-qtd split-start"><input type="number" class="orc-qtd" data-i="'+i+'" data-f="qtdEstoque" value="'+utils.escapeHtml(it.qtdEstoque)+'" step="1" min="0" title="Quantidade em estoque / posso entregar"></td>'+
+            '<td class="td-money"><input type="number" data-i="'+i+'" data-f="vunit" value="'+utils.escapeHtml(it.vunit)+'" step="0.01" min="0" title="Meu valor unitário"></td>'+
             '<td class="td-pct"><input type="number" class="orc-pct" data-i="'+i+'" data-f="pct" value="'+utils.escapeHtml(it.pct)+'" step="0.1" title="Porcentagem"></td>'+
             '<td class="td-money"><span class="cell-total" data-meus-total="'+i+'">'+utils.formatBrl(totalMeus)+'</span></td>'+
             '<td class="td-link"><input type="text" data-i="'+i+'" data-f="link" value="'+utils.escapeHtml(it.link||"")+'" placeholder="Link"></td>'+
@@ -1888,7 +1892,7 @@
         );
       }
       if(!buf.length){
-        body.innerHTML = '<tr><td colspan="11" class="orc-empty">Nenhum item nesta página. Importe o Excel do edital ou adicione uma linha.</td></tr>';
+        body.innerHTML = '<tr><td colspan="12" class="orc-empty">Nenhum item nesta página. Importe o Excel do edital ou adicione uma linha.</td></tr>';
       } else {
         body.innerHTML = buf.join("");
       }

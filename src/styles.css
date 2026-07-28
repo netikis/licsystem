@@ -593,14 +593,16 @@
     width:100%;max-width:100%;max-height:min(70vh,780px);
   }
   .orc-table{
-    width:100%;min-width:1490px;border-collapse:collapse;table-layout:fixed;
+    width:100%;min-width:1530px;border-collapse:collapse;table-layout:fixed;
     font-size:12.5px;
   }
   .orc-table col.c-chk{width:36px}
   .orc-table col.c-lote{width:72px}
   .orc-table col.c-qtd{width:76px}
-  .orc-table col.c-desc{width:auto}
+  .orc-table col.c-desc{width:auto;min-width:280px}
+  .orc-table col.c-qtd-estoque{width:72px}
   .orc-table col.c-money{width:120px}
+  .orc-table col.c-money-meus{width:100px}
   .orc-table col.c-pct{width:76px}
   .orc-table col.c-link{width:96px}
   .orc-table col.c-actions{width:220px}
