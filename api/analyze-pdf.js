@@ -1,7 +1,8 @@
 /**
  * POST /api/analyze-pdf
  * Relatório completo de edital em Markdown (Lei 14.133/2021).
- * HTTP fetch nativo — sem SDK. Retorna { relatorio: "..." }.
+ * HTTP fetch nativo — sem SDK.
+ * Retorna { relatorio: "...", documentosExigidos: [{ nome, tipo, obs }] }.
  */
 var MAX_CHARS = 150000;
 var DEFAULT_MODEL = "gemini-2.5-flash-lite";
@@ -70,9 +71,108 @@ function normalizeModelId(name) {
 function buildPrompt(textoExtraido) {
   var texto = String(textoExtraido || "").substring(0, MAX_CHARS);
   return (
-    "Aja como um especialista em licitações públicas brasileiras. Leia o texto do edital a seguir e entregue um relatório completo, formatado em Markdown, dividido estritamente nos seguintes 11 tópicos (considerando a Lei 14.133/2021): 1. Informações Gerais, 2. Cronograma Completo, 3. Exigências de Habilitação, 4. Especificações do Objeto, 5. Regras de Proposta Comercial, 6. Critérios de Julgamento, 7. Penalidades e Riscos, 8. Condições de Entrega e Execução, 9. Contrato ou Ata, 10. Checklist Final, 11. Resumo Simples. Finalize com um alerta dos 3 maiores riscos e como evitar desclassificação. TEXTO DO EDITAL: " +
+    "Aja como um especialista em licitações públicas brasileiras. Leia o texto do edital a seguir e entregue um relatório completo, formatado em Markdown, dividido estritamente nos seguintes 11 tópicos (considerando a Lei 14.133/2021): 1. Informações Gerais, 2. Cronograma Completo, 3. Exigências de Habilitação, 4. Especificações do Objeto, 5. Regras de Proposta Comercial, 6. Critérios de Julgamento, 7. Penalidades e Riscos, 8. Condições de Entrega e Execução, 9. Contrato ou Ata, 10. Checklist Final, 11. Resumo Simples. Finalize com um alerta dos 3 maiores riscos e como evitar desclassificação.\n\n" +
+    "AO FINAL do relatório Markdown (depois de tudo), inclua OBRIGATORIAMENTE um único bloco de código JSON (cercado por ```json ... ```) com a lista estruturada de documentos exigidos pelo edital (habilitação jurídica, fiscal, econômico-financeira, técnica, declarações, atestados, etc.). Use exatamente este formato:\n" +
+    '```json\n{"documentosExigidos":[{"nome":"Nome do documento","tipo":"habilitacao|tecnica|outro","obs":"detalhe opcional do edital"}]}\n```\n' +
+    "Liste cada documento de forma objetiva (um item por documento). Se o edital não deixar claro, inclua os mais prováveis com obs explicando a incerteza. Não invente números de artigos se não estiverem no texto.\n\n" +
+    "TEXTO DO EDITAL: " +
     texto
   );
+}
+
+function normalizeDocTipo(tipo) {
+  var t = String(tipo || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+  if (t.indexOf("tecnic") !== -1) return "tecnica";
+  if (
+    t.indexOf("habilit") !== -1 ||
+    t.indexOf("jurid") !== -1 ||
+    t.indexOf("fiscal") !== -1 ||
+    t.indexOf("econom") !== -1
+  ) {
+    return "habilitacao";
+  }
+  return "outro";
+}
+
+function normalizeDocumentosExigidos(list) {
+  if (!Array.isArray(list)) return [];
+  var out = [];
+  var seen = {};
+  for (var i = 0; i < list.length; i++) {
+    var item = list[i];
+    if (!item) continue;
+    var nome =
+      typeof item === "string"
+        ? item.trim()
+        : String(item.nome || item.name || item.documento || "").trim();
+    if (!nome || nome.length < 2) continue;
+    var key = nome.toLowerCase().replace(/\s+/g, " ");
+    if (seen[key]) continue;
+    seen[key] = true;
+    out.push({
+      nome: nome.slice(0, 220),
+      tipo: normalizeDocTipo(item.tipo || item.type || "outro"),
+      obs: String(item.obs || item.observacao || item.detalhe || "").trim().slice(0, 400),
+    });
+  }
+  return out.slice(0, 80);
+}
+
+/**
+ * Extrai bloco JSON final com documentosExigidos e remove do Markdown.
+ * @returns {{ relatorio: string, documentosExigidos: Array }}
+ */
+function splitRelatorioAndDocs(rawText) {
+  var text = String(rawText || "").trim();
+  var documentosExigidos = [];
+  var relatorio = text;
+
+  function tryParseJson(chunk) {
+    try {
+      var obj = JSON.parse(chunk);
+      if (obj && Array.isArray(obj.documentosExigidos)) {
+        return normalizeDocumentosExigidos(obj.documentosExigidos);
+      }
+      if (Array.isArray(obj)) {
+        return normalizeDocumentosExigidos(obj);
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  // Prefer last fenced ```json ... ``` block
+  var fenceRe = /```(?:json)?\s*([\s\S]*?)```/gi;
+  var m;
+  var last = null;
+  while ((m = fenceRe.exec(text))) {
+    last = m;
+  }
+  if (last) {
+    var parsed = tryParseJson(String(last[1] || "").trim());
+    if (parsed && parsed.length) {
+      documentosExigidos = parsed;
+      relatorio = (text.slice(0, last.index) + text.slice(last.index + last[0].length)).trim();
+      return { relatorio: relatorio, documentosExigidos: documentosExigidos };
+    }
+  }
+
+  // Fallback: trailing raw JSON object
+  var brace = text.lastIndexOf('{"documentosExigidos"');
+  if (brace === -1) brace = text.lastIndexOf('{ "documentosExigidos"');
+  if (brace !== -1) {
+    var tail = text.slice(brace).trim();
+    var parsedTail = tryParseJson(tail);
+    if (parsedTail && parsedTail.length) {
+      documentosExigidos = parsedTail;
+      relatorio = text.slice(0, brace).trim();
+    }
+  }
+
+  return { relatorio: relatorio, documentosExigidos: documentosExigidos };
 }
 
 function extractTextFromGeminiResponse(upstreamJson) {
@@ -193,12 +293,14 @@ module.exports = async function handler(req, res) {
           continue;
         }
         usedModel = modelName;
+        var split = splitRelatorioAndDocs(respostaIA);
         return send(res, 200, {
           ok: true,
           model: usedModel,
           tried: tried,
           filename: filename,
-          relatorio: respostaIA,
+          relatorio: split.relatorio || respostaIA,
+          documentosExigidos: split.documentosExigidos || [],
         });
       }
 
