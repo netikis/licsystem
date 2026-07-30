@@ -56,6 +56,7 @@
       <button data-view="orcamento"><span class="ico">🧮</span> Orçamento</button>
       <button data-view="cruzamento"><span class="ico">🔀</span> Cruzamento ML</button>
       <button data-view="cofre"><span class="ico">🔐</span> Cofre de Documentos</button>
+      <button data-view="docsChecklist"><span class="ico">✅</span> Docs do Edital</button>
       <button data-view="entregas"><span class="ico">🚚</span> Licitação</button>
       <button data-view="histEntregas"><span class="ico">📦</span> Histórico Entregas</button>
       <button data-view="concorrencia"><span class="ico">🔎</span> Concorrência</button>
@@ -230,6 +231,7 @@
               <div class="ia-report-toolbar">
                 <h3>Folha de Relatório</h3>
                 <div class="btn-row" style="margin:0">
+                  <button type="button" class="btn btn-ghost btn-sm" id="btnIaDocs" disabled>📑 Documentos necessários</button>
                   <button type="button" class="btn btn-ghost btn-sm" id="btnIaCopiar" disabled>📋 Copiar Relatório</button>
                   <button type="button" class="btn btn-primary btn-sm" id="btnIaImprimir" disabled>🖨 Imprimir</button>
                 </div>
@@ -382,6 +384,30 @@
           </div>
           <div class="desc">Controle de validade das certidões e documentos habilitatórios. Verde: válido · Amarelo: vence em ≤15 dias · Vermelho: vencido/sem data.</div>
           <div id="cofreList"></div>
+        </div>
+      </section>
+
+      <!-- ===================== DOCS CHECKLIST (edital) ===================== -->
+      <section id="view-docsChecklist" class="view">
+        <div class="card">
+          <div class="card-head">
+            <h2>✅ Documentos do Edital</h2>
+            <div class="btn-row" style="margin:0">
+              <button type="button" class="btn btn-ghost btn-sm" id="btnDocsAdd">+ Documento</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="btnDocsClearOk">Limpar OKs</button>
+              <button type="button" class="btn btn-primary btn-sm" id="btnDocsSalvar">💾 Salvar</button>
+            </div>
+          </div>
+          <div class="desc">
+            Checklist dos documentos exigidos na análise do edital. Marque <b>OK</b> nos que você já possui.
+            Quando possível, o sistema sugere correspondência com o <b>Cofre de Documentos</b>.
+          </div>
+          <div id="docsAlert" class="alert"></div>
+          <div id="docsMeta" class="docs-meta" style="display:none"></div>
+          <div id="docsSummary" class="docs-summary"></div>
+          <div id="docsList" class="docs-list">
+            <div class="muted small">Nenhum checklist ainda. Rode a <b>Análise IA</b> em um edital para gerar a lista.</div>
+          </div>
         </div>
       </section>
 
@@ -950,6 +976,19 @@
     <div class="btn-row">
       <button type="button" class="btn btn-ghost" id="btnOrcSaveCancel">Cancelar</button>
       <button type="button" class="btn btn-green" id="btnOrcSaveConfirm">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: DOCUMENTOS EXIGIDOS (pós Análise IA) ============ -->
+<div id="docsOverlay" aria-hidden="true">
+  <div class="docs-modal-card" role="dialog" aria-modal="true" aria-labelledby="docsModalTitle">
+    <h3 id="docsModalTitle">📑 Documentos necessários</h3>
+    <p id="docsModalLead">A IA identificou os documentos abaixo no edital. Confira e marque o que você já tem.</p>
+    <div id="docsModalList" class="docs-modal-list"></div>
+    <div class="btn-row">
+      <button type="button" class="btn btn-ghost" id="btnDocsModalClose">Fechar</button>
+      <button type="button" class="btn btn-gold" id="btnDocsModalGo">Ver o que tenho / Marcar OK</button>
     </div>
   </div>
 </div>
