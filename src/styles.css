@@ -131,6 +131,15 @@
   .auth-hint{margin-top:14px;font-size:11px;color:var(--ls-muted);line-height:1.4}
   #authAlert{margin-bottom:12px}
   .top-user-row{display:flex;align-items:center;gap:10px}
+  .sync-status{
+    font-size:11px;font-weight:600;color:var(--ls-muted);
+    white-space:nowrap;padding:4px 8px;border-radius:999px;
+    border:1px solid transparent;letter-spacing:.01em;
+  }
+  .sync-status.is-syncing{color:#8a6d1d;background:#fff8e6;border-color:#f0e0a8}
+  .sync-status.is-ok{color:#1f6b45;background:#eef8f1;border-color:#c6e6d2}
+  .sync-status.is-offline{color:var(--ls-muted);background:#f4f6f8;border-color:var(--ls-line)}
+  .sync-status.is-error{color:#9b2c2c;background:#fdeeee;border-color:#f0c4c4}
   .btn-logout{
     border:1px solid var(--ls-line);background:#fff;color:var(--ls-navy);
     border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;

@@ -829,6 +829,453 @@
   var ORC_KEY = "licsystem_orcamento_v2";
   var ORC_KEY_LEGACY = "licsystem_orcamento_v1";
   var COFRE_KEY = "licsystem_cofre_v1";
+  var CLOUD_META_KEY = "licsystem_cloud_meta_v1";
+  var CLOUD_LAST_UID_KEY = "licsystem_cloud_last_uid";
+
+  /* ============================ CLOUD SYNC (Firebase RTDB per uid) ============================
+   * Paths: users/{uid}/orcamento|catalogo|cofre|arp|entregas|histEntregas
+   * Envelope: { updatedAt:ms, cleared?:bool, data:... }
+   * Merge: newest updatedAt wins; empty local never overwrites cloud unless Limpar (cleared).
+   */
+  LICSYSTEM.cloudSync = {
+    DEBOUNCE_MS: 900,
+    _uid: null,
+    _onlineWired: false,
+    _pulling: false,
+    _pushTimers: {},
+    _meta: null,
+
+    path: function(key){
+      var uid = this._uid || (LICSYSTEM.state.authUser && LICSYSTEM.state.authUser.uid);
+      if(!uid) return null;
+      return "users/" + uid + "/" + key;
+    },
+
+    readMeta: function(){
+      if(this._meta) return this._meta;
+      try{
+        this._meta = JSON.parse(localStorage.getItem(CLOUD_META_KEY) || "{}") || {};
+      }catch(e){ this._meta = {}; }
+      return this._meta;
+    },
+
+    touchMeta: function(key, ts){
+      var m = this.readMeta();
+      m[key] = Number(ts) || Date.now();
+      this._meta = m;
+      try{ localStorage.setItem(CLOUD_META_KEY, JSON.stringify(m)); }catch(e){}
+    },
+
+    metaTs: function(key){
+      var m = this.readMeta();
+      return Number(m[key] || 0) || 0;
+    },
+
+    setStatus: function(kind, text){
+      var node = el("syncStatus");
+      if(!node) return;
+      if(!text){
+        node.hidden = true;
+        node.textContent = "";
+        node.className = "sync-status";
+        return;
+      }
+      node.hidden = false;
+      node.textContent = text;
+      node.className = "sync-status" + (kind ? (" is-" + kind) : "");
+    },
+
+    toFb: function(obj){
+      try{ return JSON.parse(JSON.stringify(obj)); }
+      catch(e){ return obj; }
+    },
+
+    isOrcDataEmpty: function(data){
+      if(!data) return true;
+      var items = Array.isArray(data) ? data : data.items;
+      if(!items || !items.length) return true;
+      var meta = (!Array.isArray(data) && data.meta) ? data.meta : {};
+      var hasMeta = !!(meta && (String(meta.nome||"").trim() || String(meta.numero||"").trim() || meta.catalogId));
+      var hasRow = false;
+      for(var i=0;i<items.length;i++){
+        if(LICSYSTEM.orcamento && !LICSYSTEM.orcamento.isEmptyRow(items[i])){ hasRow = true; break; }
+      }
+      return !hasRow && !hasMeta;
+    },
+
+    isListEmpty: function(data){
+      if(data == null) return true;
+      if(Array.isArray(data)) return !data.length;
+      if(typeof data === "object") return !Object.keys(data).length;
+      return false;
+    },
+
+    buildOrcData: function(){
+      return {
+        v: 2,
+        items: (LICSYSTEM.state.orcItems || []).map(function(it){
+          return LICSYSTEM.orcamento.normalizeItem(it);
+        }),
+        meta: {
+          nome: LICSYSTEM.state.orcMetaNome || "",
+          numero: LICSYSTEM.state.orcMetaNumero || "",
+          catalogId: LICSYSTEM.state.orcCatalogId || null
+        },
+        page: LICSYSTEM.state.orcPage || 1,
+        savedAt: Date.now()
+      };
+    },
+
+    applyOrcData: function(data){
+      if(!data) return;
+      var items = Array.isArray(data) ? data : (data.items || []);
+      var meta = (!Array.isArray(data) && data.meta) ? data.meta : {};
+      LICSYSTEM.state.orcItems = (items.length ? items : [LICSYSTEM.orcamento.emptyItem()])
+        .map(function(it){ return LICSYSTEM.orcamento.normalizeItem(it); });
+      if(!LICSYSTEM.state.orcItems.length) LICSYSTEM.state.orcItems = [LICSYSTEM.orcamento.emptyItem()];
+      LICSYSTEM.state.orcMetaNome = meta.nome != null ? String(meta.nome) : "";
+      LICSYSTEM.state.orcMetaNumero = meta.numero != null ? String(meta.numero) : "";
+      LICSYSTEM.state.orcCatalogId = meta.catalogId != null ? meta.catalogId : null;
+      if(!Array.isArray(data) && data.page != null){
+        LICSYSTEM.state.orcPage = Math.max(1, Number(data.page) || 1);
+      }
+      var payload = {
+        v: 2,
+        items: LICSYSTEM.state.orcItems.map(function(it){ return LICSYSTEM.orcamento.normalizeItem(it); }),
+        meta: {
+          nome: LICSYSTEM.state.orcMetaNome || "",
+          numero: LICSYSTEM.state.orcMetaNumero || "",
+          catalogId: LICSYSTEM.state.orcCatalogId || null
+        },
+        page: LICSYSTEM.state.orcPage || 1,
+        savedAt: Number((!Array.isArray(data) && (data.updatedAt || data.savedAt)) || Date.now()),
+        updatedAt: Number((!Array.isArray(data) && (data.updatedAt || data.savedAt)) || Date.now())
+      };
+      try{ localStorage.setItem(ORC_KEY, JSON.stringify(payload)); }catch(e){}
+      LICSYSTEM.state._orcDirty = true;
+      LICSYSTEM.state._orcRendered = false;
+      try{ LICSYSTEM.orcamento.updateMeta(); }catch(e){}
+      if(LICSYSTEM.state.currentView === "orcamento"){
+        try{ LICSYSTEM.orcamento.render({ save:false }); }catch(e){}
+      }
+    },
+
+    readLocalEnvelope: function(key){
+      try{
+        if(key === "orcamento"){
+          var raw = JSON.parse(localStorage.getItem(ORC_KEY) || "null");
+          if(raw == null) return null;
+          var data = Array.isArray(raw)
+            ? { v:2, items: raw, meta:{}, page:1, savedAt: this.metaTs("orcamento") }
+            : raw;
+          var ts = Number(data.updatedAt || data.savedAt || this.metaTs("orcamento") || 0);
+          return { updatedAt: ts, cleared: !!data.cleared, data: data };
+        }
+        if(key === "catalogo"){
+          var cat = JSON.parse(localStorage.getItem("licsystem_catalogo_v1") || "null");
+          if(cat == null) return null;
+          return { updatedAt: this.metaTs("catalogo"), data: Array.isArray(cat) ? cat : [] };
+        }
+        if(key === "cofre"){
+          var cof = JSON.parse(localStorage.getItem(COFRE_KEY) || "null");
+          if(cof == null) return null;
+          return { updatedAt: this.metaTs("cofre"), data: cof && typeof cof === "object" ? cof : {} };
+        }
+        if(key === "arp"){
+          var arp = JSON.parse(localStorage.getItem("licsystem_arp_v1") || "null");
+          if(arp == null) return null;
+          return { updatedAt: this.metaTs("arp"), data: Array.isArray(arp) ? arp : [] };
+        }
+        if(key === "entregas"){
+          var ent = JSON.parse(localStorage.getItem("licsystem_entregas_v1") || "null");
+          if(ent == null) return null;
+          return { updatedAt: this.metaTs("entregas"), data: Array.isArray(ent) ? ent : [] };
+        }
+        if(key === "histEntregas"){
+          var hist = JSON.parse(localStorage.getItem("licsystem_hist_entregas_v1") || "null");
+          if(hist == null) return null;
+          return { updatedAt: this.metaTs("histEntregas"), data: Array.isArray(hist) ? hist : [] };
+        }
+      }catch(e){}
+      return null;
+    },
+
+    isEnvelopeEmpty: function(key, env){
+      if(!env) return true;
+      if(env.cleared) return true;
+      var data = env.data;
+      if(key === "orcamento") return this.isOrcDataEmpty(data);
+      return this.isListEmpty(data);
+    },
+
+    applyEnvelope: function(key, env){
+      if(!env) return;
+      var data = env.data;
+      var ts = Number(env.updatedAt || Date.now());
+      if(key === "orcamento"){
+        if(env.cleared || this.isOrcDataEmpty(data)){
+          LICSYSTEM.state.orcItems = [LICSYSTEM.orcamento.emptyItem()];
+          LICSYSTEM.state.orcPage = 1;
+          LICSYSTEM.state.orcCatalogId = null;
+          LICSYSTEM.state.orcMetaNome = "";
+          LICSYSTEM.state.orcMetaNumero = "";
+          var emptyPayload = this.buildOrcData();
+          emptyPayload.savedAt = ts;
+          emptyPayload.updatedAt = ts;
+          emptyPayload.cleared = !!env.cleared;
+          try{ localStorage.setItem(ORC_KEY, JSON.stringify(emptyPayload)); }catch(e){}
+          this.touchMeta("orcamento", ts);
+          try{ LICSYSTEM.orcamento.updateMeta(); }catch(e){}
+          if(LICSYSTEM.state.currentView === "orcamento"){
+            try{ LICSYSTEM.orcamento.render({ save:false }); }catch(e){}
+          }
+        } else {
+          if(data && typeof data === "object" && !Array.isArray(data)){
+            data.updatedAt = ts;
+            data.savedAt = ts;
+          }
+          this.applyOrcData(data);
+          this.touchMeta("orcamento", ts);
+        }
+        return;
+      }
+      if(key === "catalogo"){
+        LICSYSTEM.catalogo.items = Array.isArray(data) ? data : [];
+        try{ localStorage.setItem("licsystem_catalogo_v1", JSON.stringify(LICSYSTEM.catalogo.items)); }catch(e){}
+        this.touchMeta("catalogo", ts);
+        try{ if(typeof listarProdutos === "function") listarProdutos(); }catch(e){}
+        return;
+      }
+      if(key === "cofre"){
+        LICSYSTEM.cofre.data = (data && typeof data === "object" && !Array.isArray(data)) ? data : {};
+        try{ localStorage.setItem(COFRE_KEY, JSON.stringify(LICSYSTEM.cofre.data)); }catch(e){}
+        this.touchMeta("cofre", ts);
+        try{ LICSYSTEM.cofre.render(); }catch(e){}
+        return;
+      }
+      if(key === "arp"){
+        LICSYSTEM.arp.atas = Array.isArray(data) ? data : [];
+        try{ localStorage.setItem("licsystem_arp_v1", JSON.stringify(LICSYSTEM.arp.atas)); }catch(e){}
+        this.touchMeta("arp", ts);
+        try{ if(LICSYSTEM.arp.renderAll) LICSYSTEM.arp.renderAll(); }catch(e){}
+        return;
+      }
+      if(key === "entregas"){
+        LICSYSTEM.entregas.items = Array.isArray(data) ? data : [];
+        try{ localStorage.setItem("licsystem_entregas_v1", JSON.stringify(LICSYSTEM.entregas.items)); }catch(e){}
+        this.touchMeta("entregas", ts);
+        return;
+      }
+      if(key === "histEntregas"){
+        LICSYSTEM.histEntregas.items = Array.isArray(data) ? data : [];
+        LICSYSTEM.histEntregas._loaded = true;
+        try{ localStorage.setItem("licsystem_hist_entregas_v1", JSON.stringify(LICSYSTEM.histEntregas.items)); }catch(e){}
+        this.touchMeta("histEntregas", ts);
+        try{ if(LICSYSTEM.histEntregas.render) LICSYSTEM.histEntregas.render(); }catch(e){}
+      }
+    },
+
+    pickWinner: function(localEnv, cloudEnv){
+      if(!localEnv && !cloudEnv) return null;
+      if(!localEnv) return { source: "cloud", env: cloudEnv };
+      if(!cloudEnv) return { source: "local", env: localEnv };
+      var lt = Number(localEnv.updatedAt || 0);
+      var ct = Number(cloudEnv.updatedAt || 0);
+      if(ct > lt) return { source: "cloud", env: cloudEnv };
+      if(lt > ct) return { source: "local", env: localEnv };
+      return { source: "local", env: localEnv };
+    },
+
+    pushKey: function(key, opts){
+      opts = opts || {};
+      var self = this;
+      var path = self.path(key);
+      if(!path || !utils.hasFirebaseConfig()) return Promise.resolve({ skipped: true });
+      if(!navigator.onLine){
+        self.setStatus("offline", "Offline");
+        return Promise.resolve({ offline: true });
+      }
+
+      var env = opts.env || self.readLocalEnvelope(key);
+      if(!env && opts.forceClear){
+        env = { updatedAt: Date.now(), cleared: true, data: key === "orcamento" ? self.buildOrcData() : (key === "cofre" ? {} : []) };
+      }
+      if(!env) return Promise.resolve({ skipped: true });
+
+      var empty = self.isEnvelopeEmpty(key, env);
+      if(empty && !opts.forceClear && !env.cleared){
+        // Fresh/empty browser must not wipe cloud.
+        return Promise.resolve({ skipped: true, reason: "empty-local" });
+      }
+
+      if(opts.forceClear){
+        env.cleared = true;
+        env.updatedAt = Date.now();
+      }
+      if(!env.updatedAt) env.updatedAt = Date.now();
+
+      self.setStatus("syncing", "Sincronizando…");
+      var payload = self.toFb({
+        updatedAt: env.updatedAt,
+        cleared: !!env.cleared,
+        data: env.data
+      });
+      return utils.firebaseSet(path, payload).then(function(){
+        self.touchMeta(key, env.updatedAt);
+        self.setStatus("ok", "Sincronizado");
+        return { ok: true };
+      }).catch(function(err){
+        console.warn("cloudSync push "+key, err);
+        self.setStatus("error", "Sync falhou");
+        return { ok: false, error: err };
+      });
+    },
+
+    schedulePush: function(key, opts){
+      var self = this;
+      if(self._pulling) return;
+      clearTimeout(self._pushTimers[key]);
+      self._pushTimers[key] = setTimeout(function(){
+        self._pushTimers[key] = null;
+        self.pushKey(key, opts);
+      }, self.DEBOUNCE_MS);
+    },
+
+    flushPush: function(key, opts){
+      clearTimeout(this._pushTimers[key]);
+      this._pushTimers[key] = null;
+      return this.pushKey(key, opts);
+    },
+
+    notifyLocalChange: function(key, opts){
+      opts = opts || {};
+      var ts = Number(opts.updatedAt || Date.now());
+      this.touchMeta(key, ts);
+      if(opts.immediate || opts.forceClear){
+        return this.flushPush(key, opts);
+      }
+      this.schedulePush(key, opts);
+      return Promise.resolve();
+    },
+
+    mergeKey: function(key, cloudEnv, opts){
+      opts = opts || {};
+      var localEnv = this.readLocalEnvelope(key);
+      // After account switch, ignore previous user's local until cloud applied.
+      if(opts.replaceFromCloud){
+        if(cloudEnv){
+          this.applyEnvelope(key, cloudEnv);
+          return { source: "cloud" };
+        }
+        // No cloud yet for new user — start clean (don't keep other account's work).
+        if(key === "orcamento"){
+          this.applyEnvelope(key, { updatedAt: Date.now(), cleared: true, data: this.buildOrcData() });
+        } else if(key === "cofre"){
+          this.applyEnvelope(key, { updatedAt: Date.now(), cleared: true, data: {} });
+        } else {
+          this.applyEnvelope(key, { updatedAt: Date.now(), cleared: true, data: [] });
+        }
+        return { source: "cleared" };
+      }
+
+      // Local empty + cloud has data → take cloud (even if local ts missing/0).
+      if(this.isEnvelopeEmpty(key, localEnv) && cloudEnv && !this.isEnvelopeEmpty(key, cloudEnv)){
+        this.applyEnvelope(key, cloudEnv);
+        return { source: "cloud" };
+      }
+      // Cloud empty/cleared older than local with data → keep local and push.
+      var win = this.pickWinner(localEnv, cloudEnv);
+      if(!win) return { source: "none" };
+      if(win.source === "cloud"){
+        this.applyEnvelope(key, win.env);
+        return { source: "cloud" };
+      }
+      // local wins (or tie): push if cloud missing/older
+      if(!cloudEnv || Number((cloudEnv && cloudEnv.updatedAt) || 0) < Number((localEnv && localEnv.updatedAt) || 0)){
+        if(!this.isEnvelopeEmpty(key, localEnv) || (localEnv && localEnv.cleared)){
+          this.pushKey(key, { env: localEnv, forceClear: !!(localEnv && localEnv.cleared) });
+        }
+      }
+      return { source: "local" };
+    },
+
+    pullAll: function(opts){
+      opts = opts || {};
+      var self = this;
+      if(!utils.hasFirebaseConfig() || !self.path("orcamento")){
+        return Promise.resolve();
+      }
+      if(!navigator.onLine){
+        self.setStatus("offline", "Offline");
+        return Promise.resolve();
+      }
+      self._pulling = true;
+      self.setStatus("syncing", "Sincronizando…");
+      var keys = ["orcamento", "catalogo", "cofre", "arp", "entregas", "histEntregas"];
+      return utils.ensureFirebase().then(function(fb){
+        var uid = self._uid || (LICSYSTEM.state.authUser && LICSYSTEM.state.authUser.uid);
+        return fb.database().ref("users/" + uid).once("value").then(function(snap){
+          return snap.val() || {};
+        });
+      }).then(function(root){
+        keys.forEach(function(key){
+          var raw = root[key];
+          var cloudEnv = null;
+          if(raw && typeof raw === "object"){
+            cloudEnv = {
+              updatedAt: Number(raw.updatedAt || 0),
+              cleared: !!raw.cleared,
+              data: raw.data !== undefined ? raw.data : raw
+            };
+          }
+          self.mergeKey(key, cloudEnv, opts);
+        });
+        self.setStatus("ok", "Sincronizado");
+      }).catch(function(err){
+        console.warn("cloudSync pullAll", err);
+        self.setStatus("error", "Sync falhou");
+      }).then(function(){
+        self._pulling = false;
+      });
+    },
+
+    onUser: function(user){
+      if(!user || !user.uid) return Promise.resolve();
+      var prev = null;
+      try{ prev = localStorage.getItem(CLOUD_LAST_UID_KEY); }catch(e){}
+      var switched = !!(prev && prev !== user.uid);
+      this._uid = user.uid;
+      try{ localStorage.setItem(CLOUD_LAST_UID_KEY, user.uid); }catch(e){}
+      this.wireOnline();
+      // Flush pending orçamento edits before merge
+      try{ if(LICSYSTEM.orcamento && LICSYSTEM.orcamento.flushSave) LICSYSTEM.orcamento.flushSave({ skipCloud: true }); }catch(e){}
+      return this.pullAll({ replaceFromCloud: switched });
+    },
+
+    onLogout: function(){
+      var self = this;
+      Object.keys(self._pushTimers).forEach(function(k){
+        clearTimeout(self._pushTimers[k]);
+        self._pushTimers[k] = null;
+      });
+      self._uid = null;
+      self.setStatus("", "");
+    },
+
+    wireOnline: function(){
+      if(this._onlineWired) return;
+      this._onlineWired = true;
+      var self = this;
+      window.addEventListener("online", function(){
+        if(self._uid || (LICSYSTEM.state.authUser && LICSYSTEM.state.authUser.uid)){
+          self.pullAll();
+        }
+      });
+      window.addEventListener("offline", function(){
+        self.setStatus("offline", "Offline");
+      });
+    }
+  };
 
   /* risk dictionary */
   var PALAVRAS_RISCO = ["instalação","instalacao","amostra","garantia","visita técnica","visita tecnica","treinamento","montagem","mão de obra","mao de obra","serviços","servicos"];
@@ -1724,8 +2171,10 @@
       }
       LICSYSTEM.orcamento.updateMeta();
     },
-    save:function(){
+    save:function(opts){
+      opts = opts || {};
       try{
+        var now = Date.now();
         var payload = {
           v: 2,
           items: (LICSYSTEM.state.orcItems || []).map(function(it){
@@ -1737,9 +2186,18 @@
             catalogId: LICSYSTEM.state.orcCatalogId || null
           },
           page: LICSYSTEM.state.orcPage || 1,
-          savedAt: Date.now()
+          savedAt: now,
+          updatedAt: now
         };
+        if(opts.forceClear) payload.cleared = true;
         localStorage.setItem(ORC_KEY, JSON.stringify(payload));
+        if(!opts.skipCloud && LICSYSTEM.cloudSync){
+          LICSYSTEM.cloudSync.notifyLocalChange("orcamento", {
+            updatedAt: now,
+            forceClear: !!opts.forceClear,
+            immediate: !!opts.immediate
+          });
+        }
       }catch(e){
         console.warn("Orçamento: não foi possível salvar tudo no navegador (limite de armazenamento).", e);
       }
@@ -1752,11 +2210,12 @@
         LICSYSTEM.state._orcDirty = false;
       }, 400);
     },
-    flushSave:function(){
+    flushSave:function(opts){
+      opts = opts || {};
       clearTimeout(LICSYSTEM.orcamento._saveTimer);
       LICSYSTEM.orcamento._saveTimer = null;
       LICSYSTEM.orcamento.syncFromDom();
-      LICSYSTEM.orcamento.save();
+      LICSYSTEM.orcamento.save(opts);
       LICSYSTEM.state._orcDirty = false;
     },
     /** Pull live input values into state (covers pending keystrokes before leave). */
@@ -1961,8 +2420,8 @@
       LICSYSTEM.state.orcMetaNome = "";
       LICSYSTEM.state.orcMetaNumero = "";
       LICSYSTEM.state._orcDirty = true;
-      LICSYSTEM.orcamento.render();
-      LICSYSTEM.orcamento.flushSave();
+      LICSYSTEM.orcamento.render({ save:false });
+      LICSYSTEM.orcamento.flushSave({ forceClear: true, immediate: true });
       LICSYSTEM.orcamento.updateMeta();
     },
 
@@ -2824,7 +3283,11 @@
       });
     },
     save:function(){
-      try{ localStorage.setItem(COFRE_KEY, JSON.stringify(LICSYSTEM.cofre.data)); showAlertTmp("Documentos salvos."); }catch(e){}
+      try{
+        localStorage.setItem(COFRE_KEY, JSON.stringify(LICSYSTEM.cofre.data));
+        if(LICSYSTEM.cloudSync) LICSYSTEM.cloudSync.notifyLocalChange("cofre");
+        showAlertTmp("Documentos salvos.");
+      }catch(e){}
       function showAlertTmp(){ /* subtle feedback */ }
     }
   };
@@ -3488,6 +3951,7 @@
     saveLocal:function(){
       try{
         localStorage.setItem(ENTREGAS_KEY, JSON.stringify(LICSYSTEM.entregas.items));
+        if(LICSYSTEM.cloudSync) LICSYSTEM.cloudSync.notifyLocalChange("entregas");
       }catch(e){
         console.warn("Entregas: falha ao salvar localmente", e);
       }
@@ -3712,6 +4176,7 @@
     saveLocal: function(){
       try{
         localStorage.setItem(CATALOGO_KEY, JSON.stringify(LICSYSTEM.catalogo.items));
+        if(LICSYSTEM.cloudSync) LICSYSTEM.cloudSync.notifyLocalChange("catalogo");
       }catch(e){
         console.warn("Catálogo: falha ao salvar localmente", e);
       }
@@ -3964,6 +4429,7 @@
     saveLocal: function(){
       try{
         localStorage.setItem(ARP_KEY, JSON.stringify(LICSYSTEM.arp.atas));
+        if(LICSYSTEM.cloudSync) LICSYSTEM.cloudSync.notifyLocalChange("arp");
       }catch(e){
         console.warn("ARP: falha ao salvar localmente", e);
       }
@@ -4451,9 +4917,9 @@
       if(LICSYSTEM.histEntregas._loaded) return LICSYSTEM.histEntregas.items;
       try{
         var raw = localStorage.getItem(HIST_ENTREGAS_KEY);
-        var saved = raw ? JSON.parse(raw) : null;
-        if(Array.isArray(saved) && saved.length){
-          LICSYSTEM.histEntregas.items = saved;
+        if(raw != null){
+          var saved = JSON.parse(raw);
+          LICSYSTEM.histEntregas.items = Array.isArray(saved) ? saved : [];
         } else {
           LICSYSTEM.histEntregas.items = LICSYSTEM.histEntregas.exemplos();
           LICSYSTEM.histEntregas.saveLocal();
@@ -4468,6 +4934,7 @@
     saveLocal: function(){
       try{
         localStorage.setItem(HIST_ENTREGAS_KEY, JSON.stringify(LICSYSTEM.histEntregas.items || []));
+        if(LICSYSTEM.cloudSync) LICSYSTEM.cloudSync.notifyLocalChange("histEntregas");
       }catch(e){}
       // TODO Firestore: collection('historico_entregas').doc(id).set(item, { merge:true })
     },
@@ -4955,6 +5422,7 @@
       return utils.ensureFirebaseAuth().then(function(fb){
         return fb.auth().signOut();
       }).then(function(){
+        try{ if(LICSYSTEM.cloudSync) LICSYSTEM.cloudSync.onLogout(); }catch(e){}
         LICSYSTEM.state.authUser = null;
         LICSYSTEM.auth.lock();
         showAlert("authAlert","ok","Você saiu do sistema.");
@@ -5044,8 +5512,11 @@
                   LICSYSTEM.auth._onReady(user);
                   LICSYSTEM.auth._onReady = null;
                 }
+              } else {
+                try{ if(LICSYSTEM.cloudSync) LICSYSTEM.cloudSync.onUser(user); }catch(e){}
               }
             } else {
+              try{ if(LICSYSTEM.cloudSync) LICSYSTEM.cloudSync.onLogout(); }catch(e){}
               LICSYSTEM.state.authUser = null;
               LICSYSTEM.auth.lock();
             }
@@ -5105,8 +5576,12 @@
     // Orçamento só monta quando abrir a aba (planilha grande)
       setTimeout(function(){
         LICSYSTEM.ferramentas.getPerfil(true).catch(function(){});
-        // Database em background (perfil/Firebase)
-        utils.ensureFirebase().catch(function(){});
+        // Database + sync na nuvem (por conta)
+        utils.ensureFirebase().then(function(){
+          if(LICSYSTEM.state.authUser && LICSYSTEM.cloudSync){
+            return LICSYSTEM.cloudSync.onUser(LICSYSTEM.state.authUser);
+          }
+        }).catch(function(){});
       }, 400);
       setTimeout(function(){
         if(window.__licsystemInitVoiceflow) window.__licsystemInitVoiceflow();
