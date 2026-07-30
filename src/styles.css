@@ -808,6 +808,77 @@
   .orc-save-card p{margin:0 0 14px;font-size:13px;color:var(--ls-muted)}
   .orc-save-card .btn-row{justify-content:flex-end;margin-top:16px}
 
+  /* Modal documentos exigidos (Análise IA) */
+  #docsOverlay{
+    position:fixed;inset:0;z-index:120;background:rgba(21,38,66,.45);
+    display:none;align-items:center;justify-content:center;padding:18px;
+  }
+  #docsOverlay.open{display:flex}
+  .docs-modal-card{
+    width:100%;max-width:560px;max-height:min(86vh,720px);overflow:auto;
+    background:#fff;border-radius:16px;box-shadow:var(--shadow-lg);padding:22px 22px 18px;
+  }
+  .docs-modal-card h3{margin:0 0 6px;font-size:17px;color:var(--ls-navy)}
+  .docs-modal-card p{margin:0 0 14px;font-size:13px;color:var(--ls-muted)}
+  .docs-modal-card .btn-row{justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+  .docs-modal-list{display:flex;flex-direction:column;gap:8px}
+  .docs-modal-item{
+    display:flex;gap:10px;align-items:flex-start;padding:10px 12px;
+    border:1px solid var(--ls-line);border-radius:10px;background:#f7f9fc;
+  }
+  .docs-modal-item .di-tipo{
+    flex-shrink:0;font-size:10.5px;font-weight:700;text-transform:uppercase;
+    letter-spacing:.4px;padding:3px 7px;border-radius:6px;background:var(--ls-navy);color:#fff;
+  }
+  .docs-modal-item .di-tipo.t-tecnica{background:#1a4fa0}
+  .docs-modal-item .di-tipo.t-outro{background:var(--ls-muted)}
+  .docs-modal-item .di-body{min-width:0;flex:1}
+  .docs-modal-item .di-nome{font-weight:700;color:var(--ls-navy);font-size:13px;word-break:break-word}
+  .docs-modal-item .di-obs{font-size:12px;color:var(--ls-muted);margin-top:2px;word-break:break-word}
+
+  /* Checklist documentos do edital */
+  .docs-meta{
+    display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;
+    margin-bottom:12px;padding:10px 12px;border-radius:10px;
+    background:#f7f9fc;border:1px solid var(--ls-line);font-size:13px;
+  }
+  .docs-meta b{color:var(--ls-navy)}
+  .docs-summary{
+    display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;
+  }
+  .docs-summary .docs-pill{
+    font-size:12px;font-weight:700;padding:5px 10px;border-radius:999px;
+    background:#e8edf5;color:var(--ls-navy);
+  }
+  .docs-summary .docs-pill.ok{background:var(--ls-green-bg);color:#136c3d}
+  .docs-summary .docs-pill.pend{background:var(--ls-yellow-bg);color:#8a6410}
+  .docs-list{width:100%}
+  .docs-row{
+    display:grid;grid-template-columns:auto 1fr auto;gap:12px 14px;
+    align-items:center;padding:12px 0;border-bottom:1px solid var(--ls-line);
+  }
+  .docs-row:last-child{border-bottom:0}
+  .docs-row .docs-ok{
+    display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:12px;
+    color:var(--ls-navy);cursor:pointer;user-select:none;white-space:nowrap;
+  }
+  .docs-row .docs-ok input{width:18px;height:18px;accent-color:var(--ls-green);cursor:pointer}
+  .docs-row.is-ok .docs-name{color:var(--ls-green)}
+  .docs-name{font-weight:700;color:var(--ls-navy);font-size:13.5px;word-break:break-word}
+  .docs-obs{font-size:12px;color:var(--ls-muted);margin-top:3px;word-break:break-word}
+  .docs-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .docs-badge{
+    font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;
+    background:#e8edf5;color:var(--ls-navy);
+  }
+  .docs-badge.cofre{background:#e8f0fe;color:#1a4fa0}
+  .docs-badge.ok{background:var(--ls-green-bg);color:#136c3d}
+  .docs-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  @media (max-width:720px){
+    .docs-row{grid-template-columns:1fr;gap:8px}
+    .docs-actions{justify-content:flex-start}
+  }
+
   /* ---------------- Cruzamento result ---------------- */
   .result-item{border:1px solid var(--ls-line);border-radius:14px;padding:16px;margin-bottom:12px;background:#fff;width:100%;max-width:100%;box-sizing:border-box}
   .result-item.r-green{border-left:5px solid var(--ls-green)}

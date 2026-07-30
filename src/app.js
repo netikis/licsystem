@@ -829,11 +829,12 @@
   var ORC_KEY = "licsystem_orcamento_v2";
   var ORC_KEY_LEGACY = "licsystem_orcamento_v1";
   var COFRE_KEY = "licsystem_cofre_v1";
+  var DOCS_CHECKLIST_KEY = "licsystem_docs_checklist_v1";
   var CLOUD_META_KEY = "licsystem_cloud_meta_v1";
   var CLOUD_LAST_UID_KEY = "licsystem_cloud_last_uid";
 
   /* ============================ CLOUD SYNC (Firebase RTDB per uid) ============================
-   * Paths: users/{uid}/orcamento|catalogo|cofre|arp|entregas|histEntregas
+   * Paths: users/{uid}/orcamento|catalogo|cofre|docsChecklist|arp|entregas|histEntregas
    * Envelope: { updatedAt:ms, cleared?:bool, data:... }
    * Merge: newest updatedAt wins; empty local never overwrites cloud unless Limpar (cleared).
    */
@@ -981,6 +982,11 @@
           if(cof == null) return null;
           return { updatedAt: this.metaTs("cofre"), data: cof && typeof cof === "object" ? cof : {} };
         }
+        if(key === "docsChecklist"){
+          var dchk = JSON.parse(localStorage.getItem(DOCS_CHECKLIST_KEY) || "null");
+          if(dchk == null) return null;
+          return { updatedAt: this.metaTs("docsChecklist"), data: dchk && typeof dchk === "object" ? dchk : {} };
+        }
         if(key === "arp"){
           var arp = JSON.parse(localStorage.getItem("licsystem_arp_v1") || "null");
           if(arp == null) return null;
@@ -1005,6 +1011,10 @@
       if(env.cleared) return true;
       var data = env.data;
       if(key === "orcamento") return this.isOrcDataEmpty(data);
+      if(key === "docsChecklist"){
+        if(!data || typeof data !== "object") return true;
+        return !Array.isArray(data.documentos) || !data.documentos.length;
+      }
       return this.isListEmpty(data);
     },
 
@@ -1053,6 +1063,15 @@
         try{ LICSYSTEM.cofre.render(); }catch(e){}
         return;
       }
+      if(key === "docsChecklist"){
+        if(LICSYSTEM.docsChecklist){
+          LICSYSTEM.docsChecklist.applyData(
+            (data && typeof data === "object" && !Array.isArray(data)) ? data : {}
+          );
+        }
+        this.touchMeta("docsChecklist", ts);
+        return;
+      }
       if(key === "arp"){
         LICSYSTEM.arp.atas = Array.isArray(data) ? data : [];
         try{ localStorage.setItem("licsystem_arp_v1", JSON.stringify(LICSYSTEM.arp.atas)); }catch(e){}
@@ -1098,7 +1117,13 @@
 
       var env = opts.env || self.readLocalEnvelope(key);
       if(!env && opts.forceClear){
-        env = { updatedAt: Date.now(), cleared: true, data: key === "orcamento" ? self.buildOrcData() : (key === "cofre" ? {} : []) };
+        env = {
+          updatedAt: Date.now(),
+          cleared: true,
+          data: key === "orcamento"
+            ? self.buildOrcData()
+            : (key === "cofre" || key === "docsChecklist" ? {} : [])
+        };
       }
       if(!env) return Promise.resolve({ skipped: true });
 
@@ -1170,7 +1195,7 @@
         // No cloud yet for new user — start clean (don't keep other account's work).
         if(key === "orcamento"){
           this.applyEnvelope(key, { updatedAt: Date.now(), cleared: true, data: this.buildOrcData() });
-        } else if(key === "cofre"){
+        } else if(key === "cofre" || key === "docsChecklist"){
           this.applyEnvelope(key, { updatedAt: Date.now(), cleared: true, data: {} });
         } else {
           this.applyEnvelope(key, { updatedAt: Date.now(), cleared: true, data: [] });
@@ -1211,7 +1236,7 @@
       }
       self._pulling = true;
       self.setStatus("syncing", "Sincronizando…");
-      var keys = ["orcamento", "catalogo", "cofre", "arp", "entregas", "histEntregas"];
+      var keys = ["orcamento", "catalogo", "cofre", "docsChecklist", "arp", "entregas", "histEntregas"];
       return utils.ensureFirebase().then(function(fb){
         var uid = self._uid || (LICSYSTEM.state.authUser && LICSYSTEM.state.authUser.uid);
         return fb.database().ref("users/" + uid).once("value").then(function(snap){
@@ -3289,6 +3314,378 @@
         showAlertTmp("Documentos salvos.");
       }catch(e){}
       function showAlertTmp(){ /* subtle feedback */ }
+    },
+    listDocs: function(){ return COFRE_DOCS.slice(); }
+  };
+
+  /* ============================ DOCS CHECKLIST (edital) ============================ */
+  LICSYSTEM.docsChecklist = {
+    data: {
+      editalNome: "",
+      filename: "",
+      updatedAt: 0,
+      documentos: []
+    },
+
+    emptyData: function(){
+      return { editalNome: "", filename: "", updatedAt: 0, documentos: [] };
+    },
+
+    load: function(){
+      try{
+        var raw = JSON.parse(localStorage.getItem(DOCS_CHECKLIST_KEY) || "null");
+        if(raw && typeof raw === "object" && !Array.isArray(raw)){
+          LICSYSTEM.docsChecklist.applyData(raw, { skipPersist: true });
+        } else {
+          LICSYSTEM.docsChecklist.data = LICSYSTEM.docsChecklist.emptyData();
+        }
+      }catch(e){
+        LICSYSTEM.docsChecklist.data = LICSYSTEM.docsChecklist.emptyData();
+      }
+    },
+
+    applyData: function(data, opts){
+      opts = opts || {};
+      var src = (data && typeof data === "object" && !Array.isArray(data)) ? data : {};
+      var docs = Array.isArray(src.documentos) ? src.documentos : [];
+      LICSYSTEM.docsChecklist.data = {
+        editalNome: String(src.editalNome || "").slice(0, 220),
+        filename: String(src.filename || "").slice(0, 220),
+        updatedAt: Number(src.updatedAt || 0) || 0,
+        documentos: docs.map(function(d, i){
+          return LICSYSTEM.docsChecklist.normalizeItem(d, i);
+        })
+      };
+      if(!opts.skipPersist){
+        try{ localStorage.setItem(DOCS_CHECKLIST_KEY, JSON.stringify(LICSYSTEM.docsChecklist.data)); }catch(e){}
+      }
+      if(LICSYSTEM.state.currentView === "docsChecklist"){
+        try{ LICSYSTEM.docsChecklist.render(); }catch(e){}
+      }
+    },
+
+    normalizeItem: function(d, idx){
+      d = d || {};
+      var id = String(d.id || ("doc_" + Date.now() + "_" + (idx || 0)));
+      return {
+        id: id,
+        nome: String(d.nome || "").trim().slice(0, 220) || "Documento",
+        tipo: LICSYSTEM.docsChecklist.normTipo(d.tipo),
+        obs: String(d.obs || "").trim().slice(0, 400),
+        ok: !!d.ok,
+        cofreKey: d.cofreKey ? String(d.cofreKey) : null,
+        manual: !!d.manual
+      };
+    },
+
+    normTipo: function(tipo){
+      var t = String(tipo || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
+      if(t.indexOf("tecnic") !== -1) return "tecnica";
+      if(t.indexOf("habilit") !== -1 || t.indexOf("jurid") !== -1 || t.indexOf("fiscal") !== -1 || t.indexOf("econom") !== -1){
+        return "habilitacao";
+      }
+      return "outro";
+    },
+
+    tipoLabel: function(tipo){
+      var t = LICSYSTEM.docsChecklist.normTipo(tipo);
+      if(t === "tecnica") return "Técnica";
+      if(t === "habilitacao") return "Habilitação";
+      return "Outro";
+    },
+
+    normText: function(s){
+      var t = String(s || "").toLowerCase();
+      try{ t = t.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }catch(e){}
+      return t.replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+    },
+
+    matchCofre: function(nome){
+      var n = LICSYSTEM.docsChecklist.normText(nome);
+      if(!n) return null;
+      var aliases = {
+        cnpj: ["cnpj", "cartao cnpj", "comprovante de inscricao", "cadastro nacional"],
+        cndFederal: ["cnd federal", "receita federal", "divida ativa da uniao", "certidao conjunta federal", "pgfn"],
+        cndEstadual: ["cnd estadual", "fazenda estadual", "icms", "certidao estadual"],
+        cndMunicipal: ["cnd municipal", "fazenda municipal", "iss", "certidao municipal"],
+        fgts: ["fgts", "crf", "caixa economica", "regularidade do fgts"],
+        cndt: ["cndt", "inss", "trabalhista", "debito trabalhista", "tst"],
+        balanco: ["balanco", "balanco patrimonial", "demonstracoes contabeis", "indice de liquidez"],
+        contratoSocial: ["contrato social", "estatuto social", "ato constitutivo", "alteracao contratual"]
+      };
+      var best = null;
+      var bestScore = 0;
+      COFRE_DOCS.forEach(function(doc){
+        var labelN = LICSYSTEM.docsChecklist.normText(doc.label);
+        var score = 0;
+        if(n.indexOf(labelN) !== -1 || labelN.indexOf(n) !== -1) score = 8;
+        var words = labelN.split(" ").filter(function(w){ return w.length > 2; });
+        words.forEach(function(w){ if(n.indexOf(w) !== -1) score += 2; });
+        (aliases[doc.key] || []).forEach(function(a){
+          if(n.indexOf(a) !== -1) score += 5;
+        });
+        if(score > bestScore){
+          bestScore = score;
+          best = doc;
+        }
+      });
+      if(bestScore < 5) return null;
+      return best;
+    },
+
+    persist: function(opts){
+      opts = opts || {};
+      LICSYSTEM.docsChecklist.data.updatedAt = Date.now();
+      try{
+        localStorage.setItem(DOCS_CHECKLIST_KEY, JSON.stringify(LICSYSTEM.docsChecklist.data));
+      }catch(e){}
+      if(!opts.skipCloud && LICSYSTEM.cloudSync){
+        LICSYSTEM.cloudSync.notifyLocalChange("docsChecklist", {
+          updatedAt: LICSYSTEM.docsChecklist.data.updatedAt,
+          immediate: !!opts.immediate
+        });
+      }
+    },
+
+    setFromAnalysis: function(docs, meta){
+      meta = meta || {};
+      var prevOk = {};
+      (LICSYSTEM.docsChecklist.data.documentos || []).forEach(function(d){
+        var k = LICSYSTEM.docsChecklist.normText(d.nome);
+        if(k) prevOk[k] = !!d.ok;
+      });
+      var list = (Array.isArray(docs) ? docs : []).map(function(d, i){
+        var item = LICSYSTEM.docsChecklist.normalizeItem(d, i);
+        var match = LICSYSTEM.docsChecklist.matchCofre(item.nome);
+        if(match){
+          item.cofreKey = match.key;
+          var val = (LICSYSTEM.cofre.data && LICSYSTEM.cofre.data[match.key]) || "";
+          var st = LICSYSTEM.cofre.statusOf(val);
+          // Auto-sugerir OK se cofre tem data válida (não vencido)
+          if(st && st.cls === "b-green" && !item.ok) item.ok = true;
+        }
+        var pk = LICSYSTEM.docsChecklist.normText(item.nome);
+        if(pk && prevOk[pk] != null) item.ok = prevOk[pk];
+        return item;
+      });
+      LICSYSTEM.docsChecklist.data = {
+        editalNome: String(meta.editalNome || meta.filename || "Edital analisado").slice(0, 220),
+        filename: String(meta.filename || "").slice(0, 220),
+        updatedAt: Date.now(),
+        documentos: list
+      };
+      LICSYSTEM.docsChecklist.persist({ immediate: true });
+      LICSYSTEM.docsChecklist.render();
+    },
+
+    summary: function(){
+      var docs = LICSYSTEM.docsChecklist.data.documentos || [];
+      var ok = 0;
+      docs.forEach(function(d){ if(d.ok) ok++; });
+      return { total: docs.length, ok: ok, pend: Math.max(0, docs.length - ok) };
+    },
+
+    render: function(){
+      var box = el("docsList");
+      var meta = el("docsMeta");
+      var sum = el("docsSummary");
+      if(!box) return;
+
+      var data = LICSYSTEM.docsChecklist.data || LICSYSTEM.docsChecklist.emptyData();
+      var docs = data.documentos || [];
+
+      if(meta){
+        if(docs.length || data.editalNome || data.filename){
+          meta.style.display = "flex";
+          meta.innerHTML =
+            "<span><b>Edital:</b> " + utils.escapeHtml(data.editalNome || data.filename || "—") + "</span>" +
+            (data.filename ? "<span class='muted small'>" + utils.escapeHtml(data.filename) + "</span>" : "") +
+            (data.updatedAt ? "<span class='muted small'>Atualizado: " + utils.escapeHtml(new Date(data.updatedAt).toLocaleString("pt-BR")) + "</span>" : "");
+        } else {
+          meta.style.display = "none";
+          meta.innerHTML = "";
+        }
+      }
+
+      var s = LICSYSTEM.docsChecklist.summary();
+      if(sum){
+        if(!docs.length){
+          sum.innerHTML = "";
+        } else {
+          sum.innerHTML =
+            '<span class="docs-pill">' + s.total + ' documento' + (s.total === 1 ? "" : "s") + "</span>" +
+            '<span class="docs-pill ok">' + s.ok + " OK</span>" +
+            '<span class="docs-pill pend">' + s.pend + " pendente" + (s.pend === 1 ? "" : "s") + "</span>";
+        }
+      }
+
+      if(!docs.length){
+        box.innerHTML = '<div class="muted small">Nenhum checklist ainda. Rode a <b>Análise IA</b> em um edital para gerar a lista, ou adicione um documento manualmente.</div>';
+        return;
+      }
+
+      var html = "";
+      docs.forEach(function(d){
+        var match = d.cofreKey ? COFRE_DOCS.filter(function(c){ return c.key === d.cofreKey; })[0] : null;
+        if(!match) match = LICSYSTEM.docsChecklist.matchCofre(d.nome);
+        var cofreHint = "";
+        if(match){
+          var val = (LICSYSTEM.cofre.data && LICSYSTEM.cofre.data[match.key]) || "";
+          var st = LICSYSTEM.cofre.statusOf(val);
+          cofreHint =
+            '<span class="docs-badge cofre">Encontrado no cofre: ' + utils.escapeHtml(match.label) +
+            (st ? " · " + utils.escapeHtml(st.txt) : "") + "</span>";
+          d.cofreKey = match.key;
+        }
+        html +=
+          '<div class="docs-row' + (d.ok ? " is-ok" : "") + '" data-id="' + utils.escapeHtml(d.id) + '">' +
+            '<label class="docs-ok"><input type="checkbox" class="docsOkChk"' + (d.ok ? " checked" : "") + ' /> OK</label>' +
+            '<div>' +
+              '<div class="docs-name">' + utils.escapeHtml(d.nome) + "</div>" +
+              (d.obs ? '<div class="docs-obs">' + utils.escapeHtml(d.obs) + "</div>" : "") +
+              '<div class="docs-badges">' +
+                '<span class="docs-badge">' + utils.escapeHtml(LICSYSTEM.docsChecklist.tipoLabel(d.tipo)) + "</span>" +
+                (d.ok ? '<span class="docs-badge ok">Tenho</span>' : "") +
+                cofreHint +
+              "</div>" +
+            "</div>" +
+            '<div class="docs-actions">' +
+              '<button type="button" class="btn btn-ghost btn-sm docsRemove" title="Remover">✕</button>' +
+            "</div>" +
+          "</div>";
+      });
+      box.innerHTML = html;
+
+      box.querySelectorAll(".docsOkChk").forEach(function(chk){
+        chk.addEventListener("change", function(){
+          var row = chk.closest(".docs-row");
+          var id = row && row.getAttribute("data-id");
+          LICSYSTEM.docsChecklist.setOk(id, chk.checked);
+        });
+      });
+      box.querySelectorAll(".docsRemove").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var row = btn.closest(".docs-row");
+          var id = row && row.getAttribute("data-id");
+          LICSYSTEM.docsChecklist.remove(id);
+        });
+      });
+    },
+
+    setOk: function(id, ok){
+      var docs = LICSYSTEM.docsChecklist.data.documentos || [];
+      for(var i = 0; i < docs.length; i++){
+        if(docs[i].id === id){
+          docs[i].ok = !!ok;
+          break;
+        }
+      }
+      LICSYSTEM.docsChecklist.persist();
+      LICSYSTEM.docsChecklist.render();
+    },
+
+    remove: function(id){
+      LICSYSTEM.docsChecklist.data.documentos = (LICSYSTEM.docsChecklist.data.documentos || []).filter(function(d){
+        return d.id !== id;
+      });
+      LICSYSTEM.docsChecklist.persist();
+      LICSYSTEM.docsChecklist.render();
+    },
+
+    addManual: function(){
+      var nome = window.prompt("Nome do documento exigido:");
+      if(nome == null) return;
+      nome = String(nome).trim();
+      if(!nome) return;
+      var item = LICSYSTEM.docsChecklist.normalizeItem({
+        nome: nome,
+        tipo: "outro",
+        obs: "Adicionado manualmente",
+        manual: true,
+        ok: false
+      }, (LICSYSTEM.docsChecklist.data.documentos || []).length);
+      var match = LICSYSTEM.docsChecklist.matchCofre(item.nome);
+      if(match) item.cofreKey = match.key;
+      LICSYSTEM.docsChecklist.data.documentos.push(item);
+      if(!LICSYSTEM.docsChecklist.data.editalNome){
+        LICSYSTEM.docsChecklist.data.editalNome = "Checklist manual";
+      }
+      LICSYSTEM.docsChecklist.persist();
+      LICSYSTEM.docsChecklist.render();
+      showAlert("docsAlert", "ok", "Documento adicionado.");
+    },
+
+    clearOk: function(){
+      if(!(LICSYSTEM.docsChecklist.data.documentos || []).length) return;
+      if(!confirm("Limpar todos os OK marcados?")) return;
+      (LICSYSTEM.docsChecklist.data.documentos || []).forEach(function(d){ d.ok = false; });
+      LICSYSTEM.docsChecklist.persist();
+      LICSYSTEM.docsChecklist.render();
+    },
+
+    save: function(){
+      LICSYSTEM.docsChecklist.persist({ immediate: true });
+      showAlert("docsAlert", "ok", "Checklist salvo" + (LICSYSTEM.cloudSync && LICSYSTEM.cloudSync._uid ? " (sincronizando…)" : "") + ".");
+    },
+
+    showModal: function(docs, meta){
+      meta = meta || {};
+      var ov = el("docsOverlay");
+      var list = el("docsModalList");
+      var lead = el("docsModalLead");
+      if(!ov || !list) return;
+      var arr = Array.isArray(docs) ? docs : [];
+      if(lead){
+        lead.textContent = arr.length
+          ? ("A IA identificou " + arr.length + " documento" + (arr.length === 1 ? "" : "s") + " exigido" + (arr.length === 1 ? "" : "s") + ". Confira e marque o que você já tem.")
+          : "Não foi possível listar documentos estruturados. Você ainda pode abrir o checklist e adicionar manualmente.";
+      }
+      if(!arr.length){
+        list.innerHTML = '<div class="muted small">Nenhum documento estruturado retornado. Use o botão abaixo para abrir a tela e incluir itens.</div>';
+      } else {
+        list.innerHTML = arr.map(function(d){
+          var tipo = LICSYSTEM.docsChecklist.normTipo(d.tipo);
+          return (
+            '<div class="docs-modal-item">' +
+              '<span class="di-tipo t-' + tipo + '">' + utils.escapeHtml(LICSYSTEM.docsChecklist.tipoLabel(tipo)) + "</span>" +
+              '<div class="di-body">' +
+                '<div class="di-nome">' + utils.escapeHtml(d.nome || "Documento") + "</div>" +
+                (d.obs ? '<div class="di-obs">' + utils.escapeHtml(d.obs) + "</div>" : "") +
+              "</div>" +
+            "</div>"
+          );
+        }).join("");
+      }
+      ov.classList.add("open");
+      ov.setAttribute("aria-hidden", "false");
+      LICSYSTEM.docsChecklist._pendingMeta = meta;
+      LICSYSTEM.docsChecklist._pendingDocs = arr;
+    },
+
+    closeModal: function(){
+      var ov = el("docsOverlay");
+      if(!ov) return;
+      ov.classList.remove("open");
+      ov.setAttribute("aria-hidden", "true");
+    },
+
+    goFromModal: function(){
+      var docs = LICSYSTEM.docsChecklist._pendingDocs;
+      var meta = LICSYSTEM.docsChecklist._pendingMeta || {};
+      if(Array.isArray(docs) && docs.length){
+        LICSYSTEM.docsChecklist.setFromAnalysis(docs, meta);
+      } else if(!(LICSYSTEM.docsChecklist.data.documentos || []).length){
+        LICSYSTEM.docsChecklist.data.editalNome = meta.editalNome || meta.filename || "Edital analisado";
+        LICSYSTEM.docsChecklist.data.filename = meta.filename || "";
+        LICSYSTEM.docsChecklist.persist();
+      }
+      LICSYSTEM.docsChecklist.closeModal();
+      if(window.__lsActivateView) window.__lsActivateView("docsChecklist");
+      else LICSYSTEM.docsChecklist.render();
     }
   };
 
@@ -3620,6 +4017,23 @@
     on("btnIaLimpar","click", function(){ LICSYSTEM.analiseIa.limpar(); });
     on("btnIaCopiar","click", function(){ LICSYSTEM.analiseIa.copiarRelatorio(); });
     on("btnIaImprimir","click", function(){ LICSYSTEM.analiseIa.imprimirRelatorio(); });
+    on("btnIaDocs","click", function(){ LICSYSTEM.analiseIa.openDocsModal(); });
+
+    // Checklist documentos do edital
+    on("btnDocsSalvar","click", function(){ LICSYSTEM.docsChecklist.save(); });
+    on("btnDocsAdd","click", function(){ LICSYSTEM.docsChecklist.addManual(); });
+    on("btnDocsClearOk","click", function(){ LICSYSTEM.docsChecklist.clearOk(); });
+    on("btnDocsModalClose","click", function(){ LICSYSTEM.docsChecklist.closeModal(); });
+    on("btnDocsModalGo","click", function(){ LICSYSTEM.docsChecklist.goFromModal(); });
+    on("docsOverlay","click", function(e){
+      if(e.target === el("docsOverlay")) LICSYSTEM.docsChecklist.closeModal();
+    });
+    document.addEventListener("keydown", function(e){
+      if(e.key === "Escape"){
+        var ov = el("docsOverlay");
+        if(ov && ov.classList.contains("open")) LICSYSTEM.docsChecklist.closeModal();
+      }
+    });
 
     // Orçamento
     on("btnAddLinha","click", LICSYSTEM.orcamento.addLinha);
@@ -3802,6 +4216,7 @@
     orcamento:'Orçamento',
     cruzamento:'Cruzamento Inteligente (ML)',
     cofre:'Cofre de Documentos',
+    docsChecklist:'Documentos do Edital',
     entregas:'Licitação',
     histEntregas:'Histórico e Controle de Entregas',
     concorrencia:'Análise de Concorrência',
@@ -3837,6 +4252,10 @@
         LICSYSTEM.state._cofreRendered = true;
         LICSYSTEM.cofre.render();
       }
+    }
+    if(view==="docsChecklist"){
+      try{ LICSYSTEM.cofre.load(); }catch(e){}
+      LICSYSTEM.docsChecklist.render();
     }
     if(view==="ferramentas") LICSYSTEM.ferramentas.carregarView();
     if(view==="entregas") LICSYSTEM.entregas.renderLista();
@@ -5087,6 +5506,7 @@
     file: null,
     text: "",
     relatorioMd: "",
+    documentosExigidos: [],
     busy: false,
     MAX_PAGES: 45,
     MAX_CHARS: 150000,
@@ -5108,12 +5528,15 @@
     setActionButtons: function(enabled){
       var c = el("btnIaCopiar");
       var p = el("btnIaImprimir");
+      var d = el("btnIaDocs");
       if(c) c.disabled = !enabled;
       if(p) p.disabled = !enabled;
+      if(d) d.disabled = !enabled;
     },
 
     limparRelatorio: function(){
       LICSYSTEM.analiseIa.relatorioMd = "";
+      LICSYSTEM.analiseIa.documentosExigidos = [];
       var sheet = el("iaReportSheet");
       if(sheet){
         sheet.className = "ia-report-sheet ia-empty";
@@ -5132,6 +5555,82 @@
       LICSYSTEM.analiseIa.limparRelatorio();
       hideAlert("iaAlert");
       LICSYSTEM.analiseIa.setBusy(false);
+    },
+
+    normDocsList: function(list){
+      if(!Array.isArray(list)) return [];
+      var out = [];
+      var seen = {};
+      list.forEach(function(item){
+        if(!item) return;
+        var nome = typeof item === "string"
+          ? item.trim()
+          : String(item.nome || item.name || item.documento || "").trim();
+        if(!nome || nome.length < 2) return;
+        var key = nome.toLowerCase().replace(/\s+/g, " ");
+        if(seen[key]) return;
+        seen[key] = true;
+        out.push({
+          nome: nome.slice(0, 220),
+          tipo: LICSYSTEM.docsChecklist.normTipo(item.tipo || item.type || "outro"),
+          obs: String(item.obs || item.observacao || "").trim().slice(0, 400)
+        });
+      });
+      return out.slice(0, 80);
+    },
+
+    /** Fallback: tenta ler listas do Markdown (habilitação / checklist). */
+    parseDocsFromMarkdown: function(md){
+      var text = String(md || "");
+      if(!text.trim()) return [];
+      var lines = text.split(/\r?\n/);
+      var collecting = false;
+      var tipoAtual = "habilitacao";
+      var items = [];
+      var sectionRe = /^(#{1,4}\s*)?(\d+\.\s*)?(exig[eê]ncias?\s+de\s+habilita|habilita[cç][aã]o|checklist\s+final|documentos?\s+exig|qualifica[cç][aã]o\s+t[eé]cnica)/i;
+      var stopRe = /^(#{1,4}\s*)?(\d+\.\s*)?(informa[cç][oõ]es\s+gerais|cronograma|especifica[cç]|regras\s+de\s+proposta|crit[eé]rios|penalidades|condi[cç][oõ]es\s+de\s+entrega|contrato\s+ou\s+ata|resumo\s+simples)/i;
+
+      for(var i = 0; i < lines.length; i++){
+        var line = lines[i].trim();
+        if(!line) continue;
+        if(sectionRe.test(line)){
+          collecting = true;
+          if(/t[eé]cnica/i.test(line)) tipoAtual = "tecnica";
+          else if(/checklist/i.test(line)) tipoAtual = "outro";
+          else tipoAtual = "habilitacao";
+          continue;
+        }
+        if(collecting && stopRe.test(line)){
+          collecting = false;
+          continue;
+        }
+        if(!collecting) continue;
+        var m = line.match(/^[-*•]\s+(.+)/) || line.match(/^\d+[.)]\s+(.+)/);
+        if(!m) continue;
+        var nome = String(m[1] || "")
+          .replace(/\*\*/g, "")
+          .replace(/`/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+        // Evita bullets genéricos muito longos (parágrafos)
+        if(nome.length < 4 || nome.length > 180) continue;
+        if(/^(os|as|o|a|de|da|do)\s/i.test(nome) && nome.length > 120) continue;
+        items.push({ nome: nome, tipo: tipoAtual, obs: "Extraído do relatório" });
+      }
+      return LICSYSTEM.analiseIa.normDocsList(items);
+    },
+
+    openDocsModal: function(){
+      var docs = LICSYSTEM.analiseIa.documentosExigidos || [];
+      if(!docs.length && LICSYSTEM.analiseIa.relatorioMd){
+        docs = LICSYSTEM.analiseIa.parseDocsFromMarkdown(LICSYSTEM.analiseIa.relatorioMd);
+        LICSYSTEM.analiseIa.documentosExigidos = docs;
+      }
+      var filename = (LICSYSTEM.analiseIa.file && LICSYSTEM.analiseIa.file.name) || "";
+      LICSYSTEM.docsChecklist.showModal(docs, {
+        filename: filename,
+        editalNome: filename ? filename.replace(/\.pdf$/i, "") : "Edital analisado"
+      });
     },
 
     renderRelatorio: function(md){
@@ -5319,8 +5818,32 @@
       }).then(function(body){
         var md = (body && body.relatorio) || "";
         if(!md) throw new Error("A API não retornou o campo relatorio.");
+        var docs = LICSYSTEM.analiseIa.normDocsList(body && body.documentosExigidos);
+        if(!docs.length){
+          docs = LICSYSTEM.analiseIa.parseDocsFromMarkdown(md);
+        }
+        LICSYSTEM.analiseIa.documentosExigidos = docs;
         LICSYSTEM.analiseIa.renderRelatorio(md);
-        showAlert("iaAlert","ok","✅ Relatório gerado com sucesso.");
+        var n = docs.length;
+        showAlert(
+          "iaAlert",
+          "ok",
+          "✅ Relatório gerado com sucesso." +
+            (n ? (" " + n + " documento" + (n === 1 ? "" : "s") + " exigido" + (n === 1 ? "" : "s") + " identificado" + (n === 1 ? "" : "s") + ".") : "")
+        );
+        var filename = (LICSYSTEM.analiseIa.file && LICSYSTEM.analiseIa.file.name) || "";
+        var meta = {
+          filename: filename,
+          editalNome: filename ? filename.replace(/\.pdf$/i, "") : "Edital analisado"
+        };
+        // Já grava o checklist (mesmo se o usuário fechar o modal)
+        if(docs.length){
+          try{ LICSYSTEM.docsChecklist.setFromAnalysis(docs, meta); }catch(e){}
+        }
+        // Modal pós-análise com lista + atalho para marcar OK
+        setTimeout(function(){
+          LICSYSTEM.docsChecklist.showModal(docs, meta);
+        }, 120);
       }).catch(function(err){
         showAlert("iaAlert","error", utils.escapeHtml(LICSYSTEM.analiseIa.errMsg(err)));
       }).then(function(){
@@ -5569,11 +6092,12 @@
     requestAnimationFrame(function(){
       LICSYSTEM.dashboard.render();
       LICSYSTEM.state._dashReady = true;
-    LICSYSTEM.cofre.load();
-    LICSYSTEM.cofre.render();
-    LICSYSTEM.state._cofreRendered = true;
-    LICSYSTEM.entregas.load();
-    // Orçamento só monta quando abrir a aba (planilha grande)
+      LICSYSTEM.cofre.load();
+      LICSYSTEM.cofre.render();
+      LICSYSTEM.state._cofreRendered = true;
+      LICSYSTEM.docsChecklist.load();
+      LICSYSTEM.entregas.load();
+      // Orçamento só monta quando abrir a aba (planilha grande)
       setTimeout(function(){
         LICSYSTEM.ferramentas.getPerfil(true).catch(function(){});
         // Database + sync na nuvem (por conta)

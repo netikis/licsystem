@@ -25,7 +25,7 @@
         views[j].classList.toggle('active', views[j].id===('view-'+view));
       }
       var titleEl=document.getElementById('topTitle');
-      var map={dashboard:'Dashboard',captacao:'Captação de Editais',analiseIa:'Análise Inteligente de Editais',orcamento:'Orçamento',cruzamento:'Cruzamento Inteligente (ML)',cofre:'Cofre de Documentos',entregas:'Licitação',histEntregas:'Histórico e Controle de Entregas',concorrencia:'Análise de Concorrência',catalogo:'Catálogo Interno',arp:'Atas de Registro (ARP)',disputa:'Sala de Disputa',ferramentas:'Ferramentas'};
+      var map={dashboard:'Dashboard',captacao:'Captação de Editais',analiseIa:'Análise Inteligente de Editais',orcamento:'Orçamento',cruzamento:'Cruzamento Inteligente (ML)',cofre:'Cofre de Documentos',docsChecklist:'Documentos do Edital',entregas:'Licitação',histEntregas:'Histórico e Controle de Entregas',concorrencia:'Análise de Concorrência',catalogo:'Catálogo Interno',arp:'Atas de Registro (ARP)',disputa:'Sala de Disputa',ferramentas:'Ferramentas'};
       if(titleEl) titleEl.textContent = map[view]||'LICSYSTEM';
       // notify app modules (guarded — nav never depends on this)
       try{ if(window.LICSYSTEM && LICSYSTEM.onViewChange) LICSYSTEM.onViewChange(view); }catch(e){}
