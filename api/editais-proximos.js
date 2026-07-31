@@ -8,6 +8,7 @@
  *   ibge       (obrigatório) código IBGE do município de origem
  *   raio       km (default 250, min 10, max 700)
  *   cobertura  opcional: "pr-sp" = Paraná inteiro + SP no raio (divisas)
+ *   janela     "ano" (padrão, ~365 dias) | "45"
  *   q          palavras-chave opcionais (vírgula)
  *   esferas    M,E (default) — F=federal opcional
  *
@@ -27,6 +28,13 @@ var DEFAULT_MODALIDADES = [6]; // Pregão Eletrônico (rápido o bastante p/ ser
 var EXTRA_MODALIDADES = [4, 7]; // Concorrência Eletrônica, Pregão Presencial
 var MAX_UFS = 4;
 var ESFERA_LABEL = { M: "Municipal", E: "Estadual", F: "Federal", D: "Distrital" };
+
+var resolveJanela;
+try {
+  resolveJanela = require("./lib/editais-query").resolveJanela;
+} catch (e) {
+  resolveJanela = null;
+}
 
 var _municipios = null;
 var _byIbge = null;
@@ -298,7 +306,23 @@ module.exports = async function handler(req, res) {
       modalidades = DEFAULT_MODALIDADES.concat(EXTRA_MODALIDADES);
     }
 
-    var dataFinal = ymd(new Date());
+    /* dataFinal = limite do encerramento da proposta no PNCP (não "hoje"). */
+    var janelaInfo = resolveJanela
+      ? resolveJanela({
+          janela: q.janela || q.janelaTipo || q.horizonte,
+          dias: q.dias || q.janelaDias,
+        })
+      : (function () {
+          var dFin = new Date();
+          dFin.setDate(dFin.getDate() + 365);
+          return {
+            janela: "ano",
+            label: "janela anual",
+            dias: 365,
+            dataFinal: ymd(dFin),
+          };
+        })();
+    var dataFinal = janelaInfo.dataFinal;
     var raw = [];
     var errors = [];
     var seen = Object.create(null);
@@ -403,6 +427,11 @@ module.exports = async function handler(req, res) {
 
     var avisos = [
       "Fonte: PNCP (propostas em aberto). Cobertura depende do cadastro dos órgãos no portal.",
+      "Horizonte: propostas com encerramento na " +
+        janelaInfo.label +
+        " (dataFinal PNCP até " +
+        dataFinal +
+        ").",
       "Por padrão consulta Pregão Eletrônico (mod. 6); use ampliar=1 para incluir concorrência/pregão presencial.",
       "Distância pelo município da unidade do órgão (IBGE). Editais só em portais locais (fora do PNCP) não aparecem.",
       "Raio máximo: " + MAX_RAIO_KM + " km (padrão " + DEFAULT_RAIO_KM + " km).",
@@ -441,6 +470,10 @@ module.exports = async function handler(req, res) {
       },
       raioKm: raio,
       cobertura: coberturaPrSp ? "pr-sp" : null,
+      janela: janelaInfo.janela,
+      janelaLabel: janelaInfo.label,
+      janelaDias: janelaInfo.dias,
+      dataFinalPncp: dataFinal,
       municipiosNoRaio: Object.keys(nearbyMap).length,
       ufsConsultadas: ufList,
       modalidades: modalidades,

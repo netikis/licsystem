@@ -10,6 +10,7 @@
  *   categoria              reforma,comida,cestas,cafe,natal,eletro (vírgula)
  *   q | keywords           palavras-chave extras (vírgula)
  *   ampliar=1              inclui concorrência / pregão presencial
+ *   janela                 "ano" (padrão, ~365 dias) | "45"
  *   esferas                M,E (default) ou M,E,F
  *   limite                 máx. itens (default 80)
  *
@@ -75,6 +76,8 @@ function mergeOpts(query, body) {
     esferas: b.esferas || q.esferas,
     limite: b.limite || b.limit || q.limite || q.limit,
     paginas: b.paginas || b.pages || q.paginas || q.pages,
+    janela: b.janela || b.janelaTipo || b.horizonte || q.janela || q.janelaTipo || q.horizonte,
+    dias: b.dias != null ? b.dias : b.janelaDias != null ? b.janelaDias : q.dias || q.janelaDias,
   };
 }
 

@@ -144,6 +144,8 @@ module.exports = async function handler(req, res) {
       municipio: body.municipio,
       ibge: body.ibge,
       regiao: body.regiao,
+      janela: body.janela || body.janelaTipo || body.horizonte,
+      dias: body.dias != null ? body.dias : body.janelaDias,
     };
 
     var interpreter = "local";
