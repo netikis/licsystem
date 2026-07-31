@@ -134,9 +134,10 @@
             <span class="tag">PNCP · chat</span>
           </div>
           <div class="desc">
-            Pergunte em português ou use os atalhos. Lista editais com propostas em aberto no PNCP
-            (município ou <b>Norte Pioneiro do Paraná</b> — 26 municípios). O botão flutuante
-            <b>Suporte</b> usa a mesma API (<code>/api/editais-chat</code>) para essas perguntas.
+            Pergunte em português ou use os atalhos. Lista propostas com encerramento no
+            <b>horizonte anual</b> (~12 meses) no PNCP (município ou
+            <b>Norte Pioneiro do Paraná</b> — 26 municípios). Alternativa: janela de 45 dias.
+            O botão flutuante <b>Suporte</b> usa a mesma API (<code>/api/editais-chat</code>).
           </div>
           <div id="chatEditalAlert" class="alert"></div>
           <div class="form-row">
@@ -154,6 +155,13 @@
                 <option value="cafe">Café / lanche</option>
                 <option value="natal">Natal</option>
                 <option value="eletro">Eletrodomésticos</option>
+              </select>
+            </div>
+            <div style="max-width:140px">
+              <label class="fld">Janela</label>
+              <select id="chatEditalJanela" title="Horizonte de encerramento da proposta no PNCP">
+                <option value="ano" selected>Ano (~365 dias)</option>
+                <option value="45">45 dias</option>
               </select>
             </div>
             <div style="max-width:190px;display:flex;align-items:flex-end">
@@ -183,9 +191,10 @@
             <span class="tag">PNCP · raio</span>
           </div>
           <div class="desc">
-            Informe o município de origem e busque editais com propostas em aberto (municipais e estaduais)
-            no PNCP dentro do raio informado (até 700 km). Use a cobertura <b>Paraná + divisas SP</b>
-            para cobrir o estado inteiro e a fronteira com São Paulo. Distância pelo município do órgão (IBGE).
+            Informe o município de origem e busque propostas com encerramento no
+            <b>horizonte anual</b> (municipais e estaduais) no PNCP dentro do raio
+            (até 700 km). Use a cobertura <b>Paraná + divisas SP</b> para cobrir o estado
+            inteiro e a fronteira com São Paulo. Distância pelo município do órgão (IBGE).
           </div>
           <div id="proxAlert" class="alert"></div>
           <div class="form-row">
@@ -209,6 +218,13 @@
             <div style="max-width:130px">
               <label class="fld">Raio (km)</label>
               <input type="number" id="proxRaio" min="10" max="700" step="10" value="250" />
+            </div>
+            <div style="max-width:140px">
+              <label class="fld">Janela</label>
+              <select id="proxJanela" title="Horizonte de encerramento da proposta no PNCP">
+                <option value="ano" selected>Ano (~365 dias)</option>
+                <option value="45">45 dias</option>
+              </select>
             </div>
             <div style="flex:1.4">
               <label class="fld">Palavras-chave (opcional)</label>
