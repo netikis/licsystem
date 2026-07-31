@@ -12,6 +12,45 @@
               .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
   };
 
+  /** Extrai mensagem legível de Error / string / objeto JSON da API (evita [object Object]). */
+  utils.formatApiError = function(err){
+    if (err == null) return "erro desconhecido";
+    if (typeof err === "string") return err;
+    if (err instanceof Error && err.message) {
+      var m = err.message;
+      if (m !== "[object Object]") return m;
+    }
+    var raw = err.error != null ? err.error : err.message != null ? err.message : err;
+    if (typeof raw === "string") return raw;
+    if (raw && typeof raw === "object") {
+      if (typeof raw.message === "string") return raw.message;
+      try {
+        return JSON.stringify(raw);
+      } catch (e) {
+        return String(raw);
+      }
+    }
+    if (err && typeof err === "object") {
+      try {
+        return JSON.stringify(err);
+      } catch (e2) {
+        return String(err);
+      }
+    }
+    return String(err);
+  };
+
+  /** Dica de ambiente: em produção (Vercel) não sugerir npm run dev. */
+  utils.apiHintHtml = function(){
+    try {
+      var h = String(location.hostname || "");
+      if (/\.vercel\.app$/i.test(h) || (h && h !== "localhost" && h !== "127.0.0.1")) {
+        return "Se o problema continuar, aguarde o redeploy ou confira os logs da função na Vercel.";
+      }
+    } catch (e) {}
+    return "Localmente use <code>npm run dev</code> (Vite+API); em produção o deploy na Vercel precisa incluir as APIs.";
+  };
+
   // fold: remove accents / normalize
   utils.fold = function(s){
     return String(s == null ? "" : s)
@@ -2911,7 +2950,10 @@
       fetch(url)
         .then(function (r) {
           return r.json().then(function (j) {
-            if (!r.ok) throw new Error((j && j.error) || "HTTP " + r.status);
+            if (!r.ok) {
+              var msg = utils.formatApiError((j && j.error) || j) || "HTTP " + r.status;
+              throw new Error(msg);
+            }
             return j;
           });
         })
@@ -2924,8 +2966,9 @@
             "proxAlert",
             "error",
             "Não foi possível buscar editais no PNCP (" +
-              utils.escapeHtml(err.message) +
-              "). A seleção de município funciona offline; a busca de editais precisa da API — use <code>npm run dev</code> (Vite+API) ou o deploy na Vercel."
+              utils.escapeHtml(utils.formatApiError(err)) +
+              "). A seleção de município funciona offline. " +
+              utils.apiHintHtml()
           );
         })
         .then(function () {
@@ -3165,7 +3208,10 @@
       })
         .then(function (r) {
           return r.json().then(function (j) {
-            if (!r.ok) throw new Error((j && j.error) || "HTTP " + r.status);
+            if (!r.ok) {
+              var msg = utils.formatApiError((j && j.error) || j) || "HTTP " + r.status;
+              throw new Error(msg);
+            }
             return j;
           });
         })
@@ -3178,8 +3224,9 @@
             "chatEditalAlert",
             "error",
             "Não foi possível consultar editais (" +
-              utils.escapeHtml(err.message) +
-              "). Use <code>npm run dev</code> ou o deploy na Vercel."
+              utils.escapeHtml(utils.formatApiError(err)) +
+              "). " +
+              utils.apiHintHtml()
           );
         })
         .then(function () {
