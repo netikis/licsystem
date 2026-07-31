@@ -2286,6 +2286,420 @@
       if(window.__lsActivateView) window.__lsActivateView("orcamento");
     },
 
+    /* ---------- Editais próximos (município + raio) ---------- */
+    ORIGEM_KEY: "licsystem_origem_municipio_v1",
+    _proxTimer: null,
+    _proxBusy: false,
+
+    loadOrigem: function () {
+      try {
+        return JSON.parse(localStorage.getItem(LICSYSTEM.captacao.ORIGEM_KEY) || "null");
+      } catch (e) {
+        return null;
+      }
+    },
+
+    saveOrigem: function (m) {
+      if (!m || !m.ibge) return;
+      var payload = {
+        ibge: Number(m.ibge),
+        nome: String(m.nome || ""),
+        uf: String(m.uf || ""),
+        lat: m.lat != null ? Number(m.lat) : null,
+        lng: m.lng != null ? Number(m.lng) : null,
+        savedAt: Date.now(),
+      };
+      try {
+        localStorage.setItem(LICSYSTEM.captacao.ORIGEM_KEY, JSON.stringify(payload));
+      } catch (e) {}
+      LICSYSTEM.captacao.refreshOrigemHint();
+    },
+
+    refreshOrigemHint: function () {
+      var hint = el("proxOrigemHint");
+      if (!hint) return;
+      var m = LICSYSTEM.captacao.loadOrigem();
+      if (!m || !m.ibge) {
+        hint.textContent = "Nenhum município salvo ainda.";
+        return;
+      }
+      hint.innerHTML =
+        "Salvo: <b>" +
+        utils.escapeHtml(m.nome) +
+        "</b> / " +
+        utils.escapeHtml(m.uf) +
+        " (IBGE " +
+        utils.escapeHtml(String(m.ibge)) +
+        ")";
+    },
+
+    applyCoberturaPreset: function () {
+      var sel = el("proxCobertura");
+      var raioEl = el("proxRaio");
+      var hint = el("proxCoberturaHint");
+      var cobertura = sel ? String(sel.value || "") : "";
+      if (cobertura === "pr-sp") {
+        if (raioEl) {
+          var atual = Number(raioEl.value);
+          if (!Number.isFinite(atual) || atual < 450) raioEl.value = "500";
+        }
+        if (hint) {
+          hint.textContent =
+            "Preset: consulta PR (estado inteiro) + SP no raio da origem. Raio sugerido 500 km (editável; máx. 700).";
+        }
+      } else if (hint) {
+        hint.textContent =
+          "Raio livre: até 700 km. Municípios das UFs dentro do raio. Padrão 250 km.";
+      }
+    },
+
+    initProximos: function () {
+      var input = el("proxMunicipio");
+      var ibge = el("proxIbge");
+      var box = el("proxSuggest");
+      if (!input || !ibge) return;
+
+      var saved = LICSYSTEM.captacao.loadOrigem();
+      if (saved && saved.ibge) {
+        input.value = (saved.nome || "") + (saved.uf ? " / " + saved.uf : "");
+        ibge.value = String(saved.ibge);
+      }
+      LICSYSTEM.captacao.refreshOrigemHint();
+      LICSYSTEM.captacao.applyCoberturaPreset();
+
+      if (input._proxWired) return;
+      input._proxWired = true;
+
+      input.addEventListener("input", function () {
+        ibge.value = "";
+        var q = String(input.value || "").trim();
+        clearTimeout(LICSYSTEM.captacao._proxTimer);
+        if (q.length < 2) {
+          if (box) {
+            box.hidden = true;
+            box.innerHTML = "";
+          }
+          return;
+        }
+        LICSYSTEM.captacao._proxTimer = setTimeout(function () {
+          LICSYSTEM.captacao.suggestMunicipios(q);
+        }, 280);
+      });
+
+      input.addEventListener("blur", function () {
+        setTimeout(function () {
+          if (box) box.hidden = true;
+        }, 180);
+      });
+
+      if (box) {
+        box.addEventListener("mousedown", function (e) {
+          var btn = e.target.closest("button[data-ibge]");
+          if (!btn) return;
+          e.preventDefault();
+          LICSYSTEM.captacao.selectMunicipio({
+            ibge: Number(btn.getAttribute("data-ibge")),
+            nome: btn.getAttribute("data-nome") || "",
+            uf: btn.getAttribute("data-uf") || "",
+            lat: Number(btn.getAttribute("data-lat") || 0) || null,
+            lng: Number(btn.getAttribute("data-lng") || 0) || null,
+          });
+        });
+      }
+
+      var cob = el("proxCobertura");
+      if (cob && !cob._proxWired) {
+        cob._proxWired = true;
+        cob.addEventListener("change", function () {
+          LICSYSTEM.captacao.applyCoberturaPreset();
+        });
+      }
+    },
+
+    suggestMunicipios: function (q) {
+      var box = el("proxSuggest");
+      if (!box) return;
+      fetch("/api/municipios?q=" + encodeURIComponent(q))
+        .then(function (r) {
+          return r.json().then(function (j) {
+            if (!r.ok) throw new Error((j && j.error) || "HTTP " + r.status);
+            return j;
+          });
+        })
+        .then(function (j) {
+          var arr = (j && j.municipios) || [];
+          if (!arr.length) {
+            box.innerHTML =
+              '<div class="small muted" style="padding:10px 12px">Nenhum município encontrado.</div>';
+            box.hidden = false;
+            return;
+          }
+          box.innerHTML = arr
+            .map(function (m) {
+              return (
+                '<button type="button" data-ibge="' +
+                utils.escapeHtml(String(m.ibge)) +
+                '" data-nome="' +
+                utils.escapeHtml(m.nome) +
+                '" data-uf="' +
+                utils.escapeHtml(m.uf) +
+                '" data-lat="' +
+                utils.escapeHtml(String(m.lat)) +
+                '" data-lng="' +
+                utils.escapeHtml(String(m.lng)) +
+                '"><span class="sg-uf">' +
+                utils.escapeHtml(m.uf) +
+                "</span>" +
+                utils.escapeHtml(m.nome) +
+                "</button>"
+              );
+            })
+            .join("");
+          box.hidden = false;
+        })
+        .catch(function () {
+          box.innerHTML =
+            '<div class="small muted" style="padding:10px 12px">Falha ao buscar municípios (API local). Use <code>npm run dev:api</code> ou o deploy Vercel.</div>';
+          box.hidden = false;
+        });
+    },
+
+    selectMunicipio: function (m) {
+      var input = el("proxMunicipio");
+      var ibge = el("proxIbge");
+      var box = el("proxSuggest");
+      if (!m || !m.ibge) return;
+      if (input) input.value = m.nome + (m.uf ? " / " + m.uf : "");
+      if (ibge) ibge.value = String(m.ibge);
+      if (box) {
+        box.hidden = true;
+        box.innerHTML = "";
+      }
+      LICSYSTEM.captacao.saveOrigem(m);
+    },
+
+    formatProxDate: function (iso) {
+      if (!iso) return "—";
+      try {
+        var d = new Date(iso);
+        if (isNaN(d.getTime())) return String(iso);
+        return d.toLocaleString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      } catch (e) {
+        return String(iso);
+      }
+    },
+
+    buscarProximos: function () {
+      if (LICSYSTEM.captacao._proxBusy) return;
+      var ibgeEl = el("proxIbge");
+      var ibge = Number((ibgeEl && ibgeEl.value) || 0);
+      var raio = Number((el("proxRaio") && el("proxRaio").value) || 250);
+      var cobertura = (el("proxCobertura") && el("proxCobertura").value) || "";
+      var kw = (el("proxKeywords") && el("proxKeywords").value) || "";
+      var ampliar = !!(el("proxAmpliar") && el("proxAmpliar").checked);
+      var federal = !!(el("proxFederal") && el("proxFederal").checked);
+
+      hideAlert("proxAlert");
+      if (!ibge) {
+        showAlert(
+          "proxAlert",
+          "error",
+          "Selecione um município na lista de sugestões (digite o nome e clique na opção)."
+        );
+        return;
+      }
+      if (!Number.isFinite(raio) || raio < 10) raio = 250;
+      if (raio > 700) raio = 700;
+      if (el("proxRaio")) el("proxRaio").value = String(raio);
+
+      var saved = LICSYSTEM.captacao.loadOrigem();
+      if (!saved || Number(saved.ibge) !== ibge) {
+        var nomeTxt = ((el("proxMunicipio") && el("proxMunicipio").value) || "").split("/")[0].trim();
+        LICSYSTEM.captacao.saveOrigem({ ibge: ibge, nome: nomeTxt, uf: (saved && saved.uf) || "" });
+      }
+
+      LICSYSTEM.captacao._proxBusy = true;
+      var btn = el("btnProxBuscar");
+      if (btn) btn.disabled = true;
+      if (el("proxMeta")) el("proxMeta").textContent = "";
+      el("proxResults").innerHTML =
+        '<div class="muted small"><span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Consultando PNCP no raio… isso pode levar alguns segundos.</div>';
+
+      var url =
+        "/api/editais-proximos?ibge=" +
+        encodeURIComponent(ibge) +
+        "&raio=" +
+        encodeURIComponent(raio) +
+        (cobertura ? "&cobertura=" + encodeURIComponent(cobertura) : "") +
+        (kw ? "&q=" + encodeURIComponent(kw) : "") +
+        (ampliar ? "&ampliar=1" : "") +
+        (federal ? "&esferas=M,E,F" : "&esferas=M,E");
+
+      fetch(url)
+        .then(function (r) {
+          return r.json().then(function (j) {
+            if (!r.ok) throw new Error((j && j.error) || "HTTP " + r.status);
+            return j;
+          });
+        })
+        .then(function (j) {
+          LICSYSTEM.captacao._renderProximos(j);
+        })
+        .catch(function (err) {
+          el("proxResults").innerHTML = "";
+          showAlert(
+            "proxAlert",
+            "error",
+            "Não foi possível buscar editais próximos (" +
+              utils.escapeHtml(err.message) +
+              "). Em desenvolvimento local use <code>npm run dev:api</code> (Vercel) para expor as rotas <code>/api/*</code>."
+          );
+        })
+        .then(function () {
+          LICSYSTEM.captacao._proxBusy = false;
+          if (btn) btn.disabled = false;
+        });
+    },
+
+    _renderProximos: function (j) {
+      var box = el("proxResults");
+      var meta = el("proxMeta");
+      if (!box) return;
+      var origem = (j && j.origem) || {};
+      var list = (j && j.editais) || [];
+
+      if (origem && origem.ibge) {
+        LICSYSTEM.captacao.saveOrigem({
+          ibge: origem.ibge,
+          nome: origem.nome,
+          uf: origem.uf,
+          lat: origem.lat,
+          lng: origem.lng,
+        });
+      }
+
+      if (meta) {
+        meta.textContent =
+          "Origem: " +
+          (origem.nome || "—") +
+          "/" +
+          (origem.uf || "—") +
+          " · raio " +
+          (j.raioKm || "—") +
+          " km" +
+          (j.cobertura === "pr-sp" ? " · cobertura Paraná + divisas SP" : "") +
+          " · " +
+          (j.municipiosNoRaio || 0) +
+          " municípios no raio · UFs: " +
+          ((j.ufsConsultadas || []).join(", ") || "—") +
+          " · " +
+          (j.total || 0) +
+          " edital(is)";
+      }
+
+      if (!list.length) {
+        box.innerHTML =
+          '<div class="muted small">Nenhum edital com proposta em aberto encontrado no raio' +
+          (j.totalBrutoPncp
+            ? " (o PNCP retornou " +
+              j.totalBrutoPncp +
+              " registro(s) nas UFs consultadas, mas nenhum ficou dentro do raio/filtros)."
+            : ".") +
+          " Tente aumentar o raio, ampliar modalidades ou limpar as palavras-chave.</div>";
+        showAlert(
+          "proxAlert",
+          "info",
+          "Consulta concluída — nenhum edital no raio com os filtros atuais. Fonte: PNCP (dados reais; sem resultados inventados)."
+        );
+        return;
+      }
+
+      list.forEach(function (o) {
+        LICSYSTEM.state.pncpAlerts.push({
+          orgao: o.orgao || "Órgão público",
+          uf: o.uf || "",
+          objeto: o.objeto || "",
+        });
+      });
+      LICSYSTEM.updateBell();
+      LICSYSTEM.dashboard.renderPncp();
+
+      var html = '<div style="display:flex;flex-direction:column;gap:10px">';
+      list.forEach(function (o) {
+        var border =
+          o.esfera === "E" ? "r-yellow" : o.esfera === "F" ? "r-red" : "r-green";
+        html +=
+          '<div class="result-item ' +
+          border +
+          '">' +
+          '<div class="ri-head">' +
+          '<div class="ri-title">' +
+          utils.escapeHtml(o.orgao || "Órgão") +
+          ' <span class="badge-status b-yellow">' +
+          utils.escapeHtml(o.uf || "") +
+          "</span></div>" +
+          '<div class="prox-dist">' +
+          (o.distanciaKm != null ? o.distanciaKm + " km" : "") +
+          "</div>" +
+          "</div>" +
+          '<div class="ri-sub">' +
+          utils.escapeHtml(o.municipio || "—") +
+          " · " +
+          utils.escapeHtml(o.esferaNome || o.esfera || "—") +
+          " · " +
+          utils.escapeHtml(o.modalidade || "—") +
+          "</div>" +
+          '<div class="ri-sub" style="margin-top:6px">' +
+          utils.escapeHtml(o.objeto || "") +
+          "</div>" +
+          '<div class="ri-grid">' +
+          '<div class="ri-metric"><div class="m-l">Abertura</div><div class="m-v" style="font-size:12px">' +
+          utils.escapeHtml(LICSYSTEM.captacao.formatProxDate(o.dataAbertura)) +
+          "</div></div>" +
+          '<div class="ri-metric"><div class="m-l">Encerramento</div><div class="m-v" style="font-size:12px">' +
+          utils.escapeHtml(LICSYSTEM.captacao.formatProxDate(o.dataEncerramento)) +
+          "</div></div>" +
+          (o.valorEstimado != null
+            ? '<div class="ri-metric"><div class="m-l">Estimado</div><div class="m-v" style="font-size:12px">' +
+              utils.formatBrl(o.valorEstimado) +
+              "</div></div>"
+            : "") +
+          "</div>" +
+          (o.link
+            ? '<div style="margin-top:8px"><a class="link" target="_blank" rel="noopener" href="' +
+              utils.escapeHtml(o.link) +
+              '">Abrir no PNCP ↗</a></div>'
+            : "") +
+          "</div>";
+      });
+      html += "</div>";
+      if (j.avisos && j.avisos.length) {
+        html +=
+          '<div class="small muted" style="margin-top:10px">' +
+          j.avisos
+            .map(function (a) {
+              return "• " + utils.escapeHtml(a);
+            })
+            .join("<br/>") +
+          "</div>";
+      }
+      box.innerHTML = html;
+      showAlert(
+        "proxAlert",
+        "ok",
+        list.length +
+          " edital(is) com proposta em aberto no raio de " +
+          (j.raioKm || "—") +
+          " km (fonte PNCP)."
+      );
+    },
+
     /* ---------- Radar PNCP ---------- */
     buscarPncp:function(){
       var kw = (el("pncpKeywords").value||"").split(",").map(function(s){return utils.fold(s).toLowerCase().trim();}).filter(Boolean);
@@ -2297,19 +2711,19 @@
       el("pncpResults").innerHTML = '<div class="muted small"><span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Consultando PNCP…</div>';
 
       var url1 = "https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial="+dIni+"&dataFinal="+dFim+"&codigoModalidadeContratacao=6"+(uf?"&uf="+uf:"")+"&pagina=1&tamanhoPagina=20";
-      var url2 = "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta?dataFinal="+dFim+(uf?"&uf="+uf:"")+"&pagina=1";
+      var url2 = "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta?dataFinal="+dFim+"&codigoModalidadeContratacao=6"+(uf?"&uf="+uf:"")+"&pagina=1&tamanhoPagina=20";
 
       fetch(url1).then(function(r){
         if(!r.ok) throw new Error("HTTP "+r.status);
         return r.json();
       }).then(function(j){ LICSYSTEM.captacao._handlePncp(j, kw, uf); })
       .catch(function(){
-        // fallback
+        // fallback: propostas em aberto
         fetch(url2).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
           .then(function(j){ LICSYSTEM.captacao._handlePncp(j, kw, uf); })
           .catch(function(err){
             el("pncpResults").innerHTML="";
-            showAlert("pncpAlert","error","Não foi possível consultar o PNCP ("+utils.escapeHtml(err.message)+"). Se você abriu via <b>file://</b>, o navegador pode bloquear a requisição (CORS). Tente abrir por um servidor local (ex.: <code>python -m http.server</code>).");
+            showAlert("pncpAlert","error","Não foi possível consultar o PNCP ("+utils.escapeHtml(err.message)+"). Se você abriu via <b>file://</b>, o navegador pode bloquear a requisição (CORS). Tente abrir por um servidor local (ex.: <code>npm run dev:api</code>).");
           });
       });
     },
@@ -4217,6 +4631,23 @@
     on("btnGoogleSel","click", LICSYSTEM.captacao.googleSelecionados);
     on("btnParaOrcamento","click", LICSYSTEM.captacao.paraOrcamento);
     on("btnPncp","click", LICSYSTEM.captacao.buscarPncp);
+    on("btnProxBuscar","click", LICSYSTEM.captacao.buscarProximos);
+    on("proxRaio","keydown", function(e){
+      if(e.key === "Enter"){ e.preventDefault(); LICSYSTEM.captacao.buscarProximos(); }
+    });
+    on("proxKeywords","keydown", function(e){
+      if(e.key === "Enter"){ e.preventDefault(); LICSYSTEM.captacao.buscarProximos(); }
+    });
+    on("proxCobertura","change", function(){
+      LICSYSTEM.captacao.applyCoberturaPreset();
+    });
+    document.querySelectorAll("[data-prox-raio]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var v = btn.getAttribute("data-prox-raio");
+        var raioEl = el("proxRaio");
+        if(raioEl && v) raioEl.value = String(v);
+      });
+    });
     on("capCheckAll","change", function(){
       var onChk = this.checked;
       document.querySelectorAll(".capChk").forEach(function(c){ c.checked = onChk; });
@@ -6289,6 +6720,7 @@
   function bootApp(){
     wire();
     LICSYSTEM.captacao.initUf();
+    LICSYSTEM.captacao.initProximos();
     LICSYSTEM.orcamento.load();
     LICSYSTEM.state._orcDirty = true;
     LICSYSTEM.state._orcRendered = false;
