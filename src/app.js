@@ -1476,7 +1476,7 @@
       sel.innerHTML = html;
     },
 
-    // Planilha do edital PDF (THEO / portal Castro / São Mateus do Sul / clássico)
+    // Planilha do edital PDF (THEO / Castro / São Mateus / Contenda Elotech / clássico)
     splitEdital: function (text) {
       function limparPagina(s) {
         return String(s || "")
@@ -1508,6 +1508,14 @@
             /\bEDITAL DA LICITA[CÇ][AÃ]O\s+PREG[AÃ]O ELETR[OÔ]NICO\s+N[ºo°\.]?\s*[\d\/]+/gi,
             "\n"
           )
+          // Contenda / Elotech: cabeçalho/rodapé de página + R$ partido pelo pdf.js
+          .replace(/\bPE\s*\(SRP\)\s*n[ºo°.]?\s*[\d\s\/]+/gi, "\n")
+          .replace(
+            /Tramitado e Assinado Eletronicamente[\s\S]{0,280}?code=[^\s]+/gi,
+            "\n"
+          )
+          .replace(/R\s+\$/g, "R$")
+          .replace(/R\$\s*(\d+)\s*\.\s*(\d{3})\s*,\s*(\d{2})\b/gi, "R$ $1.$2,$3")
           .replace(/R\$\s*(\d+)\s*,\s*(\d{2})\b/gi, "R$ $1,$2")
           .replace(/\u00A0/g, " ")
           .replace(/[\t ]+/g, " ")
@@ -1526,7 +1534,10 @@
           var item = utils.asCaptacaoItem(it);
           if (!item || !item.produto) return;
           if (!utils.isLinhaProdutoEdital(item)) return;
-          if (!utils.sanitizar(item.line || item.produto)) return;
+          // sanitizar/BLACKLIST (Secretaria, Edital…) é p/ linhas-lixo; não descartar
+          // item já precificado cuja descrição só menciona esses termos (ex.: Contenda EPI).
+          var priced = Number(item.editalVunit) > 0 && Number(item.qtd) > 0;
+          if (!priced && !utils.sanitizar(item.line || item.produto)) return;
           if (
             /^(P[aá]gina|Total|Subtotal|Valor|Prefeitura|Estado|Munic[ií]pio|Especifica|ANEXO|RELA|Destaco)\b/i.test(
               item.produto
@@ -1684,6 +1695,235 @@
             line: ""
           };
           // Monta line canônica
+          packed.line =
+            packed.lote +
+            " " +
+            (Math.round(qtd * 1000) / 1000).toLocaleString("pt-BR", {
+              minimumFractionDigits: 3,
+              maximumFractionDigits: 3
+            }) +
+            " " +
+            packed.und +
+            " " +
+            packed.produto;
+          if (packed.editalVunit > 0) {
+            packed.line +=
+              " " +
+              packed.editalVunit.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 4
+              });
+            if (packed.editalTotal > 0) {
+              packed.line +=
+                " " +
+                packed.editalTotal.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2
+                });
+            }
+          }
+          if (utils.isLinhaProdutoEdital(packed)) out.push(packed);
+        }
+
+        return out;
+      }
+
+      /**
+       * Contenda / Elotech TR (EPI e similares):
+       *   ITEM DESCRIÇÃO UNIDADE QUANTIDADE / UNITÁRIO TOTAL
+       * pdf.js embute o nº do item no meio da descrição; ordem das colunas:
+       *   UND  R$ unitário  QTD  R$ total
+       * Ex.: "… 2 PAR R$115,32 60 R$6.919,20 …"
+       * Diferente de São Mateus (UND QTD R$ u R$ t). Prefere a tabela COM R$.
+       */
+      function splitContendaBlocks(full) {
+        var t = limparPagina(full).replace(/\r\n?/g, "\n");
+        if (!t) return [];
+
+        var headRe = /ITEM\s+DESCRI[CÇ][AÃ]O\s+UNIDADE\s+QUANTIDADE/i;
+        var headM = headRe.exec(t);
+        var region = t;
+        if (headM) {
+          region = t.slice(headM.index + headM[0].length);
+        } else if (
+          !/\b(?:PAR|UN|UND|CX|KIT|PC|PÇ)\s+R\$\s*[\d.,]+\s+\d{1,5}\s+R\$\s*[\d.,]+/i.test(t)
+        ) {
+          return [];
+        }
+
+        // Só a 1ª planilha com preços (evita duplicar a tabela sem R$ / resumo)
+        var endM = region.search(
+          /\n\s*Valor\s*:\s*R\$|\n\s*2\.\s*FUNDAMENTA|\n\s*10\.\s*ESTIMATIVA|\n\s*ITEM\s+VALOR\s+UNIT[AÁ]RIO\b/i
+        );
+        var secondHead = region.search(/\n\s*ITEM\s+DESCRI[CÇ][AÃ]O\s+UNIDADE\s+QUANTIDADE/i);
+        if (secondHead > 40 && (endM < 0 || secondHead < endM)) endM = secondHead;
+        if (endM > 40) region = region.slice(0, endM);
+
+        var flat = region
+          .replace(/^\s*UNIT[AÁ]RIO\s+TOTAL\s*/i, "")
+          .replace(/\bVALOR\s+VALOR\b/gi, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (!flat) return [];
+
+        var undAlt = EDITAL_UNDS;
+        // Contenda: UND R$ unitário QTD R$ total
+        var reAnchor = new RegExp(
+          "\\b(" +
+            undAlt +
+            ")\\s+R\\$\\s*(\\d{1,3}(?:\\.\\d{3})*,\\d{2}|\\d+,\\d{2})\\s+(\\d{1,5})\\s+R\\$\\s*(\\d{1,3}(?:\\.\\d{3})*,\\d{2}|\\d+,\\d{2})",
+          "gi"
+        );
+
+        var anchors = [];
+        var m;
+        while ((m = reAnchor.exec(flat)) !== null) {
+          anchors.push({
+            undIndex: m.index,
+            end: m.index + m[0].length,
+            und: m[1].toUpperCase(),
+            unitRaw: m[2],
+            qtdRaw: m[3],
+            totalRaw: m[4]
+          });
+        }
+        if (anchors.length < 2) return [];
+
+        function findItemNo(before, expected) {
+          var reNum = /\b(\d{1,5})\b/g;
+          var cands = [];
+          var nm;
+          while ((nm = reNum.exec(before)) !== null) {
+            var n = parseInt(nm[1], 10);
+            if (n < 1 || n > 999) continue;
+            // Ignora decimais do PDF (9,5 cm / 7,5 cm) e dígitos colados
+            var after = before.slice(nm.index + nm[1].length, nm.index + nm[1].length + 2);
+            var beforeCh = before.charAt(nm.index - 1);
+            if (/^,\d/.test(after)) continue;
+            if (beforeCh && /\d/.test(beforeCh)) continue;
+            cands.push({ n: n, idx: nm.index, len: nm[1].length });
+          }
+          if (!cands.length) return { n: expected, idx: before.length, len: 0 };
+          // Prefere o esperado perto da UND (últimos 48 chars)
+          var base = Math.max(0, before.length - 48);
+          for (var i = cands.length - 1; i >= 0; i--) {
+            if (cands[i].n === expected && cands[i].idx >= base) return cands[i];
+          }
+          for (var j = cands.length - 1; j >= 0; j--) {
+            if (cands[j].n === expected) return cands[j];
+          }
+          var near = [];
+          for (var k = 0; k < cands.length; k++) {
+            if (cands[k].idx >= base) near.push(cands[k]);
+          }
+          if (near.length) return near[near.length - 1];
+          return cands[cands.length - 1];
+        }
+
+        function cutPrevResidue(lead) {
+          lead = String(lead || "").replace(/\s+/g, " ").trim();
+          if (!lead) return "";
+          // Só marcadores típicos de FIM de item (não "COR A DEFINIR" no meio da spec)
+          var markers =
+            /(?:CERTIFICADO DE APROVA[CÇ][AÃ]O\)?\.?|C\.?A\.?\s*\([^)]{0,80}\)\.?|DO\s+\d+\s+AO\s+\d+\.?|todos os tamanhos\.?)/gi;
+          var last = 0;
+          var mm;
+          while ((mm = markers.exec(lead)) !== null) {
+            last = mm.index + mm[0].length;
+          }
+          var cut = lead.slice(last).trim();
+          return cut || lead;
+        }
+
+        function pickContendaProduct(lead) {
+          lead = cutPrevResidue(lead);
+          if (!lead) return "";
+          var reProd =
+            /\b(Botina|Luva|Capa|BON[EÉ]|Bon[eé]|Colete|Uniforme|Jaqueta|Óculos|Oculos|Avental|Camisa|Camiseta|Cal[cç]a|Cal[cç][aã]o|Jortes|Capacete|Protetor|M[aá]scara|Bota|Sapato|Cinto|Vestimenta)\b/gi;
+          var matches = [];
+          var pm;
+          while ((pm = reProd.exec(lead)) !== null) {
+            matches.push({ idx: pm.index, word: pm[1] });
+          }
+          if (matches.length) {
+            var last = matches[matches.length - 1];
+            // "Uniforme … (Jortes, Calção) / Calça / Camisa" → manter "Uniforme"
+            if (/^(Camisa|Camiseta|Cal[cç]a|Cal[cç][aã]o|Jortes)$/i.test(last.word)) {
+              for (var bi = matches.length - 2; bi >= 0; bi--) {
+                if (
+                  /^Uniforme$/i.test(matches[bi].word) &&
+                  last.idx - matches[bi].idx < 72
+                ) {
+                  last = matches[bi];
+                  break;
+                }
+              }
+            }
+            return lead.slice(last.idx).trim();
+          }
+          // Fallback: primeira maiúscula “forte”
+          var noise =
+            /^(ABIC|Embalagem|Produto|Nota|Pacote|Benef[ií]cio|Valor|Geral|Unidade|Item|Descri|UNIT|TOTAL|PE|SRP|Tramitado|Assinado|Munic[ií]pio|Contenda|Anexo|TERMO|IDENTIFICA|Processo|Secretaria|Servidor|Data|MODALIDADE|FORMA|DEFINIR|DEFINI|Registro|Bras[aã]o|Quanto|Fio|Gola|Antpelling|Com|Possui|Z[ií]per|EXG)\b/i;
+          var midSpec =
+            /^(Proveniente|Composto|acolchoado|confeccionad[ao]|interna|componentes|palmilha|sistema|espessura|revestimento|acabamento|resist[eê]ncia|impermeabilidade|faixas?|Manga|Abertura|Coeficiente|Gramatura|Punho|Costura|Prespontada|Material|especialmente|durabilidade|proporcionando|execução|equipamento|biqueira|aproximado)\b/i;
+          var reCap = /(?:^|\s)([A-ZÁÀÂÃÉÊÍÓÔÚÇ][A-Za-zÀ-ÿ]{2,})/g;
+          var cm;
+          while ((cm = reCap.exec(lead)) !== null) {
+            if (noise.test(cm[1]) || midSpec.test(cm[1])) continue;
+            return lead.slice(cm.index + (cm[0].charAt(0) === " " ? 1 : 0)).trim();
+          }
+          return lead;
+        }
+
+        var out = [];
+        var expected = 1;
+        for (var a = 0; a < anchors.length; a++) {
+          var prevEnd = a === 0 ? 0 : anchors[a - 1].end;
+          var before = flat.slice(prevEnd, anchors[a].undIndex);
+          var itemInfo = findItemNo(before, expected);
+          var itemNo = itemInfo.n;
+          expected = itemNo + 1;
+
+          var leading = before.slice(0, itemInfo.idx).trim();
+          var between = before.slice(itemInfo.idx + itemInfo.len).trim();
+          // Nº do item antes do nome (ex.: "13 Óculos…") → descrição começa em between
+          var desc;
+          if (
+            /^(Botina|Luva|Capa|BON[EÉ]|Bon[eé]|Colete|Uniforme|Jaqueta|Óculos|Oculos|Avental|Camisa|Camiseta|Cal[cç]a|Protetor|M[aá]scara|Vestimenta)\b/i.test(
+              between
+            )
+          ) {
+            desc = between;
+          } else {
+            desc = (pickContendaProduct(leading) + " " + between).replace(/\s+/g, " ").trim();
+          }
+          desc = desc
+            .replace(/\bUNIT[AÁ]RIO\s+TOTAL\b/gi, " ")
+            .replace(/^TAMANHOS?\s*[PMGEX,\s.–-]*\.?\s*/i, "")
+            .replace(/\s+/g, " ")
+            .trim();
+
+          if (a === 0) {
+            desc = pickContendaProduct(desc) || desc;
+          }
+
+          var qtd = utils.parseBrNum(anchors[a].qtdRaw);
+          var vu = utils.parseBrNum(anchors[a].unitRaw);
+          var vt = utils.parseBrNum(anchors[a].totalRaw);
+          if (!(qtd > 0) || !desc || desc.length < 3) continue;
+
+          var descClean = utils.enxugarDescricaoEdital(desc);
+          if (!descClean || descClean.length < 3) descClean = desc;
+
+          var packed = {
+            lote: String(itemNo),
+            qtd: qtd,
+            und: anchors[a].und,
+            produto: descClean,
+            editalVunit: vu,
+            editalTotal: vt || (vu && qtd ? vu * qtd : 0),
+            line: ""
+          };
           packed.line =
             packed.lote +
             " " +
@@ -2056,6 +2296,12 @@
         (/S[aã]o\s+Mateus\s+do\s+Sul/i.test(rawText) &&
           /(?:PCT|POTE|UND)\s+\d{2,}\s+R\$\s*[\d.,]+\s+R\$/i.test(rawText));
 
+      // Contenda / Elotech TR: ITEM DESCRIÇÃO UNIDADE QUANTIDADE + UND R$ u QTD R$ t
+      var contendaHint =
+        /ITEM\s+DESCRI[CÇ][AÃ]O\s+UNIDADE\s+QUANTIDADE/i.test(rawText) ||
+        (/(?:Munic[ií]pio de Contenda|CONTENDA\/PR)/i.test(rawText) &&
+          /\b(?:PAR|UN|UND)\s+R\$\s*[\d.,]+\s+\d{1,5}\s+R\$\s*[\d.,]+/i.test(rawText));
+
       // 1) Portal Castro / cotas textuais (prioritário quando o PDF tem esse quadro)
       if (castroHint) {
         var castroFirst = splitCastroBlocks(text);
@@ -2074,14 +2320,23 @@
         }
       }
 
-      // 3) Formato THEO (Pinhalão / compras)
+      // 3) Contenda / Elotech TR (UND R$ unitário QTD R$ total) — antes do THEO
+      if (contendaHint) {
+        var contFirst = splitContendaBlocks(text);
+        if (contFirst.length >= 2) {
+          var outCont = dedupeCaptacao(contFirst);
+          if (outCont.length >= 2) return outCont;
+        }
+      }
+
+      // 4) Formato THEO (Pinhalão / compras)
       var theo = splitTheoBlocks(text);
       if (theo.length >= 2) {
         var outT = dedupeCaptacao(theo);
         if (outT.length >= 2) return outT;
       }
 
-      // 4) Portal Castro (fallback se o hint falhou)
+      // 5) Portal Castro (fallback se o hint falhou)
       if (!castroHint) {
         var castro = splitCastroBlocks(text);
         if (castro.length >= 2) {
@@ -2090,7 +2345,7 @@
         }
       }
 
-      // 5) São Mateus (fallback se o hint falhou)
+      // 6) São Mateus (fallback se o hint falhou)
       if (!saoMateusHint) {
         var sms = splitSaoMateusBlocks(text);
         if (sms.length >= 2) {
@@ -2099,7 +2354,16 @@
         }
       }
 
-      // 6) Fallback clássico linha a linha
+      // 7) Contenda (fallback se o hint falhou)
+      if (!contendaHint) {
+        var cont = splitContendaBlocks(text);
+        if (cont.length >= 2) {
+          var outCt = dedupeCaptacao(cont);
+          if (outCt.length >= 2) return outCt;
+        }
+      }
+
+      // 8) Fallback clássico linha a linha
       var t = limparPagina(text).replace(/\r\n?/g, "\n");
       var rawLines = t.split(/\n+/);
       var merged = [];
