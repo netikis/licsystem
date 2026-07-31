@@ -588,46 +588,66 @@ function formatDatePt(iso) {
   }
 }
 
+function formatDateShortPt(iso) {
+  if (!iso) return "não informada";
+  try {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    return d.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  } catch (e) {
+    return String(iso);
+  }
+}
+
 function formatRespostaPt(escopo, editais, kw) {
+  var ondeCurto =
+    escopo.tipo === "regiao" ? escopo.nome : escopo.nome + "/" + escopo.uf;
   var onde =
     escopo.tipo === "regiao"
       ? escopo.nome + " (" + escopo.municipios + " municípios)"
       : escopo.nome + "/" + escopo.uf;
   var lines = [];
-  lines.push(
-    "Encontrei " +
-      editais.length +
-      " edital(is) com proposta em aberto no PNCP para " +
-      onde +
-      "."
-  );
-  if (kw && kw.categorias && kw.categorias.length) {
-    lines.push("Filtro de categorias: " + kw.categorias.join(", ") + ".");
-  }
   if (!editais.length) {
     lines.push(
-      "Nenhum resultado com os filtros atuais. Tente sem categoria, ampliar modalidades ou outro município."
+      "Nenhuma proposta aberta no PNCP neste momento para " + ondeCurto + "."
+    );
+    if (kw && kw.categorias && kw.categorias.length) {
+      lines.push("Filtro de categorias: " + kw.categorias.join(", ") + ".");
+    }
+    lines.push(
+      "Tente sem categoria, ampliar modalidades ou outro município. Editais só em portais locais (fora do PNCP) não aparecem."
     );
     return lines.join(" ");
   }
+  lines.push("Licitações abertas em " + ondeCurto + " (PNCP):");
+  if (kw && kw.categorias && kw.categorias.length) {
+    lines.push("Filtro: " + kw.categorias.join(", ") + ".");
+  }
+  lines.push(
+    "Encontrei " + editais.length + " edital(is) com proposta em aberto."
+  );
   var maxList = Math.min(editais.length, 25);
   for (var i = 0; i < maxList; i++) {
     var e = editais[i];
+    var prefix =
+      escopo.tipo === "regiao" && e.municipio
+        ? e.municipio + " — "
+        : "";
     lines.push(
       i +
         1 +
-        ") " +
-        (e.municipio || "—") +
+        ". " +
+        prefix +
+        String(e.objeto || "Objeto não informado").slice(0, 160) +
         " — " +
-        (e.orgao || "Órgão") +
-        " | Valor: " +
         formatBrl(e.valorEstimado) +
-        " | Abertura: " +
-        formatDatePt(e.dataAbertura) +
-        " | " +
-        (e.link || "sem link") +
-        " | Objeto: " +
-        String(e.objeto || "").slice(0, 160)
+        " — abertura " +
+        formatDateShortPt(e.dataAbertura) +
+        (e.link ? " — " + e.link : "")
     );
   }
   if (editais.length > maxList) {
