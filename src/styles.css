@@ -205,6 +205,12 @@
   .card .desc{color:var(--ls-muted);font-size:12.5px;margin-bottom:16px}
   .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
   .card-head h2{margin:0}
+  .card-head-main{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0;flex:1}
+  .card-collapse-summary{font-weight:600}
+  .card-collapse-btn{flex-shrink:0;white-space:nowrap}
+  .card.is-collapsed{padding-bottom:14px}
+  .card.is-collapsed .card-head{margin-bottom:0}
+  .card.is-collapsed .card-collapsible-body{display:none}
   .grid{display:grid;gap:18px;width:100%;max-width:100%}
   .grid.kpi{grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr))}
   .grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -989,6 +995,7 @@
   }
 
   /* ---------------- Cruzamento result ---------------- */
+  .card-collapsible-body{min-width:0}
   .prox-muni-wrap{position:relative}
   .suggest-box{
     position:absolute;left:0;right:0;top:calc(100% + 2px);z-index:60;

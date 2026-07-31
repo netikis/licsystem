@@ -863,6 +863,10 @@
     capPage: 1,
     capPageSize: 100,
     capFiltered: [],
+    proxPage: 1,
+    proxPageSize: 50,
+    chatPage: 1,
+    chatPageSize: 50,
     orcItems: [],
     aprovadosCruzamento: [],
     pncpAlerts: [],
@@ -2935,6 +2939,11 @@
       var btn = el("btnProxBuscar");
       if (btn) btn.disabled = true;
       if (el("proxMeta")) el("proxMeta").textContent = "";
+      LICSYSTEM.captacao._proxList = [];
+      LICSYSTEM.captacao._proxData = null;
+      LICSYSTEM.state.proxPage = 1;
+      LICSYSTEM.captacao.updateProxPager();
+      LICSYSTEM.captacao.updateCollapseSummary("prox", "");
       el("proxResults").innerHTML =
         '<div class="muted small"><span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Consultando PNCP no raio (horizonte ' +
         (janela === "45" ? "45 dias" : "anual") +
@@ -2967,6 +2976,9 @@
         })
         .catch(function (err) {
           el("proxResults").innerHTML = "";
+          LICSYSTEM.captacao._proxList = [];
+          LICSYSTEM.captacao.updateProxPager();
+          LICSYSTEM.captacao.updateCollapseSummary("prox", "");
           showAlert(
             "proxAlert",
             "error",
@@ -2999,6 +3011,10 @@
         });
       }
 
+      LICSYSTEM.captacao._proxData = j || {};
+      LICSYSTEM.captacao._proxList = list;
+      LICSYSTEM.state.proxPage = 1;
+
       if (meta) {
         meta.textContent =
           "Origem: " +
@@ -3017,9 +3033,14 @@
           " municípios no raio · UFs: " +
           ((j.ufsConsultadas || []).join(", ") || "—") +
           " · " +
-          (j.total || 0) +
+          (j.total || list.length || 0) +
           " edital(is)";
       }
+
+      LICSYSTEM.captacao.updateCollapseSummary(
+        "prox",
+        (j.total || list.length || 0) + " edital(is)…"
+      );
 
       if (!list.length) {
         box.innerHTML =
@@ -3032,6 +3053,7 @@
               " registro(s) nas UFs consultadas, mas nenhum ficou dentro do raio/filtros)."
             : ".") +
           " Tente aumentar o raio, ampliar modalidades ou limpar as palavras-chave.</div>";
+        LICSYSTEM.captacao.updateProxPager();
         showAlert(
           "proxAlert",
           "info",
@@ -3050,8 +3072,42 @@
       LICSYSTEM.updateBell();
       LICSYSTEM.dashboard.renderPncp();
 
+      LICSYSTEM.captacao.paintProximosPage();
+      showAlert(
+        "proxAlert",
+        "ok",
+        list.length +
+          " edital(is) com proposta em aberto no raio de " +
+          (j.raioKm || "—") +
+          " km · " +
+          (j.janelaLabel || "janela anual") +
+          " (fonte PNCP)."
+      );
+    },
+
+    paintProximosPage: function () {
+      var box = el("proxResults");
+      if (!box) return;
+      var list = LICSYSTEM.captacao._proxList || [];
+      var j = LICSYSTEM.captacao._proxData || {};
+      var size = LICSYSTEM.state.proxPageSize || 50;
+      var total = list.length;
+      var pages = Math.max(1, Math.ceil(total / size) || 1);
+      if (!LICSYSTEM.state.proxPage || LICSYSTEM.state.proxPage < 1) LICSYSTEM.state.proxPage = 1;
+      if (LICSYSTEM.state.proxPage > pages) LICSYSTEM.state.proxPage = pages;
+      var page = LICSYSTEM.state.proxPage;
+      var start = (page - 1) * size;
+      var end = Math.min(start + size, total);
+
+      if (!total) {
+        LICSYSTEM.captacao.updateProxPager();
+        return;
+      }
+
       var html = '<div style="display:flex;flex-direction:column;gap:10px">';
-      list.forEach(function (o) {
+      for (var i = start; i < end; i++) {
+        var o = list[i];
+        if (!o) continue;
         var border =
           o.esfera === "E" ? "r-yellow" : o.esfera === "F" ? "r-red" : "r-green";
         html +=
@@ -3097,9 +3153,9 @@
               '">Abrir no PNCP ↗</a></div>'
             : "") +
           "</div>";
-      });
+      }
       html += "</div>";
-      if (j.avisos && j.avisos.length) {
+      if (j.avisos && j.avisos.length && page === 1) {
         html +=
           '<div class="small muted" style="margin-top:10px">' +
           j.avisos
@@ -3110,16 +3166,53 @@
           "</div>";
       }
       box.innerHTML = html;
-      showAlert(
-        "proxAlert",
-        "ok",
-        list.length +
-          " edital(is) com proposta em aberto no raio de " +
-          (j.raioKm || "—") +
-          " km · " +
-          (j.janelaLabel || "janela anual") +
-          " (fonte PNCP)."
-      );
+      LICSYSTEM.captacao.updateProxPager();
+    },
+
+    updateProxPager: function () {
+      var pager = el("proxPager");
+      var info = el("proxPagerInfo");
+      var prev = el("proxPrev");
+      var next = el("proxNext");
+      var total = (LICSYSTEM.captacao._proxList || []).length;
+      var size = LICSYSTEM.state.proxPageSize || 50;
+      var pages = Math.max(1, Math.ceil(total / size) || 1);
+      var page = LICSYSTEM.state.proxPage || 1;
+      if (!pager) return;
+      if (total <= size) {
+        pager.style.display = "none";
+        return;
+      }
+      pager.style.display = "flex";
+      var start = total ? (page - 1) * size + 1 : 0;
+      var end = Math.min(page * size, total);
+      if (info)
+        info.innerHTML =
+          "Itens <b>" +
+          start +
+          "–" +
+          end +
+          "</b> de <b>" +
+          total +
+          "</b> · Página <b>" +
+          page +
+          "</b>/" +
+          pages +
+          " (50 por página)";
+      if (prev) prev.disabled = page <= 1;
+      if (next) next.disabled = page >= pages;
+    },
+
+    goProxPage: function (delta) {
+      var size = LICSYSTEM.state.proxPageSize || 50;
+      var total = (LICSYSTEM.captacao._proxList || []).length;
+      var pages = Math.max(1, Math.ceil(total / size) || 1);
+      var next = (LICSYSTEM.state.proxPage || 1) + delta;
+      if (next < 1) next = 1;
+      if (next > pages) next = pages;
+      if (next === LICSYSTEM.state.proxPage) return;
+      LICSYSTEM.state.proxPage = next;
+      LICSYSTEM.captacao.paintProximosPage();
     },
 
     /* ---------- Perguntar editais (chat helper) ---------- */
@@ -3210,6 +3303,11 @@
       var btn = el("btnChatEdital");
       if (btn) btn.disabled = true;
       if (el("chatEditalMeta")) el("chatEditalMeta").textContent = "";
+      LICSYSTEM.captacao._chatList = [];
+      LICSYSTEM.captacao._chatData = null;
+      LICSYSTEM.state.chatPage = 1;
+      LICSYSTEM.captacao.updateChatPager();
+      LICSYSTEM.captacao.updateCollapseSummary("chat", "");
       if (el("chatEditalResults")) {
         el("chatEditalResults").innerHTML =
           '<div class="muted small"><span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Consultando PNCP (' +
@@ -3236,6 +3334,9 @@
         })
         .catch(function (err) {
           if (el("chatEditalResults")) el("chatEditalResults").innerHTML = "";
+          LICSYSTEM.captacao._chatList = [];
+          LICSYSTEM.captacao.updateChatPager();
+          LICSYSTEM.captacao.updateCollapseSummary("chat", "");
           showAlert(
             "chatEditalAlert",
             "error",
@@ -3266,6 +3367,11 @@
             " municípios"
           : (escopo.nome || "—") + "/" + (escopo.uf || "—");
 
+      LICSYSTEM.captacao._chatData = j || {};
+      LICSYSTEM.captacao._chatList = list;
+      LICSYSTEM.captacao._chatOnde = onde;
+      LICSYSTEM.state.chatPage = 1;
+
       if (meta) {
         meta.textContent =
           onde +
@@ -3273,7 +3379,7 @@
           (j.janelaLabel || "janela anual") +
           (j.dataFinalPncp ? " até " + j.dataFinalPncp : "") +
           " · " +
-          (j.total || 0) +
+          (j.total || list.length || 0) +
           " edital(is)" +
           (j.categorias && j.categorias.length
             ? " · categorias: " + j.categorias.join(", ")
@@ -3281,6 +3387,11 @@
           " · UFs: " +
           ((j.ufsConsultadas || []).join(", ") || "—");
       }
+
+      LICSYSTEM.captacao.updateCollapseSummary(
+        "chat",
+        (j.total || list.length || 0) + " edital(is)…"
+      );
 
       if (!list.length) {
         var amostra = (j && j.amostraMunicipios) || [];
@@ -3314,6 +3425,7 @@
             ? " dataFinal PNCP até " + j.dataFinalPncp + "."
             : "") +
           " Se o edital existir só no portal da prefeitura, não aparece aqui.</div>";
+        LICSYSTEM.captacao.updateChatPager();
         showAlert(
           "chatEditalAlert",
           "info",
@@ -3332,11 +3444,45 @@
       LICSYSTEM.updateBell();
       LICSYSTEM.dashboard.renderPncp();
 
+      LICSYSTEM.captacao.paintChatPage();
+      showAlert(
+        "chatEditalAlert",
+        "ok",
+        list.length +
+          " edital(is) com encerramento no horizonte " +
+          utils.escapeHtml(j.janelaLabel || "anual") +
+          " para " +
+          utils.escapeHtml(onde) +
+          " (PNCP)."
+      );
+    },
+
+    paintChatPage: function () {
+      var box = el("chatEditalResults");
+      if (!box) return;
+      var list = LICSYSTEM.captacao._chatList || [];
+      var j = LICSYSTEM.captacao._chatData || {};
+      var size = LICSYSTEM.state.chatPageSize || 50;
+      var total = list.length;
+      var pages = Math.max(1, Math.ceil(total / size) || 1);
+      if (!LICSYSTEM.state.chatPage || LICSYSTEM.state.chatPage < 1) LICSYSTEM.state.chatPage = 1;
+      if (LICSYSTEM.state.chatPage > pages) LICSYSTEM.state.chatPage = pages;
+      var page = LICSYSTEM.state.chatPage;
+      var start = (page - 1) * size;
+      var end = Math.min(start + size, total);
+
+      if (!total) {
+        LICSYSTEM.captacao.updateChatPager();
+        return;
+      }
+
       var html =
         '<div class="tbl-wrap"><table class="chat-edital-table"><thead><tr>' +
         "<th>Município</th><th>Órgão</th><th>Objeto</th><th>Valor estimado</th><th>Abertura</th><th>Modalidade</th><th>Edital</th>" +
         "</tr></thead><tbody>";
-      list.forEach(function (o) {
+      for (var i = start; i < end; i++) {
+        var o = list[i];
+        if (!o) continue;
         html +=
           "<tr>" +
           "<td>" +
@@ -3367,9 +3513,9 @@
             : "—") +
           "</td>" +
           "</tr>";
-      });
+      }
       html += "</tbody></table></div>";
-      if (j.avisos && j.avisos.length) {
+      if (j.avisos && j.avisos.length && page === 1) {
         html +=
           '<div class="small muted" style="margin-top:10px">' +
           j.avisos
@@ -3380,16 +3526,122 @@
           "</div>";
       }
       box.innerHTML = html;
-      showAlert(
-        "chatEditalAlert",
-        "ok",
-        list.length +
-          " edital(is) com encerramento no horizonte " +
-          utils.escapeHtml(j.janelaLabel || "anual") +
-          " para " +
-          utils.escapeHtml(onde) +
-          " (PNCP)."
-      );
+      LICSYSTEM.captacao.updateChatPager();
+    },
+
+    updateChatPager: function () {
+      var pager = el("chatPager");
+      var info = el("chatPagerInfo");
+      var prev = el("chatPrev");
+      var next = el("chatNext");
+      var total = (LICSYSTEM.captacao._chatList || []).length;
+      var size = LICSYSTEM.state.chatPageSize || 50;
+      var pages = Math.max(1, Math.ceil(total / size) || 1);
+      var page = LICSYSTEM.state.chatPage || 1;
+      if (!pager) return;
+      if (total <= size) {
+        pager.style.display = "none";
+        return;
+      }
+      pager.style.display = "flex";
+      var start = total ? (page - 1) * size + 1 : 0;
+      var end = Math.min(page * size, total);
+      if (info)
+        info.innerHTML =
+          "Itens <b>" +
+          start +
+          "–" +
+          end +
+          "</b> de <b>" +
+          total +
+          "</b> · Página <b>" +
+          page +
+          "</b>/" +
+          pages +
+          " (50 por página)";
+      if (prev) prev.disabled = page <= 1;
+      if (next) next.disabled = page >= pages;
+    },
+
+    goChatPage: function (delta) {
+      var size = LICSYSTEM.state.chatPageSize || 50;
+      var total = (LICSYSTEM.captacao._chatList || []).length;
+      var pages = Math.max(1, Math.ceil(total / size) || 1);
+      var next = (LICSYSTEM.state.chatPage || 1) + delta;
+      if (next < 1) next = 1;
+      if (next > pages) next = pages;
+      if (next === LICSYSTEM.state.chatPage) return;
+      LICSYSTEM.state.chatPage = next;
+      LICSYSTEM.captacao.paintChatPage();
+    },
+
+    COLLAPSE_KEY: "licsystem_captacao_collapse_v1",
+
+    updateCollapseSummary: function (which, text) {
+      var id = which === "prox" ? "proxCollapseSummary" : "chatCollapseSummary";
+      var sum = el(id);
+      if (!sum) return;
+      sum.textContent = text || "";
+      var card =
+        which === "prox" ? el("cardProxEditais") : el("cardChatEditais");
+      var collapsed = card && card.classList.contains("is-collapsed");
+      sum.hidden = !collapsed || !text;
+    },
+
+    applyCardCollapse: function (card, collapsed) {
+      if (!card) return;
+      var btn = card.querySelector(".card-collapse-btn");
+      var key = card.getAttribute("data-collapse-key");
+      card.classList.toggle("is-collapsed", !!collapsed);
+      if (btn) {
+        btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+        btn.textContent = collapsed ? "▸ Expandir" : "▾ Minimizar";
+        btn.title = collapsed ? "Expandir painel" : "Minimizar painel";
+      }
+      var sumId =
+        key === "prox-editais" ? "proxCollapseSummary" : "chatCollapseSummary";
+      var sum = el(sumId);
+      if (sum) {
+        sum.hidden = !collapsed || !String(sum.textContent || "").trim();
+      }
+      try {
+        var store = JSON.parse(
+          localStorage.getItem(LICSYSTEM.captacao.COLLAPSE_KEY) || "{}"
+        );
+        if (key) store[key] = !!collapsed;
+        localStorage.setItem(
+          LICSYSTEM.captacao.COLLAPSE_KEY,
+          JSON.stringify(store)
+        );
+      } catch (e) {}
+    },
+
+    initCardCollapse: function () {
+      var store = {};
+      try {
+        store = JSON.parse(
+          localStorage.getItem(LICSYSTEM.captacao.COLLAPSE_KEY) || "{}"
+        );
+      } catch (e) {
+        store = {};
+      }
+      ["cardChatEditais", "cardProxEditais"].forEach(function (id) {
+        var card = el(id);
+        if (!card) return;
+        var key = card.getAttribute("data-collapse-key");
+        var collapsed = !!(key && store[key]);
+        LICSYSTEM.captacao.applyCardCollapse(card, collapsed);
+        var btn = card.querySelector(".card-collapse-btn");
+        if (btn && !btn._collapseWired) {
+          btn._collapseWired = true;
+          btn.addEventListener("click", function () {
+            LICSYSTEM.captacao.applyCardCollapse(
+              card,
+              !card.classList.contains("is-collapsed")
+            );
+          });
+        }
+      });
     },
 
     /* ---------- Radar PNCP ---------- */
@@ -5412,6 +5664,10 @@
     on("orcNext","click", function(){ LICSYSTEM.orcamento.goPage(1); });
     on("capPrev","click", function(){ LICSYSTEM.captacao.goPage(-1); });
     on("capNext","click", function(){ LICSYSTEM.captacao.goPage(1); });
+    on("proxPrev","click", function(){ LICSYSTEM.captacao.goProxPage(-1); });
+    on("proxNext","click", function(){ LICSYSTEM.captacao.goProxPage(1); });
+    on("chatPrev","click", function(){ LICSYSTEM.captacao.goChatPage(-1); });
+    on("chatNext","click", function(){ LICSYSTEM.captacao.goChatPage(1); });
     on("orcCheckAll","change", function(){
       var onChk = this.checked;
       document.querySelectorAll(".orcChk").forEach(function(c){ c.checked = onChk; });
@@ -7422,6 +7678,7 @@
     LICSYSTEM.captacao.initUf();
     LICSYSTEM.captacao.initProximos();
     LICSYSTEM.captacao.initChatEditais();
+    LICSYSTEM.captacao.initCardCollapse();
     LICSYSTEM.orcamento.load();
     LICSYSTEM.state._orcDirty = true;
     LICSYSTEM.state._orcRendered = false;
