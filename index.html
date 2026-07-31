@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <!-- CSS: src/styles.css (minificado no build) -->
 </head>
 <body class="auth-locked">
@@ -536,11 +537,26 @@
       <!-- ===================== COFRE ===================== -->
       <section id="view-cofre" class="view">
         <div class="card">
-          <div class="card-head"><h2>🔐 Cofre de Documentos</h2>
-            <button class="btn btn-primary btn-sm" id="btnSalvarCofre">💾 Salvar</button>
+          <div class="card-head">
+            <h2>🔐 Cofre de Documentos</h2>
+            <div class="btn-row" style="margin:0">
+              <button type="button" class="btn btn-primary btn-sm" id="btnCofreAdd">+ Adicionar</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="btnCofreEdit">✏️ Editar</button>
+              <button type="button" class="btn btn-red btn-sm" id="btnCofreRemove">🗑 Remover</button>
+              <button type="button" class="btn btn-gold btn-sm" id="btnCofreExportZip">📦 Exportar ZIP</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="btnSalvarCofre">💾 Salvar</button>
+            </div>
           </div>
-          <div class="desc">Controle de validade das certidões e documentos habilitatórios. Verde: válido · Amarelo: vence em ≤15 dias · Vermelho: vencido/sem data.</div>
-          <div id="cofreList"></div>
+          <div class="desc">
+            Gerencie certidões e documentos habilitatórios: adicione, edite, remova vencidos e exporte em ZIP.
+            <b>Verde:</b> válido · <b>Amarelo:</b> vence em ≤15 dias · <b>Vermelho:</b> vencido/sem data.
+          </div>
+          <div id="cofreAlert" class="alert"></div>
+          <div class="btn-row cofre-toolbar">
+            <label class="cofre-check-all"><input type="checkbox" id="cofreSelectAll" /> Selecionar todos</label>
+            <button type="button" class="btn btn-ghost btn-sm" id="btnCofreSeed">Carregar padrões</button>
+          </div>
+          <div id="cofreList" class="cofre-list"></div>
         </div>
       </section>
 
@@ -1146,6 +1162,51 @@
     <div class="btn-row">
       <button type="button" class="btn btn-ghost" id="btnDocsModalClose">Fechar</button>
       <button type="button" class="btn btn-gold" id="btnDocsModalGo">Ver o que tenho / Marcar OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: COFRE — ADICIONAR / EDITAR ============ -->
+<div id="cofreOverlay" aria-hidden="true">
+  <div class="docs-modal-card cofre-modal-card" role="dialog" aria-modal="true" aria-labelledby="cofreModalTitle">
+    <h3 id="cofreModalTitle">Adicionar documento</h3>
+    <p id="cofreModalLead">Informe os dados do documento. Arquivo (PDF/imagem) ou link externo.</p>
+    <div id="cofreModalAlert" class="alert"></div>
+    <input type="hidden" id="cofreEditId" value="" />
+    <div class="form-row">
+      <div>
+        <label class="fld" for="cofreNome">Nome do documento</label>
+        <input type="text" id="cofreNome" placeholder="ex.: CND Federal" maxlength="220" autocomplete="off" />
+      </div>
+      <div>
+        <label class="fld" for="cofreTipo">Tipo / categoria</label>
+        <select id="cofreTipo">
+          <option value="habilitacao">Habilitação</option>
+          <option value="certidao">Certidão</option>
+          <option value="contrato">Contrato / Ato societário</option>
+          <option value="tecnica">Técnica</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label class="fld" for="cofreValidade">Validade (opcional)</label>
+        <input type="date" id="cofreValidade" />
+      </div>
+      <div>
+        <label class="fld" for="cofreLink">Link (opcional)</label>
+        <input type="url" id="cofreLink" placeholder="https://…" autocomplete="off" />
+      </div>
+    </div>
+    <label class="fld" for="cofreArquivo">Arquivo PDF ou imagem (opcional, máx. 400 KB)</label>
+    <input type="file" id="cofreArquivo" accept=".pdf,image/*,application/pdf" />
+    <div id="cofreArquivoInfo" class="muted small" style="margin:6px 0 10px"></div>
+    <label class="fld" for="cofreObs">Observações</label>
+    <textarea id="cofreObs" rows="2" maxlength="400" placeholder="ex.: renovar no site da Receita"></textarea>
+    <div class="btn-row">
+      <button type="button" class="btn btn-ghost" id="btnCofreModalCancel">Cancelar</button>
+      <button type="button" class="btn btn-green" id="btnCofreModalSave">💾 Salvar documento</button>
     </div>
   </div>
 </div>
