@@ -128,130 +128,156 @@
       <!-- ===================== CAPTAÇÃO ===================== -->
       <section id="view-captacao" class="view">
         <!-- Perguntar editais (chat helper — PNCP) -->
-        <div class="card">
+        <div class="card" id="cardChatEditais" data-collapse-key="chat-editais">
           <div class="card-head">
-            <h2>💬 Perguntar editais</h2>
-            <span class="tag">PNCP · chat</span>
-          </div>
-          <div class="desc">
-            Pergunte em português ou use os atalhos. Lista propostas com encerramento no
-            <b>horizonte anual</b> (~12 meses) no PNCP (município ou
-            <b>Norte Pioneiro do Paraná</b> — 26 municípios). Alternativa: janela de 45 dias.
-            O botão flutuante <b>Suporte</b> usa a mesma API (<code>/api/editais-chat</code>).
-          </div>
-          <div id="chatEditalAlert" class="alert"></div>
-          <div class="form-row">
-            <div style="flex:2;min-width:220px">
-              <label class="fld">Pergunta</label>
-              <input type="text" id="chatEditalMsg" placeholder='Ex.: Quais licitações terão em Ibaiti' autocomplete="off" />
+            <div class="card-head-main">
+              <h2>💬 Perguntar editais</h2>
+              <span class="tag">PNCP · chat</span>
+              <span class="card-collapse-summary muted small" id="chatCollapseSummary" hidden></span>
             </div>
-            <div style="max-width:200px">
-              <label class="fld">Categoria (opcional)</label>
-              <select id="chatEditalCat">
-                <option value="">Todas</option>
-                <option value="reforma">Reformas / obras</option>
-                <option value="comida">Aquisições de comida</option>
-                <option value="cestas">Cestas básicas</option>
-                <option value="cafe">Café / lanche</option>
-                <option value="natal">Natal</option>
-                <option value="eletro">Eletrodomésticos</option>
-              </select>
+            <button type="button" class="btn btn-ghost btn-sm card-collapse-btn" id="btnCollapseChat" aria-expanded="true" aria-controls="chatCardBody" title="Minimizar painel">▾ Minimizar</button>
+          </div>
+          <div class="card-collapsible-body" id="chatCardBody">
+            <div class="desc">
+              Pergunte em português ou use os atalhos. Lista propostas com encerramento no
+              <b>horizonte anual</b> (~12 meses) no PNCP (município ou
+              <b>Norte Pioneiro do Paraná</b> — 26 municípios). Alternativa: janela de 45 dias.
+              O botão flutuante <b>Suporte</b> usa a mesma API (<code>/api/editais-chat</code>).
             </div>
-            <div style="max-width:140px">
-              <label class="fld">Janela</label>
-              <select id="chatEditalJanela" title="Horizonte de encerramento da proposta no PNCP">
-                <option value="ano" selected>Ano (~365 dias)</option>
-                <option value="45">45 dias</option>
-              </select>
+            <div id="chatEditalAlert" class="alert"></div>
+            <div class="form-row">
+              <div style="flex:2;min-width:220px">
+                <label class="fld">Pergunta</label>
+                <input type="text" id="chatEditalMsg" placeholder='Ex.: Quais licitações terão em Ibaiti' autocomplete="off" />
+              </div>
+              <div style="max-width:200px">
+                <label class="fld">Categoria (opcional)</label>
+                <select id="chatEditalCat">
+                  <option value="">Todas</option>
+                  <option value="reforma">Reformas / obras</option>
+                  <option value="comida">Aquisições de comida</option>
+                  <option value="cestas">Cestas básicas</option>
+                  <option value="cafe">Café / lanche</option>
+                  <option value="natal">Natal</option>
+                  <option value="eletro">Eletrodomésticos</option>
+                </select>
+              </div>
+              <div style="max-width:140px">
+                <label class="fld">Janela</label>
+                <select id="chatEditalJanela" title="Horizonte de encerramento da proposta no PNCP">
+                  <option value="ano" selected>Ano (~365 dias)</option>
+                  <option value="45">45 dias</option>
+                </select>
+              </div>
+              <div style="max-width:190px;display:flex;align-items:flex-end">
+                <button class="btn btn-gold" id="btnChatEdital" style="width:100%">🔍 Buscar editais</button>
+              </div>
             </div>
-            <div style="max-width:190px;display:flex;align-items:flex-end">
-              <button class="btn btn-gold" id="btnChatEdital" style="width:100%">🔍 Buscar editais</button>
+            <div class="btn-row chat-edital-prompts" style="margin-top:0;flex-wrap:wrap;gap:8px;align-items:center">
+              <span class="small muted">Atalhos:</span>
+              <button type="button" class="btn btn-sm" data-chat-prompt="norte-pioneiro">Norte Pioneiro (todos)</button>
+              <button type="button" class="btn btn-sm" data-chat-prompt="norte-comida">Norte Pioneiro · comida/cestas</button>
+              <button type="button" class="btn btn-sm" data-chat-prompt="norte-reforma">Norte Pioneiro · reformas</button>
+              <button type="button" class="btn btn-sm" data-chat-prompt="norte-natal">Norte Pioneiro · Natal</button>
+              <button type="button" class="btn btn-sm" data-chat-prompt="norte-eletro">Norte Pioneiro · eletro</button>
+              <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-left:4px">
+                <input type="checkbox" id="chatEditalAmpliar" />
+                Ampliar modalidades
+              </label>
+            </div>
+            <div class="small muted" id="chatEditalMeta" style="margin:8px 0 4px"></div>
+            <div id="chatEditalResults"></div>
+            <div class="pager" id="chatPager" style="display:none">
+              <div class="pager-info" id="chatPagerInfo"></div>
+              <div class="pager-btns">
+                <button type="button" class="btn btn-ghost btn-sm" id="chatPrev">← Anterior</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="chatNext">Próxima →</button>
+              </div>
             </div>
           </div>
-          <div class="btn-row chat-edital-prompts" style="margin-top:0;flex-wrap:wrap;gap:8px;align-items:center">
-            <span class="small muted">Atalhos:</span>
-            <button type="button" class="btn btn-sm" data-chat-prompt="norte-pioneiro">Norte Pioneiro (todos)</button>
-            <button type="button" class="btn btn-sm" data-chat-prompt="norte-comida">Norte Pioneiro · comida/cestas</button>
-            <button type="button" class="btn btn-sm" data-chat-prompt="norte-reforma">Norte Pioneiro · reformas</button>
-            <button type="button" class="btn btn-sm" data-chat-prompt="norte-natal">Norte Pioneiro · Natal</button>
-            <button type="button" class="btn btn-sm" data-chat-prompt="norte-eletro">Norte Pioneiro · eletro</button>
-            <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-left:4px">
-              <input type="checkbox" id="chatEditalAmpliar" />
-              Ampliar modalidades
-            </label>
-          </div>
-          <div class="small muted" id="chatEditalMeta" style="margin:8px 0 4px"></div>
-          <div id="chatEditalResults"></div>
         </div>
 
         <!-- Editais próximos (município + raio) -->
-        <div class="card">
+        <div class="card" id="cardProxEditais" data-collapse-key="prox-editais">
           <div class="card-head">
-            <h2>📍 Editais próximos</h2>
-            <span class="tag">PNCP · raio</span>
+            <div class="card-head-main">
+              <h2>📍 Editais próximos</h2>
+              <span class="tag">PNCP · raio</span>
+              <span class="card-collapse-summary muted small" id="proxCollapseSummary" hidden></span>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm card-collapse-btn" id="btnCollapseProx" aria-expanded="true" aria-controls="proxCardBody" title="Minimizar painel">▾ Minimizar</button>
           </div>
-          <div class="desc">
-            Informe o município de origem e busque propostas com encerramento no
-            <b>horizonte anual</b> (municipais e estaduais) no PNCP dentro do raio
-            (até 700 km). Use a cobertura <b>Paraná + divisas SP</b> para cobrir o estado
-            inteiro e a fronteira com São Paulo. Distância pelo município do órgão (IBGE).
-          </div>
-          <div id="proxAlert" class="alert"></div>
-          <div class="form-row">
-            <div style="flex:2;min-width:200px">
-              <label class="fld">Município de origem</label>
-              <div class="prox-muni-wrap">
-                <input type="text" id="proxMunicipio" placeholder="Digite e escolha na lista (ex.: Ibaiti)" autocomplete="off" />
-                <input type="hidden" id="proxIbge" value="" />
-                <div id="proxSuggest" class="suggest-box" hidden></div>
+          <div class="card-collapsible-body" id="proxCardBody">
+            <div class="desc">
+              Informe o município de origem e busque propostas com encerramento no
+              <b>horizonte anual</b> (municipais e estaduais) no PNCP dentro do raio
+              (até 700 km). Use a cobertura <b>Paraná + divisas SP</b> para cobrir o estado
+              inteiro e a fronteira com São Paulo. Distância pelo município do órgão (IBGE).
+            </div>
+            <div id="proxAlert" class="alert"></div>
+            <div class="form-row">
+              <div style="flex:2;min-width:200px">
+                <label class="fld">Município de origem</label>
+                <div class="prox-muni-wrap">
+                  <input type="text" id="proxMunicipio" placeholder="Digite e escolha na lista (ex.: Ibaiti)" autocomplete="off" />
+                  <input type="hidden" id="proxIbge" value="" />
+                  <div id="proxSuggest" class="suggest-box" hidden></div>
+                </div>
+                <div id="proxQuickPick" class="prox-quick-pick" hidden></div>
+                <div class="small muted" id="proxOrigemHint" style="margin-top:6px">Nenhum município salvo ainda.</div>
               </div>
-              <div id="proxQuickPick" class="prox-quick-pick" hidden></div>
-              <div class="small muted" id="proxOrigemHint" style="margin-top:6px">Nenhum município salvo ainda.</div>
+              <div style="max-width:220px">
+                <label class="fld">Cobertura</label>
+                <select id="proxCobertura">
+                  <option value="">Raio livre</option>
+                  <option value="pr-sp">Paraná + divisas SP</option>
+                </select>
+              </div>
+              <div style="max-width:130px">
+                <label class="fld">Raio (km)</label>
+                <input type="number" id="proxRaio" min="10" max="700" step="10" value="250" />
+              </div>
+              <div style="max-width:140px">
+                <label class="fld">Janela</label>
+                <select id="proxJanela" title="Horizonte de encerramento da proposta no PNCP">
+                  <option value="ano" selected>Ano (~365 dias)</option>
+                  <option value="45">45 dias</option>
+                </select>
+              </div>
+              <div style="flex:1.4">
+                <label class="fld">Palavras-chave (opcional)</label>
+                <input type="text" id="proxKeywords" placeholder="ex.: material elétrico, ferramenta" />
+              </div>
+              <div style="max-width:190px;display:flex;align-items:flex-end">
+                <button class="btn btn-gold" id="btnProxBuscar" style="width:100%">🔍 Buscar no raio</button>
+              </div>
             </div>
-            <div style="max-width:220px">
-              <label class="fld">Cobertura</label>
-              <select id="proxCobertura">
-                <option value="">Raio livre</option>
-                <option value="pr-sp">Paraná + divisas SP</option>
-              </select>
+            <div class="btn-row" style="margin-top:0;flex-wrap:wrap;gap:8px;align-items:center">
+              <span class="small muted">Atalhos de raio:</span>
+              <button type="button" class="btn btn-sm" data-prox-raio="150">150 km</button>
+              <button type="button" class="btn btn-sm" data-prox-raio="250">250 km</button>
+              <button type="button" class="btn btn-sm" data-prox-raio="500">500 km</button>
+              <button type="button" class="btn btn-sm" data-prox-raio="700">700 km</button>
+              <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-left:8px">
+                <input type="checkbox" id="proxAmpliar" />
+                Ampliar modalidades (concorrência / pregão presencial)
+              </label>
+              <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="proxFederal" />
+                Incluir órgãos federais no raio
+              </label>
             </div>
-            <div style="max-width:130px">
-              <label class="fld">Raio (km)</label>
-              <input type="number" id="proxRaio" min="10" max="700" step="10" value="250" />
-            </div>
-            <div style="max-width:140px">
-              <label class="fld">Janela</label>
-              <select id="proxJanela" title="Horizonte de encerramento da proposta no PNCP">
-                <option value="ano" selected>Ano (~365 dias)</option>
-                <option value="45">45 dias</option>
-              </select>
-            </div>
-            <div style="flex:1.4">
-              <label class="fld">Palavras-chave (opcional)</label>
-              <input type="text" id="proxKeywords" placeholder="ex.: material elétrico, ferramenta" />
-            </div>
-            <div style="max-width:190px;display:flex;align-items:flex-end">
-              <button class="btn btn-gold" id="btnProxBuscar" style="width:100%">🔍 Buscar no raio</button>
+            <div class="small muted" id="proxCoberturaHint" style="margin-top:6px"></div>
+            <div id="proxMeta" class="small muted" style="margin:8px 0 4px"></div>
+            <div id="proxResults"></div>
+            <div class="pager" id="proxPager" style="display:none">
+              <div class="pager-info" id="proxPagerInfo"></div>
+              <div class="pager-btns">
+                <button type="button" class="btn btn-ghost btn-sm" id="proxPrev">← Anterior</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="proxNext">Próxima →</button>
+              </div>
             </div>
           </div>
-          <div class="btn-row" style="margin-top:0;flex-wrap:wrap;gap:8px;align-items:center">
-            <span class="small muted">Atalhos de raio:</span>
-            <button type="button" class="btn btn-sm" data-prox-raio="150">150 km</button>
-            <button type="button" class="btn btn-sm" data-prox-raio="250">250 km</button>
-            <button type="button" class="btn btn-sm" data-prox-raio="500">500 km</button>
-            <button type="button" class="btn btn-sm" data-prox-raio="700">700 km</button>
-            <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-left:8px">
-              <input type="checkbox" id="proxAmpliar" />
-              Ampliar modalidades (concorrência / pregão presencial)
-            </label>
-            <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer">
-              <input type="checkbox" id="proxFederal" />
-              Incluir órgãos federais no raio
-            </label>
-          </div>
-          <div class="small muted" id="proxCoberturaHint" style="margin-top:6px"></div>
-          <div id="proxMeta" class="small muted" style="margin:8px 0 4px"></div>
-          <div id="proxResults"></div>
         </div>
 
         <!-- Radar PNCP -->
