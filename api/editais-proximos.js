@@ -15,9 +15,6 @@
  *   - cobertura livre: até 2 páginas × UF × modalidade, máx. 4 UFs
  *   - cobertura pr-sp: PR até 3 páginas/mod.; SP até 2; demais UFs omitidas
  */
-var fs = require("fs");
-var path = require("path");
-
 var PNCP_BASE = "https://pncp.gov.br/api/consulta/v1";
 var PAGE_SIZE = 50;
 var MAX_PAGES_PER_UF_MOD = 2;
@@ -50,12 +47,8 @@ function json(res, status, body) {
 
 function loadMunicipios() {
   if (_municipios) return _municipios;
-  try {
-    _municipios = require("./data/municipios.json");
-  } catch (e) {
-    var file = path.join(__dirname, "data", "municipios.json");
-    _municipios = JSON.parse(fs.readFileSync(file, "utf8"));
-  }
+  /* Módulo com require estático — NFT inclui o JSON; sem fs. */
+  _municipios = require("./lib/municipios-data");
   _byIbge = Object.create(null);
   for (var i = 0; i < _municipios.length; i++) {
     _byIbge[_municipios[i].i] = _municipios[i];

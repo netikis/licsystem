@@ -7,9 +7,6 @@
  *   uf  opcional (sigla)
  *   ibge opcional — retorna um município exato
  */
-var fs = require("fs");
-var path = require("path");
-
 var _municipios = null;
 
 function cors(res) {
@@ -28,13 +25,8 @@ function json(res, status, body) {
 
 function load() {
   if (_municipios) return _municipios;
-  /* require() faz o bundler/NFT da Vercel incluir o JSON no lambda. */
-  try {
-    _municipios = require("./data/municipios.json");
-    if (Array.isArray(_municipios)) return _municipios;
-  } catch (e) {}
-  var file = path.join(__dirname, "data", "municipios.json");
-  _municipios = JSON.parse(fs.readFileSync(file, "utf8"));
+  /* Módulo com require estático — NFT inclui o JSON; sem fs. */
+  _municipios = require("./lib/municipios-data");
   return _municipios;
 }
 
