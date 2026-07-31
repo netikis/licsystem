@@ -234,7 +234,7 @@
     });
 
     appendBot(
-      "Olá! Posso listar <b>editais com proposta aberta no PNCP</b>.\n\n" +
+      "Olá! Posso listar <b>propostas com encerramento no horizonte anual</b> no PNCP.\n\n" +
         "Exemplos:\n" +
         "• Quais licitações terão em Ibaiti\n" +
         "• Licitações no Norte Pioneiro\n" +
@@ -356,6 +356,7 @@
       body: JSON.stringify({
         mensagem: mensagem,
         esferas: "M,E",
+        janela: "ano",
       }),
     }).then(function (r) {
       return r.json().then(function (j) {

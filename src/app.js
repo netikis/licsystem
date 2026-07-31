@@ -2909,6 +2909,7 @@
       var kw = (el("proxKeywords") && el("proxKeywords").value) || "";
       var ampliar = !!(el("proxAmpliar") && el("proxAmpliar").checked);
       var federal = !!(el("proxFederal") && el("proxFederal").checked);
+      var janela = (el("proxJanela") && el("proxJanela").value) || "ano";
 
       if (!Number.isFinite(raio) || raio < 10) raio = 250;
       if (raio > 700) raio = 700;
@@ -2935,13 +2936,17 @@
       if (btn) btn.disabled = true;
       if (el("proxMeta")) el("proxMeta").textContent = "";
       el("proxResults").innerHTML =
-        '<div class="muted small"><span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Consultando PNCP no raio… isso pode levar alguns segundos.</div>';
+        '<div class="muted small"><span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Consultando PNCP no raio (horizonte ' +
+        (janela === "45" ? "45 dias" : "anual") +
+        ")… isso pode levar alguns segundos.</div>";
 
       var url =
         "/api/editais-proximos?ibge=" +
         encodeURIComponent(ibge) +
         "&raio=" +
         encodeURIComponent(raio) +
+        "&janela=" +
+        encodeURIComponent(janela) +
         (cobertura ? "&cobertura=" + encodeURIComponent(cobertura) : "") +
         (kw ? "&q=" + encodeURIComponent(kw) : "") +
         (ampliar ? "&ampliar=1" : "") +
@@ -3005,6 +3010,9 @@
           " km" +
           (j.cobertura === "pr-sp" ? " · cobertura Paraná + divisas SP" : "") +
           " · " +
+          (j.janelaLabel || "janela anual") +
+          (j.dataFinalPncp ? " até " + j.dataFinalPncp : "") +
+          " · " +
           (j.municipiosNoRaio || 0) +
           " municípios no raio · UFs: " +
           ((j.ufsConsultadas || []).join(", ") || "—") +
@@ -3015,7 +3023,9 @@
 
       if (!list.length) {
         box.innerHTML =
-          '<div class="muted small">Nenhum edital com proposta em aberto encontrado no raio' +
+          '<div class="muted small">Nenhuma proposta com encerramento no horizonte ' +
+          utils.escapeHtml(j.janelaLabel || "anual") +
+          " encontrada no raio" +
           (j.totalBrutoPncp
             ? " (o PNCP retornou " +
               j.totalBrutoPncp +
@@ -3106,7 +3116,9 @@
         list.length +
           " edital(is) com proposta em aberto no raio de " +
           (j.raioKm || "—") +
-          " km (fonte PNCP)."
+          " km · " +
+          (j.janelaLabel || "janela anual") +
+          " (fonte PNCP)."
       );
     },
 
@@ -3180,12 +3192,14 @@
       opts = opts || {};
       hideAlert("chatEditalAlert");
       var ampliar = !!(el("chatEditalAmpliar") && el("chatEditalAmpliar").checked);
+      var janela = (el("chatEditalJanela") && el("chatEditalJanela").value) || "ano";
       var body = {
         mensagem: opts.mensagem || undefined,
         regiao: opts.regiao || undefined,
         municipio: opts.municipio || undefined,
         categoria: opts.categoria || undefined,
         ampliar: ampliar ? "1" : undefined,
+        janela: janela,
         esferas: "M,E",
       };
       Object.keys(body).forEach(function (k) {
@@ -3198,7 +3212,9 @@
       if (el("chatEditalMeta")) el("chatEditalMeta").textContent = "";
       if (el("chatEditalResults")) {
         el("chatEditalResults").innerHTML =
-          '<div class="muted small"><span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Consultando PNCP… isso pode levar alguns segundos.</div>';
+          '<div class="muted small"><span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Consultando PNCP (' +
+          (janela === "45" ? "45 dias" : "horizonte anual") +
+          ")… isso pode levar alguns segundos.</div>";
       }
 
       fetch("/api/editais-chat", {
@@ -3254,6 +3270,9 @@
         meta.textContent =
           onde +
           " · " +
+          (j.janelaLabel || "janela anual") +
+          (j.dataFinalPncp ? " até " + j.dataFinalPncp : "") +
+          " · " +
           (j.total || 0) +
           " edital(is)" +
           (j.categorias && j.categorias.length
@@ -3264,14 +3283,37 @@
       }
 
       if (!list.length) {
+        var amostra = (j && j.amostraMunicipios) || [];
+        var amostraTxt = amostra.length
+          ? " Municípios nos registros brutos do PNCP: " +
+            amostra
+              .slice(0, 8)
+              .map(function (a) {
+                return (
+                  (a.municipio || "?") +
+                  (a.uf ? "/" + a.uf : "") +
+                  " (" +
+                  (a.qtd || 0) +
+                  ")"
+                );
+              })
+              .join(", ") +
+            "."
+          : "";
         box.innerHTML =
-          '<div class="muted small">Nenhum edital com proposta em aberto no PNCP para este escopo' +
+          '<div class="muted small">Nenhuma proposta com encerramento no horizonte ' +
+          utils.escapeHtml(j.janelaLabel || "anual") +
+          " no PNCP para este escopo" +
           (j.totalBrutoPncp
             ? " (PNCP retornou " +
               j.totalBrutoPncp +
-              " registro(s) na UF, nenhum no filtro de município/categoria)."
+              " registro(s) brutos; nenhum passou no filtro de município/categoria)."
             : ".") +
-          "</div>";
+          amostraTxt +
+          (j.dataFinalPncp
+            ? " dataFinal PNCP até " + j.dataFinalPncp + "."
+            : "") +
+          " Se o edital existir só no portal da prefeitura, não aparece aqui.</div>";
         showAlert(
           "chatEditalAlert",
           "info",
@@ -3342,9 +3384,11 @@
         "chatEditalAlert",
         "ok",
         list.length +
-          " edital(is) abertos no PNCP para " +
+          " edital(is) com encerramento no horizonte " +
+          utils.escapeHtml(j.janelaLabel || "anual") +
+          " para " +
           utils.escapeHtml(onde) +
-          "."
+          " (PNCP)."
       );
     },
 
