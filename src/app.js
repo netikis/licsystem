@@ -85,7 +85,7 @@
 
   /** Unidades comuns em editais (THEO / compras / portais municipais). */
   var EDITAL_UNDS =
-    "UNID|UND|UNI|UN|QUILO|METRO|ROLO|BARRA|LT|L|BL|BAL|GAL|KG|MT|M³|M²|M3|M2|M|PC|PÇ|CX|PAR|CJ|KIT|PCT|RL|BD|SC|GL|JOGO|PAR|SV|HR|VB|DZ";
+    "UNID|UND|UNI|UN|QUILO|METRO|ROLO|BARRA|LT|L|BL|BAL|GAL|KG|MT|M³|M²|M3|M2|M|PC|PÇ|CX|PAR|CJ|KIT|PCT|POTE|RL|BD|SC|GL|JOGO|PAR|SV|HR|VB|DZ";
 
   /** Cotas textuais (Castro / portais): Exclusivo ME/EPP/MEI | Ampla Concorrência */
   var EDITAL_COTAS_TXT =
@@ -267,6 +267,10 @@
    *   "8 Ampla Concorrência 200 UND 80.856 BRAÇO ... 520,00 104.000,00"
    *   Cotas e Cód NÃO são lote nem quantidade.
    *
+   * Formato São Mateus do Sul (LOTE + ITEM + UND + QTD + R$):
+   *   "1 Açúcar refinado ... PCT 3000 R$ 15,93 R$ 47.790,00"
+   *   LOTE/Benefício (ex.: "1 Geral") NÃO é quantidade.
+   *
    * Formato clássico (ITEM|LOTE):
    *   "117 10,000 UND ALICATE ... 38,1700 381,70"
    */
@@ -274,7 +278,9 @@
     var s = String(raw == null ? "" : raw)
       .replace(/[\u00A0\u202F\u2007\u2009\u200A\u2008]/g, " ")
       .replace(/\s+/g, " ")
-      .trim();
+      .trim()
+      // R$ 3 ,87 → R$ 3,87 (pdf.js às vezes parte o decimal)
+      .replace(/R\$\s*(\d+)\s*,\s*(\d{2})\b/gi, "R$ $1,$2");
     if (!s) return null;
 
     function pack(lote, qtd, und, desc, editalVunit, editalTotal) {
@@ -378,7 +384,8 @@
     s = String(raw == null ? "" : raw)
       .replace(/[\u00A0\u202F\u2007\u2009\u200A\u2008]/g, " ")
       .replace(/\s+/g, " ")
-      .trim();
+      .trim()
+      .replace(/R\$\s*(\d+)\s*,\s*(\d{2})\b/gi, "R$ $1,$2");
 
     var editalVunit = 0,
       editalTotal = 0;
@@ -387,14 +394,23 @@
       editalVunit = theoUnit;
       editalTotal = theoTotal;
     }
+    // São Mateus / portais com prefixo R$
+    var pmRs = s.match(
+      /\s+R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})\s+R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})\s*$/i
+    );
+    if (pmRs && !theoFoot && !theoFootSp) {
+      editalVunit = utils.parseBrNum(pmRs[1]);
+      editalTotal = utils.parseBrNum(pmRs[2]);
+      s = s.slice(0, pmRs.index).trim();
+    }
     var priceRe =
       /\s+(\d{1,3}(?:\.\d{3})*,\d{2,4}|\d+[.,]\d{2,4})\s+(\d{1,3}(?:\.\d{3})*,\d{2}|\d+[.,]\d{2})\s*$/;
-    var pm = s.match(priceRe);
+    var pm = !pmRs ? s.match(priceRe) : null;
     if (pm && !theoFoot && !theoFootSp) {
       editalVunit = utils.parseBrNum(pm[1]);
       editalTotal = utils.parseBrNum(pm[2]);
       s = s.slice(0, pm.index).trim();
-    } else if (!theoFoot && !theoFootSp) {
+    } else if (!theoFoot && !theoFootSp && !pmRs) {
       var onlyUnit = s.match(/\s+(\d{1,3}(?:\.\d{3})*,\d{3,4}|\d+[.,]\d{3,4})\s*$/);
       if (onlyUnit) {
         editalVunit = utils.parseBrNum(onlyUnit[1]);
@@ -1417,7 +1433,7 @@
       sel.innerHTML = html;
     },
 
-    // Planilha do edital PDF (THEO / portal Castro / clássico)
+    // Planilha do edital PDF (THEO / portal Castro / São Mateus do Sul / clássico)
     splitEdital: function (text) {
       function limparPagina(s) {
         return String(s || "")
@@ -1443,6 +1459,13 @@
             "\n"
           )
           .replace(/\bSoma:\s*[\d.,]+/gi, "\n")
+          // São Mateus do Sul: marcadores curtos de página/cabeçalho (nunca engolir a tabela)
+          .replace(/^\s*[-–]\s*\d{1,3}\s*[-–]\s*$/gm, "\n")
+          .replace(
+            /\bEDITAL DA LICITA[CÇ][AÃ]O\s+PREG[AÃ]O ELETR[OÔ]NICO\s+N[ºo°\.]?\s*[\d\/]+/gi,
+            "\n"
+          )
+          .replace(/R\$\s*(\d+)\s*,\s*(\d{2})\b/gi, "R$ $1,$2")
           .replace(/\u00A0/g, " ")
           .replace(/[\t ]+/g, " ")
           .trim();
@@ -1472,6 +1495,182 @@
           seen[k] = 1;
           out.push(item);
         });
+        return out;
+      }
+
+      /**
+       * São Mateus do Sul (Elotech / quadro LOTE+ITEM):
+       *   LOTE ITEM DESCRIÇÃO DO OBJETO UND QTD Unitário Total
+       * pdf.js embaralha: nº do item no meio da descrição; preços com "R$".
+       * Ex.: "… 1 qualidade. Produto deverá ser PCT 3000 R$ 15,93 R$ 47.790,00 …"
+       * Usa a tabela COM preços (Unitário/Total); ignora a de "item por cesta".
+       */
+      function splitSaoMateusBlocks(full) {
+        var t = limparPagina(full).replace(/\r\n?/g, "\n");
+        if (!t) return [];
+
+        var headRe =
+          /LOTE\s+ITEM\s+DESCRI[CÇ][AÃ]O\s+DO\s+OBJETO\s+UND\s+QTD\s+Unit[aá]rio\s+Total/i;
+        var headM = headRe.exec(t);
+        var region = t;
+        if (headM) {
+          region = t.slice(headM.index + headM[0].length);
+        } else if (!/(?:PCT|POTE|UND)\s+\d{2,}\s+R\$\s*[\d.,]+\s+R\$/i.test(t)) {
+          return [];
+        }
+
+        var endM = region.search(
+          /\n\s*Valor\s+total\s+R\$|"Geral"\s*:|ANEXO\s+II\b/i
+        );
+        if (endM > 40) region = region.slice(0, endM);
+
+        var flat = region
+          .replace(/\b\d{1,5}\s+Geral\b/gi, " ")
+          .replace(/\bBenef[ií]cio\s+para\s+MPE\b/gi, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (!flat) return [];
+
+        var undAlt = EDITAL_UNDS;
+        var reAnchor = new RegExp(
+          "\\b(" +
+            undAlt +
+            ")\\s+(\\d{1,3}(?:\\.\\d{3})+|\\d{2,})\\s+R\\$\\s*(\\d{1,3}(?:\\.\\d{3})*,\\d{2}|\\d+,\\d{2})\\s+R\\$\\s*(\\d{1,3}(?:\\.\\d{3})*,\\d{2}|\\d+,\\d{2})",
+          "gi"
+        );
+
+        var anchors = [];
+        var m;
+        while ((m = reAnchor.exec(flat)) !== null) {
+          anchors.push({
+            undIndex: m.index,
+            end: m.index + m[0].length,
+            und: m[1].toUpperCase(),
+            qtdRaw: m[2],
+            unitRaw: m[3],
+            totalRaw: m[4]
+          });
+        }
+        if (anchors.length < 2) return [];
+
+        function findItemNo(before, expected) {
+          var reNum = /\b(\d{1,5})\b/g;
+          var cands = [];
+          var nm;
+          while ((nm = reNum.exec(before)) !== null) {
+            var n = parseInt(nm[1], 10);
+            if (n >= 1 && n <= 999) cands.push({ n: n, idx: nm.index, len: nm[1].length });
+          }
+          if (!cands.length) return { n: expected, idx: before.length, len: 0 };
+          for (var i = cands.length - 1; i >= 0; i--) {
+            if (cands[i].n === expected) return cands[i];
+          }
+          // Prefere número perto do UND (últimos 80 chars)
+          var near = [];
+          var base = Math.max(0, before.length - 80);
+          for (var j = 0; j < cands.length; j++) {
+            if (cands[j].idx >= base) near.push(cands[j]);
+          }
+          if (near.length) return near[near.length - 1];
+          return cands[cands.length - 1];
+        }
+
+        var out = [];
+        var expected = 1;
+        for (var a = 0; a < anchors.length; a++) {
+          var prevEnd = a === 0 ? 0 : anchors[a - 1].end;
+          var before = flat.slice(prevEnd, anchors[a].undIndex);
+          var itemInfo = findItemNo(before, expected);
+          var itemNo = itemInfo.n;
+          expected = itemNo + 1;
+
+          var leading = before.slice(0, itemInfo.idx).trim();
+          var between = before.slice(itemInfo.idx + itemInfo.len).trim();
+
+          // Nome do produto: última inicial maiúscula “forte” perto do fim
+          // (ignora restos do item anterior e maiúsculas no meio da especificação).
+          function pickProductStart(lead) {
+            lead = String(lead || "").replace(/\s+/g, " ").trim();
+            if (!lead) return "";
+            var noise =
+              /^(ABIC|Embalagem|Produto|Nota|Pacote|CESTAS?|Benef[ií]cio|Valor|Geral|Unidade|Leguminosa|validade|Tipo|No\.?|N[ºo]|Rua|CEP|O)\b/i;
+            var midSpec =
+              /^(Proveniente|Composto|Beneficiado|Enriquecido|Isento|Polido|Torrado|Mo[ií]do|Aproximado|Emulsificante|Aromatizante|Tradicional|Superior|Selado|Qualidade|Sensorial|Longo|Fino|Pacotes?|Certifica|Índice|Pureza|Homog[eê]neo)\b/i;
+            // Janela inteira: specs longas (ex. café/ABIC) empurram o nome para fora
+            // se cortarmos só os últimos N caracteres.
+            var best = -1;
+            var reCap = /(?:^|\s)([A-ZÁÀÂÃÉÊÍÓÔÚÇ][A-Za-zÀ-ÿ]{2,})/g;
+            var cm;
+            while ((cm = reCap.exec(lead)) !== null) {
+              if (noise.test(cm[1]) || midSpec.test(cm[1])) continue;
+              best = cm.index + (cm[0].charAt(0) === " " ? 1 : 0);
+            }
+            return best >= 0 ? lead.slice(best).trim() : lead;
+          }
+
+          var desc = (pickProductStart(leading) + " " + between)
+            .replace(/\bQtd\.?\s*de\s*cesta\b/gi, " ")
+            .replace(/\bpara\s+MPE\b/gi, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+          // Remove restos de cabeçalho colados no 1º item
+          if (a === 0) {
+            desc = desc
+              .replace(/^[\s\S]*?\bCESTAS?\s+B[AÁ]SICAS\b\s*/i, "")
+              .replace(/^\s*Valor\s+estimado\b\s*/i, "")
+              .trim();
+            desc = pickProductStart(desc) || desc;
+          }
+
+          var qtd = utils.parseBrNum(anchors[a].qtdRaw);
+          var vu = utils.parseBrNum(anchors[a].unitRaw);
+          var vt = utils.parseBrNum(anchors[a].totalRaw);
+          if (!(qtd > 0) || !desc || desc.length < 3) continue;
+
+          var descClean = utils.enxugarDescricaoEdital(desc);
+          if (!descClean || descClean.length < 3) descClean = desc;
+
+          var packed = {
+            lote: String(itemNo),
+            qtd: qtd,
+            und: anchors[a].und,
+            produto: descClean,
+            editalVunit: vu,
+            editalTotal: vt || (vu && qtd ? vu * qtd : 0),
+            line: ""
+          };
+          // Monta line canônica
+          packed.line =
+            packed.lote +
+            " " +
+            (Math.round(qtd * 1000) / 1000).toLocaleString("pt-BR", {
+              minimumFractionDigits: 3,
+              maximumFractionDigits: 3
+            }) +
+            " " +
+            packed.und +
+            " " +
+            packed.produto;
+          if (packed.editalVunit > 0) {
+            packed.line +=
+              " " +
+              packed.editalVunit.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 4
+              });
+            if (packed.editalTotal > 0) {
+              packed.line +=
+                " " +
+                packed.editalTotal.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2
+                });
+            }
+          }
+          if (utils.isLinhaProdutoEdital(packed)) out.push(packed);
+        }
+
         return out;
       }
 
@@ -1809,6 +2008,11 @@
         /Exclusivo\s+ME\/?EPP\/?MEI|Ampla\s+Concorr/i.test(rawText) ||
         /Exclusivo[\s\S]{0,80}ME\/?EPP\/?MEI|Ampla[\s\S]{0,80}Concorr/i.test(rawText);
 
+      var saoMateusHint =
+        /LOTE\s+ITEM\s+DESCRI[CÇ][AÃ]O\s+DO\s+OBJETO\s+UND\s+QTD/i.test(rawText) ||
+        (/S[aã]o\s+Mateus\s+do\s+Sul/i.test(rawText) &&
+          /(?:PCT|POTE|UND)\s+\d{2,}\s+R\$\s*[\d.,]+\s+R\$/i.test(rawText));
+
       // 1) Portal Castro / cotas textuais (prioritário quando o PDF tem esse quadro)
       if (castroHint) {
         var castroFirst = splitCastroBlocks(text);
@@ -1818,14 +2022,23 @@
         }
       }
 
-      // 2) Formato THEO (Pinhalão / compras)
+      // 2) São Mateus do Sul (LOTE+ITEM + R$) — antes do THEO (senão "N PCT …" vira falso THEO)
+      if (saoMateusHint) {
+        var smsFirst = splitSaoMateusBlocks(text);
+        if (smsFirst.length >= 2) {
+          var outSms = dedupeCaptacao(smsFirst);
+          if (outSms.length >= 2) return outSms;
+        }
+      }
+
+      // 3) Formato THEO (Pinhalão / compras)
       var theo = splitTheoBlocks(text);
       if (theo.length >= 2) {
         var outT = dedupeCaptacao(theo);
         if (outT.length >= 2) return outT;
       }
 
-      // 3) Portal Castro (fallback se o hint falhou)
+      // 4) Portal Castro (fallback se o hint falhou)
       if (!castroHint) {
         var castro = splitCastroBlocks(text);
         if (castro.length >= 2) {
@@ -1834,7 +2047,16 @@
         }
       }
 
-      // 4) Fallback clássico linha a linha
+      // 5) São Mateus (fallback se o hint falhou)
+      if (!saoMateusHint) {
+        var sms = splitSaoMateusBlocks(text);
+        if (sms.length >= 2) {
+          var outS = dedupeCaptacao(sms);
+          if (outS.length >= 2) return outS;
+        }
+      }
+
+      // 6) Fallback clássico linha a linha
       var t = limparPagina(text).replace(/\r\n?/g, "\n");
       var rawLines = t.split(/\n+/);
       var merged = [];
