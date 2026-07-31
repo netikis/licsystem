@@ -2294,6 +2294,8 @@
     _proxActiveIdx: 0,
     _proxRaioTouched: false,
     _proxSuggestSeq: 0,
+    _municipiosLocal: null,
+    _municipiosLocalPromise: null,
 
     foldTxt: function (s) {
       return String(s || "")
@@ -2301,6 +2303,88 @@
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase()
         .trim();
+    },
+
+    /** Dataset IBGE estático em /municipios.json (public/ → dist no build). */
+    loadMunicipiosLocal: function () {
+      if (LICSYSTEM.captacao._municipiosLocal) {
+        return Promise.resolve(LICSYSTEM.captacao._municipiosLocal);
+      }
+      if (LICSYSTEM.captacao._municipiosLocalPromise) {
+        return LICSYSTEM.captacao._municipiosLocalPromise;
+      }
+      LICSYSTEM.captacao._municipiosLocalPromise = fetch("/municipios.json", {
+        credentials: "same-origin",
+        cache: "force-cache",
+      })
+        .then(function (r) {
+          var ctype = String((r.headers && r.headers.get("content-type")) || "");
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          if (ctype.indexOf("json") === -1 && ctype.indexOf("text/html") !== -1) {
+            throw new Error("municipios.json indisponível");
+          }
+          return r.json();
+        })
+        .then(function (list) {
+          if (!Array.isArray(list)) throw new Error("Dataset inválido");
+          LICSYSTEM.captacao._municipiosLocal = list;
+          return list;
+        })
+        .catch(function (err) {
+          LICSYSTEM.captacao._municipiosLocalPromise = null;
+          throw err;
+        });
+      return LICSYSTEM.captacao._municipiosLocalPromise;
+    },
+
+    searchMunicipiosLocal: function (q, uf) {
+      var term = LICSYSTEM.captacao.foldTxt(q);
+      var ufFilter = String(uf || "")
+        .trim()
+        .toUpperCase();
+      if (term.length < 2 && !ufFilter) return Promise.resolve([]);
+      return LICSYSTEM.captacao.loadMunicipiosLocal().then(function (list) {
+        var out = [];
+        for (var j = 0; j < list.length; j++) {
+          var m = list[j];
+          if (ufFilter && m.u !== ufFilter) continue;
+          if (term && LICSYSTEM.captacao.foldTxt(m.n).indexOf(term) === -1) continue;
+          out.push({
+            ibge: m.i,
+            nome: m.n,
+            uf: m.u,
+            lat: m.a,
+            lng: m.o,
+          });
+          if (out.length >= 30) break;
+        }
+        out.sort(function (a, b) {
+          var an = LICSYSTEM.captacao.foldTxt(a.nome);
+          var bn = LICSYSTEM.captacao.foldTxt(b.nome);
+          var ap = term && an.indexOf(term) === 0 ? 0 : 1;
+          var bp = term && bn.indexOf(term) === 0 ? 0 : 1;
+          if (ap !== bp) return ap - bp;
+          return an.localeCompare(bn, "pt-BR");
+        });
+        return out;
+      });
+    },
+
+    /**
+     * Autocomplete: prioriza /municipios.json (estático na Vercel).
+     * /api/municipios fica como reforço; nunca depende só do serverless.
+     */
+    fetchMunicipios: function (q) {
+      var term = String(q || "").trim();
+      return LICSYSTEM.captacao.searchMunicipiosLocal(term).catch(function () {
+        return fetch("/api/municipios?q=" + encodeURIComponent(term))
+          .then(function (r) {
+            return r.json().then(function (j) {
+              if (!r.ok) throw new Error((j && j.error) || "HTTP " + r.status);
+              return (j && j.municipios) || [];
+            });
+          });
+      });
     },
 
     loadOrigem: function () {
@@ -2412,6 +2496,9 @@
       var ibge = el("proxIbge");
       var box = el("proxSuggest");
       if (!input || !ibge) return;
+
+      /* Pré-carrega lista estática para o autocomplete não esperar cold start. */
+      LICSYSTEM.captacao.loadMunicipiosLocal().catch(function () {});
 
       var saved = LICSYSTEM.captacao.loadOrigem();
       if (saved && saved.ibge) {
@@ -2592,16 +2679,10 @@
         q
       );
       if (cached) return Promise.resolve(cached);
-      return fetch("/api/municipios?q=" + encodeURIComponent(q))
-        .then(function (r) {
-          return r.json().then(function (j) {
-            if (!r.ok) throw new Error((j && j.error) || "HTTP " + r.status);
-            return j;
-          });
-        })
-        .then(function (j) {
-          var arr = (j && j.municipios) || [];
-          LICSYSTEM.captacao._proxSuggestions = arr;
+      return LICSYSTEM.captacao
+        .fetchMunicipios(q)
+        .then(function (arr) {
+          LICSYSTEM.captacao._proxSuggestions = arr || [];
           return LICSYSTEM.captacao.pickBestMunicipio(arr, q);
         })
         .catch(function () {
@@ -2613,16 +2694,11 @@
       var box = el("proxSuggest");
       if (!box) return;
       var seq = ++LICSYSTEM.captacao._proxSuggestSeq;
-      fetch("/api/municipios?q=" + encodeURIComponent(q))
-        .then(function (r) {
-          return r.json().then(function (j) {
-            if (!r.ok) throw new Error((j && j.error) || "HTTP " + r.status);
-            return j;
-          });
-        })
-        .then(function (j) {
+      LICSYSTEM.captacao
+        .fetchMunicipios(q)
+        .then(function (arr) {
           if (seq !== LICSYSTEM.captacao._proxSuggestSeq) return;
-          var arr = (j && j.municipios) || [];
+          arr = arr || [];
           LICSYSTEM.captacao._proxSuggestions = arr;
           LICSYSTEM.captacao._proxActiveIdx = 0;
           LICSYSTEM.captacao.clearQuickPick();
@@ -2691,7 +2767,7 @@
           LICSYSTEM.captacao._proxSuggestions = [];
           LICSYSTEM.captacao.clearQuickPick();
           box.innerHTML =
-            '<div class="small muted" style="padding:10px 12px">Falha ao buscar municípios (API local). Use <code>npm run dev:api</code> ou o deploy Vercel.</div>';
+            '<div class="small muted" style="padding:10px 12px">Não foi possível carregar municípios. Atualize o site (Ctrl+F5) ou tente novamente.</div>';
           box.hidden = false;
         });
     },
@@ -2783,7 +2859,7 @@
           showAlert(
             "proxAlert",
             "error",
-            "Falha ao confirmar o município. Verifique a API local (<code>npm run dev:api</code>) e tente de novo."
+            "Falha ao confirmar o município. Recarregue a página e tente de novo (autocomplete usa a lista local IBGE)."
           );
         });
     },
@@ -2847,9 +2923,9 @@
           showAlert(
             "proxAlert",
             "error",
-            "Não foi possível buscar editais próximos (" +
+            "Não foi possível buscar editais no PNCP (" +
               utils.escapeHtml(err.message) +
-              "). Em desenvolvimento local use <code>npm run dev:api</code> (Vercel) para expor as rotas <code>/api/*</code>."
+              "). A seleção de município funciona offline; a busca de editais precisa da API — use <code>npm run dev</code> (Vite+API) ou o deploy na Vercel."
           );
         })
         .then(function () {
@@ -2988,6 +3064,240 @@
           " edital(is) com proposta em aberto no raio de " +
           (j.raioKm || "—") +
           " km (fonte PNCP)."
+      );
+    },
+
+    /* ---------- Perguntar editais (chat helper) ---------- */
+    initChatEditais: function () {
+      if (LICSYSTEM.captacao._chatWired) return;
+      LICSYSTEM.captacao._chatWired = true;
+      var msg = el("chatEditalMsg");
+      if (msg) {
+        msg.addEventListener("keydown", function (e) {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            LICSYSTEM.captacao.buscarChatEditais();
+          }
+        });
+      }
+      document.querySelectorAll("[data-chat-prompt]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          LICSYSTEM.captacao.runChatPrompt(btn.getAttribute("data-chat-prompt"));
+        });
+      });
+    },
+
+    runChatPrompt: function (id) {
+      var cat = el("chatEditalCat");
+      var msg = el("chatEditalMsg");
+      var map = {
+        "norte-pioneiro": { regiao: "norte-pioneiro", categoria: "", label: "Norte Pioneiro do Paraná (todos os editais abertos)" },
+        "norte-comida": { regiao: "norte-pioneiro", categoria: "comida,cestas,cafe", label: "Norte Pioneiro · comida / cestas / café" },
+        "norte-reforma": { regiao: "norte-pioneiro", categoria: "reforma", label: "Norte Pioneiro · reformas" },
+        "norte-natal": { regiao: "norte-pioneiro", categoria: "natal", label: "Norte Pioneiro · Natal" },
+        "norte-eletro": { regiao: "norte-pioneiro", categoria: "eletro", label: "Norte Pioneiro · eletrodomésticos" },
+      };
+      var p = map[id];
+      if (!p) return;
+      if (msg) msg.value = p.label;
+      if (cat) {
+        var first = String(p.categoria || "").split(",")[0] || "";
+        cat.value = first;
+      }
+      LICSYSTEM.captacao._runChatEditais({
+        regiao: p.regiao,
+        categoria: p.categoria,
+      });
+    },
+
+    buscarChatEditais: function () {
+      var texto = String((el("chatEditalMsg") && el("chatEditalMsg").value) || "").trim();
+      var cat = (el("chatEditalCat") && el("chatEditalCat").value) || "";
+      if (!texto && !cat) {
+        showAlert(
+          "chatEditalAlert",
+          "info",
+          "Digite uma pergunta (ex.: Quais licitações terão em Ibaiti) ou use um atalho do Norte Pioneiro."
+        );
+        return;
+      }
+      var opts = { mensagem: texto };
+      if (cat) opts.categoria = cat;
+      // Atalho textual: se o usuário só escreveu "norte pioneiro"
+      var folded = utils.fold(texto).toLowerCase();
+      if (/norte\s*pioneiro/.test(folded) && texto.length < 40) {
+        opts.regiao = "norte-pioneiro";
+        opts.mensagem = "";
+      }
+      LICSYSTEM.captacao._runChatEditais(opts);
+    },
+
+    _runChatEditais: function (opts) {
+      if (LICSYSTEM.captacao._chatBusy) return;
+      opts = opts || {};
+      hideAlert("chatEditalAlert");
+      var ampliar = !!(el("chatEditalAmpliar") && el("chatEditalAmpliar").checked);
+      var body = {
+        mensagem: opts.mensagem || undefined,
+        regiao: opts.regiao || undefined,
+        municipio: opts.municipio || undefined,
+        categoria: opts.categoria || undefined,
+        ampliar: ampliar ? "1" : undefined,
+        esferas: "M,E",
+      };
+      Object.keys(body).forEach(function (k) {
+        if (body[k] == null || body[k] === "") delete body[k];
+      });
+
+      LICSYSTEM.captacao._chatBusy = true;
+      var btn = el("btnChatEdital");
+      if (btn) btn.disabled = true;
+      if (el("chatEditalMeta")) el("chatEditalMeta").textContent = "";
+      if (el("chatEditalResults")) {
+        el("chatEditalResults").innerHTML =
+          '<div class="muted small"><span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Consultando PNCP… isso pode levar alguns segundos.</div>';
+      }
+
+      fetch("/api/editais-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(body),
+      })
+        .then(function (r) {
+          return r.json().then(function (j) {
+            if (!r.ok) throw new Error((j && j.error) || "HTTP " + r.status);
+            return j;
+          });
+        })
+        .then(function (j) {
+          LICSYSTEM.captacao._renderChatEditais(j);
+        })
+        .catch(function (err) {
+          if (el("chatEditalResults")) el("chatEditalResults").innerHTML = "";
+          showAlert(
+            "chatEditalAlert",
+            "error",
+            "Não foi possível consultar editais (" +
+              utils.escapeHtml(err.message) +
+              "). Use <code>npm run dev</code> ou o deploy na Vercel."
+          );
+        })
+        .then(function () {
+          LICSYSTEM.captacao._chatBusy = false;
+          if (btn) btn.disabled = false;
+        });
+    },
+
+    _renderChatEditais: function (j) {
+      var box = el("chatEditalResults");
+      var meta = el("chatEditalMeta");
+      if (!box) return;
+      var escopo = (j && j.escopo) || {};
+      var list = (j && j.editais) || [];
+
+      var onde =
+        escopo.tipo === "regiao"
+          ? (escopo.nome || "Região") +
+            " · " +
+            (escopo.municipios || 0) +
+            " municípios"
+          : (escopo.nome || "—") + "/" + (escopo.uf || "—");
+
+      if (meta) {
+        meta.textContent =
+          onde +
+          " · " +
+          (j.total || 0) +
+          " edital(is)" +
+          (j.categorias && j.categorias.length
+            ? " · categorias: " + j.categorias.join(", ")
+            : "") +
+          " · UFs: " +
+          ((j.ufsConsultadas || []).join(", ") || "—");
+      }
+
+      if (!list.length) {
+        box.innerHTML =
+          '<div class="muted small">Nenhum edital com proposta em aberto no PNCP para este escopo' +
+          (j.totalBrutoPncp
+            ? " (PNCP retornou " +
+              j.totalBrutoPncp +
+              " registro(s) na UF, nenhum no filtro de município/categoria)."
+            : ".") +
+          "</div>";
+        showAlert(
+          "chatEditalAlert",
+          "info",
+          "Consulta concluída — sem resultados com os filtros atuais (dados reais do PNCP)."
+        );
+        return;
+      }
+
+      list.forEach(function (o) {
+        LICSYSTEM.state.pncpAlerts.push({
+          orgao: o.orgao || "Órgão público",
+          uf: o.uf || "",
+          objeto: o.objeto || "",
+        });
+      });
+      LICSYSTEM.updateBell();
+      LICSYSTEM.dashboard.renderPncp();
+
+      var html =
+        '<div class="tbl-wrap"><table class="chat-edital-table"><thead><tr>' +
+        "<th>Município</th><th>Órgão</th><th>Objeto</th><th>Valor estimado</th><th>Abertura</th><th>Modalidade</th><th>Edital</th>" +
+        "</tr></thead><tbody>";
+      list.forEach(function (o) {
+        html +=
+          "<tr>" +
+          "<td>" +
+          utils.escapeHtml(o.municipio || "—") +
+          "</td>" +
+          "<td>" +
+          utils.escapeHtml(o.orgao || "—") +
+          "</td>" +
+          '<td class="chat-edital-obj">' +
+          utils.escapeHtml(o.objeto || "—") +
+          "</td>" +
+          "<td>" +
+          (o.valorEstimado != null
+            ? utils.formatBrl(o.valorEstimado)
+            : "—") +
+          "</td>" +
+          "<td>" +
+          utils.escapeHtml(LICSYSTEM.captacao.formatProxDate(o.dataAbertura)) +
+          "</td>" +
+          "<td>" +
+          utils.escapeHtml(o.modalidade || "—") +
+          "</td>" +
+          "<td>" +
+          (o.link
+            ? '<a class="link" target="_blank" rel="noopener" href="' +
+              utils.escapeHtml(o.link) +
+              '">PNCP ↗</a>'
+            : "—") +
+          "</td>" +
+          "</tr>";
+      });
+      html += "</tbody></table></div>";
+      if (j.avisos && j.avisos.length) {
+        html +=
+          '<div class="small muted" style="margin-top:10px">' +
+          j.avisos
+            .map(function (a) {
+              return "• " + utils.escapeHtml(a);
+            })
+            .join("<br/>") +
+          "</div>";
+      }
+      box.innerHTML = html;
+      showAlert(
+        "chatEditalAlert",
+        "ok",
+        list.length +
+          " edital(is) abertos no PNCP para " +
+          utils.escapeHtml(onde) +
+          "."
       );
     },
 
@@ -4923,6 +5233,7 @@
     on("btnParaOrcamento","click", LICSYSTEM.captacao.paraOrcamento);
     on("btnPncp","click", LICSYSTEM.captacao.buscarPncp);
     on("btnProxBuscar","click", LICSYSTEM.captacao.buscarProximos);
+    on("btnChatEdital","click", LICSYSTEM.captacao.buscarChatEditais);
     on("proxRaio","keydown", function(e){
       if(e.key === "Enter"){ e.preventDefault(); LICSYSTEM.captacao.buscarProximos(); }
     });
@@ -7019,6 +7330,7 @@
     wire();
     LICSYSTEM.captacao.initUf();
     LICSYSTEM.captacao.initProximos();
+    LICSYSTEM.captacao.initChatEditais();
     LICSYSTEM.orcamento.load();
     LICSYSTEM.state._orcDirty = true;
     LICSYSTEM.state._orcRendered = false;

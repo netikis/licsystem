@@ -1,3 +1,9 @@
+/**
+ * Widget Voiceflow "Suporte LICSYSTEM".
+ * O embed NÃO consulta o PNCP sozinho — para editais abertos use Captação → Perguntar editais
+ * ou conecte um Custom Action no VF para https://licsystem.vercel.app/api/editais-chat
+ * (passo a passo: docs/voiceflow-editais-chat.md).
+ */
 (function(){
   var VF_PROJECT_ID = "6a5cf8b3de847e8e5630f8f1";
   var VF_RUNTIME = "https://general-runtime.voiceflow.com";
