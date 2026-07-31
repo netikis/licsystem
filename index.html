@@ -140,11 +140,14 @@
           </div>
           <div id="proxAlert" class="alert"></div>
           <div class="form-row">
-            <div style="flex:2;position:relative">
+            <div style="flex:2;min-width:200px">
               <label class="fld">Município de origem</label>
-              <input type="text" id="proxMunicipio" placeholder="Digite o nome (ex.: Curitiba)" autocomplete="off" />
-              <input type="hidden" id="proxIbge" value="" />
-              <div id="proxSuggest" class="suggest-box" hidden></div>
+              <div class="prox-muni-wrap">
+                <input type="text" id="proxMunicipio" placeholder="Digite e escolha na lista (ex.: Ibaiti)" autocomplete="off" />
+                <input type="hidden" id="proxIbge" value="" />
+                <div id="proxSuggest" class="suggest-box" hidden></div>
+              </div>
+              <div id="proxQuickPick" class="prox-quick-pick" hidden></div>
               <div class="small muted" id="proxOrigemHint" style="margin-top:6px">Nenhum município salvo ainda.</div>
             </div>
             <div style="max-width:220px">
