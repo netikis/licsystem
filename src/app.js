@@ -310,6 +310,11 @@
    *   "1 Açúcar refinado ... PCT 3000 R$ 15,93 R$ 47.790,00"
    *   LOTE/Benefício (ex.: "1 Geral") NÃO é quantidade.
    *
+   * Formato Três Barras do Paraná (ITEM + PRODUTO + UND + QTDE + UNIT + TOTAL, sem R$):
+   *   "2 BASE PARA RELÉ FOTOCÉLULA BIVOLT UND 50 17,65 882,50"
+   *   Multilinha: nome antes do nº; nº no meio da descrição; continuação após preços.
+   *   (splitEdital / splitTresBarrasBlocks — não confundir com THEO "N UND …")
+   *
    * Formato clássico (ITEM|LOTE):
    *   "117 10,000 UND ALICATE ... 38,1700 381,70"
    */
@@ -1476,11 +1481,12 @@
       sel.innerHTML = html;
     },
 
-    // Planilha do edital PDF (THEO / Castro / São Mateus / Contenda Elotech / clássico)
+    // Planilha do edital PDF (THEO / Castro / São Mateus / Contenda / Três Barras / clássico)
     splitEdital: function (text) {
       function limparPagina(s) {
         return String(s || "")
           .replace(/\bP[aá]gina\s*:\s*\d+\s*\/\s*\d+/gi, "\n")
+          .replace(/\bP[aá]gina\s+\d+\s+de\s+\d+/gi, "\n")
           // Cabeçalho curto (NÃO atravessar a página até o rodapé — isso apagava todos os itens)
           .replace(
             /Munic[ií]pio de Castro\s*(?:\r?\n|\s)+Diretoria de Suprimentos/gi,
@@ -1512,6 +1518,11 @@
           .replace(/\bPE\s*\(SRP\)\s*n[ºo°.]?\s*[\d\s\/]+/gi, "\n")
           .replace(
             /Tramitado e Assinado Eletronicamente[\s\S]{0,280}?code=[^\s]+/gi,
+            "\n"
+          )
+          // Três Barras do Paraná: rodapé de página (não engolir a tabela)
+          .replace(
+            /Av\.\s*Brasil,\s*245[\s\S]{0,220}?licitacao@tresbarras\.pr\.gov\.br/gi,
             "\n"
           )
           .replace(/R\s+\$/g, "R$")
@@ -1958,6 +1969,216 @@
       }
 
       /**
+       * Três Barras do Paraná (Anexo I – materiais elétricos):
+       *   ITEM PRODUTO UND. QTDE. UNIT. / VALOR MÁX. (sem prefixo R$)
+       * pdf.js: nº do item no meio da descrição; continuação após preços;
+       *   "… 16 UND 10 261,51 2.615,10 GALVANIZADO CN1 …"
+       *   "2 BASE PARA RELÉ … UND 50 17,65 882,50"
+       * Diferente de São Mateus/Contenda (com R$) e de THEO ("N UND desc" + qtd no rodapé).
+       */
+      function splitTresBarrasBlocks(full) {
+        var t = limparPagina(full).replace(/\r\n?/g, "\n");
+        if (!t) return [];
+
+        var headRe = /ITEM\s+PRODUTO\s+UND\.?\s*QTDE\.?\s*UNIT/i;
+        var headM = headRe.exec(t);
+        var region = t;
+        if (headM) {
+          region = t.slice(headM.index + headM[0].length);
+        } else if (
+          !/\b(?:UND\.?|M)\s+\d{1,5}\s+\d{1,3}(?:\.\d{3})*,\d{2}\s+\d{1,3}(?:\.\d{3})*,\d{2}/i.test(
+            t
+          )
+        ) {
+          return [];
+        }
+
+        // Só o quadro de preços do Anexo I (ignora modelos de proposta sem valores)
+        var endM = region.search(/VALOR\s+M[AÁ]XIMO\s+DA\s+LICITA[CÇ][AÃ]O/i);
+        if (endM > 40) region = region.slice(0, endM);
+        var secondHead = region.search(/\n\s*ITEM\s+QNTD\s+UNID\b/i);
+        if (secondHead > 40 && (endM < 0 || secondHead < endM)) {
+          region = region.slice(0, secondHead);
+        }
+
+        var flat = region
+          .replace(/\bVALOR\s+M[AÁ]X\.?\b/gi, " ")
+          .replace(/\bM[AÁ]X\.?\b/gi, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (!flat) return [];
+
+        var undAlt = EDITAL_UNDS;
+        // Três Barras: UND|M  QTD  unitário  total  (sem R$)
+        var reAnchor = new RegExp(
+          "\\b(" +
+            undAlt +
+            ")\\.?\\s+(\\d{1,3}(?:\\.\\d{3})+|\\d+)\\s+(\\d{1,3}(?:\\.\\d{3})*,\\d{2}|\\d+,\\d{2})\\s+(\\d{1,3}(?:\\.\\d{3})*,\\d{2}|\\d+,\\d{2})",
+          "gi"
+        );
+
+        var anchors = [];
+        var m;
+        while ((m = reAnchor.exec(flat)) !== null) {
+          anchors.push({
+            undIndex: m.index,
+            end: m.index + m[0].length,
+            und: String(m[1] || "")
+              .toUpperCase()
+              .replace(/\.$/, ""),
+            qtdRaw: m[2],
+            unitRaw: m[3],
+            totalRaw: m[4]
+          });
+        }
+        if (anchors.length < 2) return [];
+
+        function findItemNo(before, expected) {
+          var reNum = /\b(\d{1,5})\b/g;
+          var cands = [];
+          var nm;
+          while ((nm = reNum.exec(before)) !== null) {
+            var n = parseInt(nm[1], 10);
+            if (n < 1 || n > 999) continue;
+            var after = before.slice(
+              nm.index + nm[1].length,
+              nm.index + nm[1].length + 2
+            );
+            var beforeCh = before.charAt(nm.index - 1);
+            if (/^,\d/.test(after)) continue;
+            if (/^\.\d/.test(after)) continue;
+            if (beforeCh && /\d/.test(beforeCh)) continue;
+            cands.push({ n: n, idx: nm.index, len: nm[1].length });
+          }
+          if (!cands.length) return { n: expected, idx: before.length, len: 0 };
+          var base = Math.max(0, before.length - 80);
+          for (var i = cands.length - 1; i >= 0; i--) {
+            if (cands[i].n === expected && cands[i].idx >= base) return cands[i];
+          }
+          for (var j = cands.length - 1; j >= 0; j--) {
+            if (cands[j].n === expected) return cands[j];
+          }
+          var near = [];
+          for (var k = 0; k < cands.length; k++) {
+            if (cands[k].idx >= base) near.push(cands[k]);
+          }
+          if (near.length) return near[near.length - 1];
+          return cands[cands.length - 1];
+        }
+
+        function pickTresBarrasProduct(lead) {
+          lead = String(lead || "").replace(/\s+/g, " ").trim();
+          if (!lead) return "";
+          var reProd =
+            /\b(CONJUNTO|BASE\s+PARA|BOCAL|BRA[CÇ]O|CABO|CAIXA|CONECTOR|REFLETOR|CONTACTORA|DISJUNTOR|FIO|GRAMPO|HASTE|L[AÂ]MPADA|FITA|PARAFUSO|POSTE|REATOR|REL[EÉ]|TERMINAL|BARRAMENTO|BORNE)\b/gi;
+          var pm = reProd.exec(lead);
+          if (pm) return lead.slice(pm.index).trim();
+          // Sem lexico: aceita leading “forte”, ignora continuação de frase do item anterior
+          if (
+            /^(SECUNDARIA|DE\s+NO|NO\s+M[IÍ]NIMO|TUBULAR|AMARELA|PONTAS|FUNCIONAMENTO|VIDA\s+UTIL|GALVANIZADO|DA\s+COR|ALUMINIO|POT[EÊ]NCIA|IDENTIFICA|NTC|A[CÇ]O\s+GALV|COM\s+SELO|GARANTIA|DIMENS)/i.test(
+              lead
+            )
+          ) {
+            return "";
+          }
+          return lead.length > 12 ? lead : "";
+        }
+
+        // Pass 1: nº do item (posição absoluta)
+        var itemInfos = [];
+        var expected = 1;
+        for (var a0 = 0; a0 < anchors.length; a0++) {
+          var prevEnd0 = a0 === 0 ? 0 : anchors[a0 - 1].end;
+          var before0 = flat.slice(prevEnd0, anchors[a0].undIndex);
+          var info0 = findItemNo(before0, expected);
+          itemInfos.push({
+            n: info0.n,
+            absIdx: prevEnd0 + info0.idx,
+            len: info0.len,
+            idxInBefore: info0.idx
+          });
+          expected = info0.n + 1;
+        }
+
+        var out = [];
+        for (var a = 0; a < anchors.length; a++) {
+          var prevEnd = a === 0 ? 0 : anchors[a - 1].end;
+          var before = flat.slice(prevEnd, anchors[a].undIndex);
+          var itemInfo = itemInfos[a];
+          var itemNo = itemInfo.n;
+
+          var leading = before.slice(0, itemInfo.idxInBefore).trim();
+          var between = before.slice(itemInfo.idxInBefore + itemInfo.len).trim();
+
+          var nextItemAbs =
+            a + 1 < itemInfos.length ? itemInfos[a + 1].absIdx : flat.length;
+          var afterSlice = flat.slice(anchors[a].end, nextItemAbs).trim();
+          var nextProd = pickTresBarrasProduct(afterSlice);
+          var trailing = afterSlice;
+          if (nextProd) {
+            var cutAt = afterSlice.indexOf(nextProd);
+            if (cutAt >= 0) trailing = afterSlice.slice(0, cutAt).trim();
+          }
+
+          var leadProd = pickTresBarrasProduct(leading);
+          leading = leadProd || "";
+
+          var desc = (leading + " " + between + " " + trailing)
+            .replace(/\s+/g, " ")
+            .trim();
+          desc = desc.replace(/^(M[AÁ]X\.?|VALOR)\s+/i, "").trim();
+
+          var qtd = utils.parseBrNum(anchors[a].qtdRaw);
+          var vu = utils.parseBrNum(anchors[a].unitRaw);
+          var vt = utils.parseBrNum(anchors[a].totalRaw);
+          if (!(qtd > 0) || !desc || desc.length < 3) continue;
+
+          var descClean = utils.enxugarDescricaoEdital(desc);
+          if (!descClean || descClean.length < 3) descClean = desc;
+
+          var packed = {
+            lote: String(itemNo),
+            qtd: qtd,
+            und: anchors[a].und,
+            produto: descClean,
+            editalVunit: vu,
+            editalTotal: vt || (vu && qtd ? vu * qtd : 0),
+            line: ""
+          };
+          packed.line =
+            packed.lote +
+            " " +
+            (Math.round(qtd * 1000) / 1000).toLocaleString("pt-BR", {
+              minimumFractionDigits: 3,
+              maximumFractionDigits: 3
+            }) +
+            " " +
+            packed.und +
+            " " +
+            packed.produto;
+          if (packed.editalVunit > 0) {
+            packed.line +=
+              " " +
+              packed.editalVunit.toLocaleString("pt-BR", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 4
+              });
+            if (packed.editalTotal > 0) {
+              packed.line +=
+                " " +
+                packed.editalTotal.toLocaleString("pt-BR", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2
+                });
+            }
+          }
+          if (utils.isLinhaProdutoEdital(packed)) out.push(packed);
+        }
+
+        return out;
+      }
+
+      /**
        * PDF THEO: itens quebrados em várias linhas
        *   "1 UN Abraçadeira..."
        *   "continuação descrição"
@@ -2302,6 +2523,14 @@
         (/(?:Munic[ií]pio de Contenda|CONTENDA\/PR)/i.test(rawText) &&
           /\b(?:PAR|UN|UND)\s+R\$\s*[\d.,]+\s+\d{1,5}\s+R\$\s*[\d.,]+/i.test(rawText));
 
+      // Três Barras: ITEM PRODUTO UND. QTDE. UNIT. (sem R$) — antes do THEO
+      var tresBarrasHint =
+        /ITEM\s+PRODUTO\s+UND\.?\s*QTDE\.?\s*UNIT/i.test(rawText) ||
+        (/Tr[eê]s\s+Barras\s+do\s+Paran[aá]/i.test(rawText) &&
+          /\b(?:UND\.?|M)\s+\d{1,5}\s+\d{1,3}(?:\.\d{3})*,\d{2}\s+\d{1,3}(?:\.\d{3})*,\d{2}/i.test(
+            rawText
+          ));
+
       // 1) Portal Castro / cotas textuais (prioritário quando o PDF tem esse quadro)
       if (castroHint) {
         var castroFirst = splitCastroBlocks(text);
@@ -2329,14 +2558,23 @@
         }
       }
 
-      // 4) Formato THEO (Pinhalão / compras)
+      // 4) Três Barras do Paraná (UND QTD unit total sem R$) — antes do THEO
+      if (tresBarrasHint) {
+        var tbFirst = splitTresBarrasBlocks(text);
+        if (tbFirst.length >= 2) {
+          var outTb = dedupeCaptacao(tbFirst);
+          if (outTb.length >= 2) return outTb;
+        }
+      }
+
+      // 5) Formato THEO (Pinhalão / compras)
       var theo = splitTheoBlocks(text);
       if (theo.length >= 2) {
         var outT = dedupeCaptacao(theo);
         if (outT.length >= 2) return outT;
       }
 
-      // 5) Portal Castro (fallback se o hint falhou)
+      // 6) Portal Castro (fallback se o hint falhou)
       if (!castroHint) {
         var castro = splitCastroBlocks(text);
         if (castro.length >= 2) {
@@ -2345,7 +2583,7 @@
         }
       }
 
-      // 6) São Mateus (fallback se o hint falhou)
+      // 7) São Mateus (fallback se o hint falhou)
       if (!saoMateusHint) {
         var sms = splitSaoMateusBlocks(text);
         if (sms.length >= 2) {
@@ -2354,7 +2592,7 @@
         }
       }
 
-      // 7) Contenda (fallback se o hint falhou)
+      // 8) Contenda (fallback se o hint falhou)
       if (!contendaHint) {
         var cont = splitContendaBlocks(text);
         if (cont.length >= 2) {
@@ -2363,7 +2601,16 @@
         }
       }
 
-      // 8) Fallback clássico linha a linha
+      // 9) Três Barras (fallback se o hint falhou)
+      if (!tresBarrasHint) {
+        var tb = splitTresBarrasBlocks(text);
+        if (tb.length >= 2) {
+          var outTb2 = dedupeCaptacao(tb);
+          if (outTb2.length >= 2) return outTb2;
+        }
+      }
+
+      // 10) Fallback clássico linha a linha
       var t = limparPagina(text).replace(/\r\n?/g, "\n");
       var rawLines = t.split(/\n+/);
       var merged = [];
