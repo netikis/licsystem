@@ -2290,6 +2290,18 @@
     ORIGEM_KEY: "licsystem_origem_municipio_v1",
     _proxTimer: null,
     _proxBusy: false,
+    _proxSuggestions: [],
+    _proxActiveIdx: 0,
+    _proxRaioTouched: false,
+    _proxSuggestSeq: 0,
+
+    foldTxt: function (s) {
+      return String(s || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
+    },
 
     loadOrigem: function () {
       try {
@@ -2320,20 +2332,47 @@
       if (!hint) return;
       var m = LICSYSTEM.captacao.loadOrigem();
       if (!m || !m.ibge) {
-        hint.textContent = "Nenhum município salvo ainda.";
+        hint.textContent =
+          "Digite o nome, clique na sugestão (ou Enter) e busque. Ex.: Ibaiti.";
         return;
       }
       hint.innerHTML =
-        "Salvo: <b>" +
+        "Origem: <b>" +
         utils.escapeHtml(m.nome) +
         "</b> / " +
         utils.escapeHtml(m.uf) +
         " (IBGE " +
         utils.escapeHtml(String(m.ibge)) +
-        ")";
+        ") — pronta para buscar.";
     },
 
-    applyCoberturaPreset: function () {
+    clearQuickPick: function () {
+      var qp = el("proxQuickPick");
+      if (!qp) return;
+      qp.hidden = true;
+      qp.innerHTML = "";
+    },
+
+    showQuickPick: function (m) {
+      var qp = el("proxQuickPick");
+      if (!qp || !m || !m.ibge) return;
+      var label = (m.nome || "") + (m.uf ? "/" + m.uf : "");
+      qp.innerHTML =
+        '<button type="button" class="btn btn-sm btn-gold" id="btnProxUsarMatch">Usar ' +
+        utils.escapeHtml(label) +
+        "</button>" +
+        ' <span class="small muted">único resultado — clique ou pressione Enter</span>';
+      qp.hidden = false;
+      var btn = el("btnProxUsarMatch");
+      if (btn) {
+        btn.addEventListener("click", function () {
+          LICSYSTEM.captacao.selectMunicipio(m);
+        });
+      }
+    },
+
+    applyCoberturaPreset: function (opts) {
+      opts = opts || {};
       var sel = el("proxCobertura");
       var raioEl = el("proxRaio");
       var hint = el("proxCoberturaHint");
@@ -2341,11 +2380,26 @@
       if (cobertura === "pr-sp") {
         if (raioEl) {
           var atual = Number(raioEl.value);
-          if (!Number.isFinite(atual) || atual < 450) raioEl.value = "500";
+          var shouldBump =
+            opts.forceBump ||
+            !LICSYSTEM.captacao._proxRaioTouched ||
+            !Number.isFinite(atual) ||
+            atual <= 250;
+          if (shouldBump && (!Number.isFinite(atual) || atual < 450)) {
+            raioEl.value = "500";
+          }
         }
+        var raioNow = raioEl ? Number(raioEl.value) : 500;
         if (hint) {
-          hint.textContent =
-            "Preset: consulta PR (estado inteiro) + SP no raio da origem. Raio sugerido 500 km (editável; máx. 700).";
+          if (Number.isFinite(raioNow) && raioNow < 400) {
+            hint.innerHTML =
+              "Cobertura PR + divisas SP: com raio " +
+              raioNow +
+              " km a área fica estreita. <b>Sugestão: 500 km</b> (atalho abaixo) para cobrir bem o Paraná e a fronteira com SP.";
+          } else {
+            hint.textContent =
+              "Preset: consulta PR (estado inteiro) + SP no raio da origem. Raio sugerido 500 km (editável; máx. 700).";
+          }
         }
       } else if (hint) {
         hint.textContent =
@@ -2365,16 +2419,18 @@
         ibge.value = String(saved.ibge);
       }
       LICSYSTEM.captacao.refreshOrigemHint();
-      LICSYSTEM.captacao.applyCoberturaPreset();
+      LICSYSTEM.captacao.applyCoberturaPreset({ forceBump: false });
 
       if (input._proxWired) return;
       input._proxWired = true;
 
       input.addEventListener("input", function () {
         ibge.value = "";
+        LICSYSTEM.captacao.clearQuickPick();
         var q = String(input.value || "").trim();
         clearTimeout(LICSYSTEM.captacao._proxTimer);
         if (q.length < 2) {
+          LICSYSTEM.captacao._proxSuggestions = [];
           if (box) {
             box.hidden = true;
             box.innerHTML = "";
@@ -2383,13 +2439,69 @@
         }
         LICSYSTEM.captacao._proxTimer = setTimeout(function () {
           LICSYSTEM.captacao.suggestMunicipios(q);
-        }, 280);
+        }, 220);
+      });
+
+      input.addEventListener("keydown", function (e) {
+        var list = LICSYSTEM.captacao._proxSuggestions || [];
+        if (e.key === "ArrowDown" && list.length) {
+          e.preventDefault();
+          LICSYSTEM.captacao._proxActiveIdx = Math.min(
+            list.length - 1,
+            (LICSYSTEM.captacao._proxActiveIdx || 0) + 1
+          );
+          LICSYSTEM.captacao._paintSuggestActive();
+          return;
+        }
+        if (e.key === "ArrowUp" && list.length) {
+          e.preventDefault();
+          LICSYSTEM.captacao._proxActiveIdx = Math.max(
+            0,
+            (LICSYSTEM.captacao._proxActiveIdx || 0) - 1
+          );
+          LICSYSTEM.captacao._paintSuggestActive();
+          return;
+        }
+        if (e.key === "Enter") {
+          e.preventDefault();
+          if (list.length) {
+            var idx = Math.max(
+              0,
+              Math.min(list.length - 1, LICSYSTEM.captacao._proxActiveIdx || 0)
+            );
+            LICSYSTEM.captacao.selectMunicipio(list[idx]);
+            return;
+          }
+          LICSYSTEM.captacao.resolveMunicipioFromInput().then(function (m) {
+            if (m) LICSYSTEM.captacao.selectMunicipio(m);
+            else
+              showAlert(
+                "proxAlert",
+                "info",
+                "Nenhum município encontrado para esse texto. Digite pelo menos 2 letras e escolha na lista."
+              );
+          });
+        }
+        if (e.key === "Escape" && box) {
+          box.hidden = true;
+        }
       });
 
       input.addEventListener("blur", function () {
         setTimeout(function () {
           if (box) box.hidden = true;
-        }, 180);
+        }, 200);
+      });
+
+      input.addEventListener("focus", function () {
+        if (
+          box &&
+          LICSYSTEM.captacao._proxSuggestions &&
+          LICSYSTEM.captacao._proxSuggestions.length &&
+          !ibge.value
+        ) {
+          box.hidden = false;
+        }
       });
 
       if (box) {
@@ -2407,19 +2519,80 @@
         });
       }
 
+      var raioEl = el("proxRaio");
+      if (raioEl && !raioEl._proxWired) {
+        raioEl._proxWired = true;
+        raioEl.addEventListener("change", function () {
+          LICSYSTEM.captacao._proxRaioTouched = true;
+          LICSYSTEM.captacao.applyCoberturaPreset();
+        });
+        raioEl.addEventListener("input", function () {
+          LICSYSTEM.captacao._proxRaioTouched = true;
+        });
+      }
+
       var cob = el("proxCobertura");
       if (cob && !cob._proxWired) {
         cob._proxWired = true;
         cob.addEventListener("change", function () {
-          LICSYSTEM.captacao.applyCoberturaPreset();
+          if (String(cob.value || "") === "pr-sp") {
+            LICSYSTEM.captacao._proxRaioTouched = false;
+          }
+          LICSYSTEM.captacao.applyCoberturaPreset({ forceBump: true });
         });
       }
     },
 
-    suggestMunicipios: function (q) {
+    _paintSuggestActive: function () {
       var box = el("proxSuggest");
       if (!box) return;
-      fetch("/api/municipios?q=" + encodeURIComponent(q))
+      var buttons = box.querySelectorAll("button[data-ibge]");
+      var idx = LICSYSTEM.captacao._proxActiveIdx || 0;
+      for (var i = 0; i < buttons.length; i++) {
+        if (i === idx) buttons[i].classList.add("sg-active");
+        else buttons[i].classList.remove("sg-active");
+      }
+      if (buttons[idx] && buttons[idx].scrollIntoView) {
+        buttons[idx].scrollIntoView({ block: "nearest" });
+      }
+    },
+
+    pickBestMunicipio: function (arr, q) {
+      if (!arr || !arr.length) return null;
+      var term = LICSYSTEM.captacao.foldTxt(q);
+      if (!term) return arr[0];
+      var exact = [];
+      var starts = [];
+      for (var i = 0; i < arr.length; i++) {
+        var fn = LICSYSTEM.captacao.foldTxt(arr[i].nome);
+        if (fn === term) exact.push(arr[i]);
+        else if (fn.indexOf(term) === 0) starts.push(arr[i]);
+      }
+      if (exact.length === 1) return exact[0];
+      if (exact.length > 1) {
+        var pr = exact.filter(function (m) {
+          return String(m.uf || "").toUpperCase() === "PR";
+        });
+        if (pr.length === 1) return pr[0];
+        return exact[0];
+      }
+      if (arr.length === 1) return arr[0];
+      if (starts.length === 1) return starts[0];
+      return null;
+    },
+
+    resolveMunicipioFromInput: function () {
+      var input = el("proxMunicipio");
+      var q = String((input && input.value) || "")
+        .split("/")[0]
+        .trim();
+      if (q.length < 2) return Promise.resolve(null);
+      var cached = LICSYSTEM.captacao.pickBestMunicipio(
+        LICSYSTEM.captacao._proxSuggestions,
+        q
+      );
+      if (cached) return Promise.resolve(cached);
+      return fetch("/api/municipios?q=" + encodeURIComponent(q))
         .then(function (r) {
           return r.json().then(function (j) {
             if (!r.ok) throw new Error((j && j.error) || "HTTP " + r.status);
@@ -2428,16 +2601,71 @@
         })
         .then(function (j) {
           var arr = (j && j.municipios) || [];
+          LICSYSTEM.captacao._proxSuggestions = arr;
+          return LICSYSTEM.captacao.pickBestMunicipio(arr, q);
+        })
+        .catch(function () {
+          return null;
+        });
+    },
+
+    suggestMunicipios: function (q) {
+      var box = el("proxSuggest");
+      if (!box) return;
+      var seq = ++LICSYSTEM.captacao._proxSuggestSeq;
+      fetch("/api/municipios?q=" + encodeURIComponent(q))
+        .then(function (r) {
+          return r.json().then(function (j) {
+            if (!r.ok) throw new Error((j && j.error) || "HTTP " + r.status);
+            return j;
+          });
+        })
+        .then(function (j) {
+          if (seq !== LICSYSTEM.captacao._proxSuggestSeq) return;
+          var arr = (j && j.municipios) || [];
+          LICSYSTEM.captacao._proxSuggestions = arr;
+          LICSYSTEM.captacao._proxActiveIdx = 0;
+          LICSYSTEM.captacao.clearQuickPick();
           if (!arr.length) {
             box.innerHTML =
-              '<div class="small muted" style="padding:10px 12px">Nenhum município encontrado.</div>';
+              '<div class="small muted" style="padding:10px 12px">Nenhum município encontrado. Tente outro nome.</div>';
             box.hidden = false;
             return;
           }
+          var best = LICSYSTEM.captacao.pickBestMunicipio(arr, q);
+          /* Único resultado (ex.: Ibaiti): auto-seleciona e confirma visualmente. */
+          if (arr.length === 1 && best) {
+            LICSYSTEM.captacao.selectMunicipio(best);
+            showAlert(
+              "proxAlert",
+              "ok",
+              "Município selecionado: <b>" +
+                utils.escapeHtml(best.nome) +
+                " / " +
+                utils.escapeHtml(best.uf) +
+                "</b>. Pode clicar em Buscar no raio."
+            );
+            return;
+          }
+          if (best && LICSYSTEM.captacao.foldTxt(best.nome) === LICSYSTEM.captacao.foldTxt(q)) {
+            LICSYSTEM.captacao.selectMunicipio(best);
+            showAlert(
+              "proxAlert",
+              "ok",
+              "Município selecionado: <b>" +
+                utils.escapeHtml(best.nome) +
+                " / " +
+                utils.escapeHtml(best.uf) +
+                "</b>. Pode clicar em Buscar no raio."
+            );
+            return;
+          }
           box.innerHTML = arr
-            .map(function (m) {
+            .map(function (m, i) {
               return (
-                '<button type="button" data-ibge="' +
+                '<button type="button" class="' +
+                (i === 0 ? "sg-active" : "") +
+                '" data-ibge="' +
                 utils.escapeHtml(String(m.ibge)) +
                 '" data-nome="' +
                 utils.escapeHtml(m.nome) +
@@ -2456,8 +2684,12 @@
             })
             .join("");
           box.hidden = false;
+          if (best) LICSYSTEM.captacao.showQuickPick(best);
         })
         .catch(function () {
+          if (seq !== LICSYSTEM.captacao._proxSuggestSeq) return;
+          LICSYSTEM.captacao._proxSuggestions = [];
+          LICSYSTEM.captacao.clearQuickPick();
           box.innerHTML =
             '<div class="small muted" style="padding:10px 12px">Falha ao buscar municípios (API local). Use <code>npm run dev:api</code> ou o deploy Vercel.</div>';
           box.hidden = false;
@@ -2475,6 +2707,10 @@
         box.hidden = true;
         box.innerHTML = "";
       }
+      LICSYSTEM.captacao._proxSuggestions = [m];
+      LICSYSTEM.captacao._proxActiveIdx = 0;
+      LICSYSTEM.captacao.clearQuickPick();
+      hideAlert("proxAlert");
       LICSYSTEM.captacao.saveOrigem(m);
     },
 
@@ -2497,31 +2733,86 @@
 
     buscarProximos: function () {
       if (LICSYSTEM.captacao._proxBusy) return;
+      hideAlert("proxAlert");
       var ibgeEl = el("proxIbge");
       var ibge = Number((ibgeEl && ibgeEl.value) || 0);
+      if (ibge) {
+        LICSYSTEM.captacao._runBuscarProximos(ibge);
+        return;
+      }
+      var typed = String((el("proxMunicipio") && el("proxMunicipio").value) || "").trim();
+      if (typed.length < 2) {
+        showAlert(
+          "proxAlert",
+          "info",
+          "Informe o município de origem (ex.: Ibaiti). Digite o nome e escolha na lista, ou pressione Enter."
+        );
+        var inp = el("proxMunicipio");
+        if (inp) inp.focus();
+        return;
+      }
+      LICSYSTEM.captacao._proxBusy = true;
+      var btnWait = el("btnProxBuscar");
+      if (btnWait) btnWait.disabled = true;
+      LICSYSTEM.captacao
+        .resolveMunicipioFromInput()
+        .then(function (m) {
+          LICSYSTEM.captacao._proxBusy = false;
+          if (btnWait) btnWait.disabled = false;
+          if (!m || !m.ibge) {
+            showAlert(
+              "proxAlert",
+              "info",
+              "Não deu para confirmar o município só com o texto digitado. Clique na sugestão da lista (ou use Enter quando houver um único resultado)."
+            );
+            var inp2 = el("proxMunicipio");
+            if (inp2) {
+              inp2.focus();
+              LICSYSTEM.captacao.suggestMunicipios(
+                typed.split("/")[0].trim()
+              );
+            }
+            return;
+          }
+          LICSYSTEM.captacao.selectMunicipio(m);
+          LICSYSTEM.captacao._runBuscarProximos(Number(m.ibge));
+        })
+        .catch(function () {
+          LICSYSTEM.captacao._proxBusy = false;
+          if (btnWait) btnWait.disabled = false;
+          showAlert(
+            "proxAlert",
+            "error",
+            "Falha ao confirmar o município. Verifique a API local (<code>npm run dev:api</code>) e tente de novo."
+          );
+        });
+    },
+
+    _runBuscarProximos: function (ibge) {
       var raio = Number((el("proxRaio") && el("proxRaio").value) || 250);
       var cobertura = (el("proxCobertura") && el("proxCobertura").value) || "";
       var kw = (el("proxKeywords") && el("proxKeywords").value) || "";
       var ampliar = !!(el("proxAmpliar") && el("proxAmpliar").checked);
       var federal = !!(el("proxFederal") && el("proxFederal").checked);
 
-      hideAlert("proxAlert");
-      if (!ibge) {
-        showAlert(
-          "proxAlert",
-          "error",
-          "Selecione um município na lista de sugestões (digite o nome e clique na opção)."
-        );
-        return;
-      }
       if (!Number.isFinite(raio) || raio < 10) raio = 250;
       if (raio > 700) raio = 700;
       if (el("proxRaio")) el("proxRaio").value = String(raio);
 
+      if (cobertura === "pr-sp" && raio < 400) {
+        LICSYSTEM.captacao.applyCoberturaPreset();
+      }
+
       var saved = LICSYSTEM.captacao.loadOrigem();
       if (!saved || Number(saved.ibge) !== ibge) {
-        var nomeTxt = ((el("proxMunicipio") && el("proxMunicipio").value) || "").split("/")[0].trim();
-        LICSYSTEM.captacao.saveOrigem({ ibge: ibge, nome: nomeTxt, uf: (saved && saved.uf) || "" });
+        var nomeTxt = ((el("proxMunicipio") && el("proxMunicipio").value) || "")
+          .split("/")[0]
+          .trim();
+        LICSYSTEM.captacao.saveOrigem({
+          ibge: ibge,
+          nome: nomeTxt,
+          uf: (saved && saved.uf) || "",
+        });
       }
 
       LICSYSTEM.captacao._proxBusy = true;
@@ -4639,13 +4930,20 @@
       if(e.key === "Enter"){ e.preventDefault(); LICSYSTEM.captacao.buscarProximos(); }
     });
     on("proxCobertura","change", function(){
-      LICSYSTEM.captacao.applyCoberturaPreset();
+      if (String((el("proxCobertura") && el("proxCobertura").value) || "") === "pr-sp") {
+        LICSYSTEM.captacao._proxRaioTouched = false;
+      }
+      LICSYSTEM.captacao.applyCoberturaPreset({ forceBump: true });
     });
     document.querySelectorAll("[data-prox-raio]").forEach(function(btn){
       btn.addEventListener("click", function(){
         var v = btn.getAttribute("data-prox-raio");
         var raioEl = el("proxRaio");
-        if(raioEl && v) raioEl.value = String(v);
+        if(raioEl && v){
+          raioEl.value = String(v);
+          LICSYSTEM.captacao._proxRaioTouched = true;
+          LICSYSTEM.captacao.applyCoberturaPreset();
+        }
       });
     });
     on("capCheckAll","change", function(){
