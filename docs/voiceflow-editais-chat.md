@@ -1,8 +1,30 @@
-# Voiceflow → LICSYSTEM editais chat
+# Suporte LICSYSTEM → editais PNCP
 
-O widget **Suporte LICSYSTEM** (`src/voiceflow.js`) só embute o projeto Voiceflow. Ele **não** consulta o PNCP sozinho. Para listar editais abertos, conecte um **Custom Action / API step** no fluxo Voiceflow ao endpoint abaixo.
+## O que o chat faz agora (no app)
 
-## Endpoint
+O botão flutuante **Suporte** (`src/voiceflow.js`) abre um painel **no LICSYSTEM**.
+
+- Perguntas sobre **licitações / editais / município / Norte Pioneiro** → o app chama `POST /api/editais-chat` e responde com dados reais do PNCP (`respostaTexto`).
+- Outros assuntos → pode abrir o widget Voiceflow (“Assistente geral”).
+
+Não depende de Custom Action no Voiceflow cloud para listar editais.
+
+### Como perguntar
+
+Exemplos:
+
+- `Quais licitações terão em Ibaiti`
+- `Licitações no Norte Pioneiro`
+- `Editais em Jacarezinho com cestas`
+- Atalhos no painel: Ibaiti, Norte Pioneiro, Norte · cestas, Jacarezinho
+
+Se não houver proposta aberta: a resposta diz honestamente que **não há proposta aberta no PNCP neste momento** (não “não consigo puxar”).
+
+Também funciona em **Captação → Perguntar editais** (mesma API).
+
+---
+
+## Endpoint (API)
 
 ```
 https://licsystem.vercel.app/api/editais-chat
@@ -11,10 +33,11 @@ https://licsystem.vercel.app/api/editais-chat
 - Métodos: `GET` ou `POST`
 - CORS: liberado (`*`)
 - Fonte: PNCP oficial (propostas em aberto)
+- Dados de municípios / Norte Pioneiro: módulos `require()` em `api/lib/` (bundle Vercel)
 
-## Exemplos
+### Exemplos
 
-**Norte Pioneiro (26 municípios AMUNORPI):**
+**Norte Pioneiro:**
 
 ```
 GET https://licsystem.vercel.app/api/editais-chat?regiao=norte-pioneiro
@@ -26,7 +49,7 @@ GET https://licsystem.vercel.app/api/editais-chat?regiao=norte-pioneiro
 GET https://licsystem.vercel.app/api/editais-chat?municipio=Ibaiti
 ```
 
-**Texto livre (parser local em PT):**
+**Texto livre:**
 
 ```
 POST https://licsystem.vercel.app/api/editais-chat
@@ -37,40 +60,26 @@ Content-Type: application/json
 }
 ```
 
-**Categorias** (`reforma`, `comida`, `cestas`, `cafe`, `natal`, `eletro`):
+### Resposta útil
 
-```
-GET .../api/editais-chat?regiao=norte-pioneiro&categoria=cestas,comida,natal
-```
-
-## Resposta (campos úteis no VF)
-
-| Campo | Uso no chat |
-|--------|-------------|
+| Campo | Uso |
+|--------|-----|
 | `respostaTexto` | Mensagem pronta em português |
-| `editais[]` | Lista estruturada |
-| `editais[].valorEstimado` | Valor estimado |
-| `editais[].dataAbertura` | Data de abertura |
-| `editais[].link` | Link do edital no PNCP |
-| `editais[].municipio` / `orgao` / `objeto` / `modalidade` | Detalhes |
+| `editais[]` | Lista (objeto, valor, data, link, município…) |
 
-## Passo a passo no Voiceflow
+---
 
-1. No canvas do projeto **Suporte LICSYSTEM**, após capturar a pergunta do usuário, adicione um bloco **API** / **Custom Action**.
+## Opcional: Custom Action no Voiceflow
+
+Se quiser que o agente Voiceflow (cloud) também consulte o PNCP:
+
+1. No canvas **Suporte LICSYSTEM**, após capturar a pergunta, bloco **API** / **Custom Action**.
 2. Method: `POST`, URL: `https://licsystem.vercel.app/api/editais-chat`
-3. Body JSON: `{ "mensagem": "{last_utterance}" }` (ou a variável do VF que guarda o texto).
-4. Mapeie a resposta: exiba `{respostaTexto}` no Speak/Text; opcionalmente itere `editais` se o plano VF permitir.
-5. Publique o agente Voiceflow (o embed do LICSYSTEM já usa o `projectID` em `src/voiceflow.js`).
+3. Body: `{ "mensagem": "{last_utterance}" }`
+4. Exiba `{respostaTexto}` no Speak/Text.
+5. Publique o agente.
 
-## Alternativa sem editar o Voiceflow
-
-No app, aba **Captação** → card **Perguntar editais**: atalhos e pergunta livre já chamam a mesma API.
-
-## Metadados
-
-```
-GET https://licsystem.vercel.app/api/editais-chat?meta=1
-```
+Isso é **opcional** — o painel do app já consulta a API sozinho.
 
 ## NL com Gemini (opcional)
 
