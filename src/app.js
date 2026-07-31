@@ -899,15 +899,31 @@
 
   /* ============================ CLOUD SYNC (Firebase RTDB per uid) ============================
    * Paths: users/{uid}/orcamento|catalogo|cofre|docsChecklist|arp|entregas|histEntregas
-   * Envelope: { updatedAt:ms, cleared?:bool, data:... }
+   * Envelope: { updatedAt:ms, cleared?:bool, writeId?:string, data:... }
    * Merge: newest updatedAt wins; empty local never overwrites cloud unless Limpar (cleared).
+   * Live: after login, onValue listeners apply newer remote envelopes without re-login.
+   *
+   * Suggested RTDB rules (optional; open "auth != null" still works):
+   *   { "rules": { "users": {
+   *     "$uid": { ".read": "auth != null && auth.uid === $uid",
+   *               ".write": "auth != null && auth.uid === $uid" }
+   *   }}}
+   * Captação (PDF/radar) permanece só no navegador — não entra nestes nós.
    */
   LICSYSTEM.cloudSync = {
     DEBOUNCE_MS: 900,
+    REMOTE_DEFER_MS: 700,
+    KEYS: ["orcamento", "catalogo", "cofre", "docsChecklist", "arp", "entregas", "histEntregas"],
     _uid: null,
     _onlineWired: false,
     _pulling: false,
+    _applyingRemote: false,
     _pushTimers: {},
+    _pendingRemoteTimers: {},
+    _pendingRemote: {},
+    _echoAt: {},
+    _echoWriteId: {},
+    _listenerRefs: {},
     _meta: null,
 
     path: function(key){
@@ -936,6 +952,10 @@
       return Number(m[key] || 0) || 0;
     },
 
+    newWriteId: function(){
+      return (this._uid || "local") + "-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+    },
+
     setStatus: function(kind, text){
       var node = el("syncStatus");
       if(!node) return;
@@ -943,11 +963,23 @@
         node.hidden = true;
         node.textContent = "";
         node.className = "sync-status";
+        node.removeAttribute("title");
         return;
       }
       node.hidden = false;
       node.textContent = text;
       node.className = "sync-status" + (kind ? (" is-" + kind) : "");
+      if(kind === "offline"){
+        node.title = "Sem conexão. As alterações ficam neste PC e sincronizam automaticamente ao voltar a internet.";
+      } else if(kind === "ok"){
+        node.title = "Dados sincronizados em tempo real com a nuvem (mesmo login em outros PCs).";
+      } else if(kind === "syncing"){
+        node.title = "Sincronizando com a nuvem…";
+      } else if(kind === "error"){
+        node.title = "Falha ao sincronizar. Verifique a conexão e tente novamente.";
+      } else {
+        node.title = "Sincronização na nuvem";
+      }
     },
 
     toFb: function(obj){
@@ -1017,7 +1049,6 @@
         updatedAt: Number((!Array.isArray(data) && (data.updatedAt || data.savedAt)) || Date.now())
       };
       try{ localStorage.setItem(ORC_KEY, JSON.stringify(payload)); }catch(e){}
-      LICSYSTEM.state._orcDirty = true;
       LICSYSTEM.state._orcRendered = false;
       try{ LICSYSTEM.orcamento.updateMeta(); }catch(e){}
       if(LICSYSTEM.state.currentView === "orcamento"){
@@ -1099,6 +1130,7 @@
           emptyPayload.cleared = !!env.cleared;
           try{ localStorage.setItem(ORC_KEY, JSON.stringify(emptyPayload)); }catch(e){}
           this.touchMeta("orcamento", ts);
+          LICSYSTEM.state._orcDirty = false;
           try{ LICSYSTEM.orcamento.updateMeta(); }catch(e){}
           if(LICSYSTEM.state.currentView === "orcamento"){
             try{ LICSYSTEM.orcamento.render({ save:false }); }catch(e){}
@@ -1110,6 +1142,7 @@
           }
           this.applyOrcData(data);
           this.touchMeta("orcamento", ts);
+          LICSYSTEM.state._orcDirty = false;
         }
         return;
       }
@@ -1147,6 +1180,11 @@
         LICSYSTEM.entregas.items = Array.isArray(data) ? data : [];
         try{ localStorage.setItem("licsystem_entregas_v1", JSON.stringify(LICSYSTEM.entregas.items)); }catch(e){}
         this.touchMeta("entregas", ts);
+        try{
+          if(LICSYSTEM.state.currentView === "entregas" && LICSYSTEM.entregas.renderLista){
+            LICSYSTEM.entregas.renderLista();
+          }
+        }catch(e){}
         return;
       }
       if(key === "histEntregas"){
@@ -1175,7 +1213,7 @@
       var path = self.path(key);
       if(!path || !utils.hasFirebaseConfig()) return Promise.resolve({ skipped: true });
       if(!navigator.onLine){
-        self.setStatus("offline", "Offline");
+        self.setStatus("offline", "Offline — sync ao voltar");
         return Promise.resolve({ offline: true });
       }
 
@@ -1202,13 +1240,17 @@
         env.updatedAt = Date.now();
       }
       if(!env.updatedAt) env.updatedAt = Date.now();
+      if(!env.writeId) env.writeId = self.newWriteId();
 
       self.setStatus("syncing", "Sincronizando…");
       var payload = self.toFb({
         updatedAt: env.updatedAt,
         cleared: !!env.cleared,
+        writeId: env.writeId,
         data: env.data
       });
+      self._echoAt[key] = Number(env.updatedAt) || 0;
+      self._echoWriteId[key] = env.writeId;
       return utils.firebaseSet(path, payload).then(function(){
         self.touchMeta(key, env.updatedAt);
         self.setStatus("ok", "Sincronizado");
@@ -1222,10 +1264,11 @@
 
     schedulePush: function(key, opts){
       var self = this;
-      if(self._pulling) return;
+      if(self._pulling || self._applyingRemote) return;
       clearTimeout(self._pushTimers[key]);
       self._pushTimers[key] = setTimeout(function(){
         self._pushTimers[key] = null;
+        if(self._pulling || self._applyingRemote) return;
         self.pushKey(key, opts);
       }, self.DEBOUNCE_MS);
     },
@@ -1288,6 +1331,131 @@
       return { source: "local" };
     },
 
+    parseCloudEnv: function(raw){
+      if(!raw || typeof raw !== "object") return null;
+      return {
+        updatedAt: Number(raw.updatedAt || 0),
+        cleared: !!raw.cleared,
+        writeId: raw.writeId ? String(raw.writeId) : "",
+        data: raw.data !== undefined ? raw.data : raw
+      };
+    },
+
+    isOrcBusy: function(){
+      if(LICSYSTEM.state._orcDirty) return true;
+      if(LICSYSTEM.orcamento && LICSYSTEM.orcamento._saveTimer) return true;
+      try{
+        var ae = document.activeElement;
+        if(ae && ae.closest && ae.closest("#orcBody, #orcMetaNome, #orcMetaNumero")) return true;
+      }catch(e){}
+      return false;
+    },
+
+    isEcho: function(key, cloudEnv){
+      if(!cloudEnv) return true;
+      var remoteTs = Number(cloudEnv.updatedAt || 0);
+      var echoTs = Number(this._echoAt[key] || 0);
+      if(cloudEnv.writeId && this._echoWriteId[key] && cloudEnv.writeId === this._echoWriteId[key]){
+        return true;
+      }
+      if(remoteTs && echoTs && remoteTs <= echoTs) return true;
+      var localTs = this.metaTs(key);
+      if(remoteTs && localTs && remoteTs <= localTs) return true;
+      return false;
+    },
+
+    applyRemoteEnvelope: function(key, cloudEnv){
+      if(!cloudEnv) return;
+      var self = this;
+      self._applyingRemote = true;
+      try{
+        self.applyEnvelope(key, cloudEnv);
+        if(key === "orcamento"){
+          LICSYSTEM.state._orcDirty = false;
+        }
+        if(cloudEnv.writeId) self._echoWriteId[key] = cloudEnv.writeId;
+        self._echoAt[key] = Number(cloudEnv.updatedAt || 0);
+        self.setStatus("ok", "Sincronizado");
+      }finally{
+        self._applyingRemote = false;
+      }
+    },
+
+    schedulePendingRemote: function(key){
+      var self = this;
+      clearTimeout(self._pendingRemoteTimers[key]);
+      self._pendingRemoteTimers[key] = setTimeout(function(){
+        self._pendingRemoteTimers[key] = null;
+        var env = self._pendingRemote[key];
+        if(!env) return;
+        if(key === "orcamento" && self.isOrcBusy()){
+          // Keep deferring while typing; local saves will win via newer updatedAt.
+          self.schedulePendingRemote(key);
+          return;
+        }
+        delete self._pendingRemote[key];
+        if(self.isEcho(key, env)) return;
+        self.applyRemoteEnvelope(key, env);
+      }, self.REMOTE_DEFER_MS);
+    },
+
+    onRemoteSnap: function(key, snap){
+      var self = this;
+      if(self._pulling || self._applyingRemote) return;
+      if(!self._uid) return;
+      var cloudEnv = self.parseCloudEnv(snap && snap.val ? snap.val() : null);
+      if(!cloudEnv) return;
+      if(self.isEcho(key, cloudEnv)) return;
+
+      if(key === "orcamento" && self.isOrcBusy()){
+        self._pendingRemote[key] = cloudEnv;
+        self.schedulePendingRemote(key);
+        self.setStatus("syncing", "Sync pendente…");
+        return;
+      }
+
+      self.applyRemoteEnvelope(key, cloudEnv);
+    },
+
+    stopRealtime: function(){
+      var self = this;
+      Object.keys(self._listenerRefs).forEach(function(key){
+        try{
+          var ref = self._listenerRefs[key];
+          if(ref) ref.off("value");
+        }catch(e){}
+      });
+      self._listenerRefs = {};
+      Object.keys(self._pendingRemoteTimers).forEach(function(key){
+        clearTimeout(self._pendingRemoteTimers[key]);
+        self._pendingRemoteTimers[key] = null;
+      });
+      self._pendingRemote = {};
+    },
+
+    startRealtime: function(){
+      var self = this;
+      if(!utils.hasFirebaseConfig() || !self._uid) return Promise.resolve();
+      self.stopRealtime();
+      return utils.ensureFirebase().then(function(fb){
+        if(!self._uid) return;
+        self.KEYS.forEach(function(key){
+          var path = self.path(key);
+          if(!path) return;
+          var ref = fb.database().ref(path);
+          self._listenerRefs[key] = ref;
+          ref.on("value", function(snap){
+            self.onRemoteSnap(key, snap);
+          }, function(err){
+            console.warn("cloudSync live "+key, err);
+            self.setStatus("error", "Sync falhou");
+          });
+        });
+      }).catch(function(err){
+        console.warn("cloudSync startRealtime", err);
+      });
+    },
+
     pullAll: function(opts){
       opts = opts || {};
       var self = this;
@@ -1295,12 +1463,12 @@
         return Promise.resolve();
       }
       if(!navigator.onLine){
-        self.setStatus("offline", "Offline");
+        self.setStatus("offline", "Offline — sync ao voltar");
         return Promise.resolve();
       }
       self._pulling = true;
       self.setStatus("syncing", "Sincronizando…");
-      var keys = ["orcamento", "catalogo", "cofre", "docsChecklist", "arp", "entregas", "histEntregas"];
+      var keys = self.KEYS;
       return utils.ensureFirebase().then(function(fb){
         var uid = self._uid || (LICSYSTEM.state.authUser && LICSYSTEM.state.authUser.uid);
         return fb.database().ref("users/" + uid).once("value").then(function(snap){
@@ -1308,16 +1476,12 @@
         });
       }).then(function(root){
         keys.forEach(function(key){
-          var raw = root[key];
-          var cloudEnv = null;
-          if(raw && typeof raw === "object"){
-            cloudEnv = {
-              updatedAt: Number(raw.updatedAt || 0),
-              cleared: !!raw.cleared,
-              data: raw.data !== undefined ? raw.data : raw
-            };
-          }
+          var cloudEnv = self.parseCloudEnv(root[key]);
           self.mergeKey(key, cloudEnv, opts);
+          if(cloudEnv){
+            self._echoAt[key] = Number(cloudEnv.updatedAt || self.metaTs(key) || 0);
+            if(cloudEnv.writeId) self._echoWriteId[key] = cloudEnv.writeId;
+          }
         });
         self.setStatus("ok", "Sincronizado");
       }).catch(function(err){
@@ -1330,15 +1494,21 @@
 
     onUser: function(user){
       if(!user || !user.uid) return Promise.resolve();
+      var self = this;
       var prev = null;
       try{ prev = localStorage.getItem(CLOUD_LAST_UID_KEY); }catch(e){}
       var switched = !!(prev && prev !== user.uid);
-      this._uid = user.uid;
+      if(self._uid && self._uid !== user.uid){
+        self.stopRealtime();
+      }
+      self._uid = user.uid;
       try{ localStorage.setItem(CLOUD_LAST_UID_KEY, user.uid); }catch(e){}
-      this.wireOnline();
+      self.wireOnline();
       // Flush pending orçamento edits before merge
       try{ if(LICSYSTEM.orcamento && LICSYSTEM.orcamento.flushSave) LICSYSTEM.orcamento.flushSave({ skipCloud: true }); }catch(e){}
-      return this.pullAll({ replaceFromCloud: switched });
+      return self.pullAll({ replaceFromCloud: switched }).then(function(){
+        return self.startRealtime();
+      });
     },
 
     onLogout: function(){
@@ -1347,6 +1517,9 @@
         clearTimeout(self._pushTimers[k]);
         self._pushTimers[k] = null;
       });
+      self.stopRealtime();
+      self._echoAt = {};
+      self._echoWriteId = {};
       self._uid = null;
       self.setStatus("", "");
     },
@@ -1357,11 +1530,13 @@
       var self = this;
       window.addEventListener("online", function(){
         if(self._uid || (LICSYSTEM.state.authUser && LICSYSTEM.state.authUser.uid)){
-          self.pullAll();
+          self.pullAll().then(function(){
+            return self.startRealtime();
+          });
         }
       });
       window.addEventListener("offline", function(){
-        self.setStatus("offline", "Offline");
+        self.setStatus("offline", "Offline — sync ao voltar");
       });
     }
   };
