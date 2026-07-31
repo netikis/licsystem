@@ -50,8 +50,12 @@ function json(res, status, body) {
 
 function loadMunicipios() {
   if (_municipios) return _municipios;
-  var file = path.join(__dirname, "data", "municipios.json");
-  _municipios = JSON.parse(fs.readFileSync(file, "utf8"));
+  try {
+    _municipios = require("./data/municipios.json");
+  } catch (e) {
+    var file = path.join(__dirname, "data", "municipios.json");
+    _municipios = JSON.parse(fs.readFileSync(file, "utf8"));
+  }
   _byIbge = Object.create(null);
   for (var i = 0; i < _municipios.length; i++) {
     _byIbge[_municipios[i].i] = _municipios[i];
