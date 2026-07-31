@@ -3,20 +3,9 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "functions": {
-    "api/municipios.js": {
-      "includeFiles": "api/data/**"
-    },
-    "api/editais-proximos.js": {
-      "maxDuration": 60,
-      "includeFiles": "api/data/**"
-    },
-    "api/editais-chat.js": {
-      "maxDuration": 60,
-      "includeFiles": "api/data/**"
-    },
-    "api/chat-editais.js": {
-      "maxDuration": 60,
-      "includeFiles": "api/data/**"
+    "api/**/*.js": {
+      "includeFiles": "api/data/**",
+      "maxDuration": 60
     }
   },
   "rewrites": [
