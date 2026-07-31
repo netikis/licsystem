@@ -1037,6 +1037,38 @@
   .checklist-item:last-child{border-bottom:0}
   .checklist-item .ci-name{flex:1 1 160px;min-width:0;font-weight:600;color:var(--ls-navy)}
   .checklist-item input[type=date]{width:100%;max-width:180px}
+
+  /* Cofre de documentos */
+  #cofreOverlay{
+    position:fixed;inset:0;z-index:120;background:rgba(21,38,66,.45);
+    display:none;align-items:center;justify-content:center;padding:18px;
+  }
+  #cofreOverlay.open{display:flex}
+  .cofre-modal-card{max-width:560px}
+  .cofre-toolbar{align-items:center;margin:4px 0 10px}
+  .cofre-check-all{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--ls-navy);cursor:pointer}
+  .cofre-list{display:flex;flex-direction:column;gap:0}
+  .cofre-item{
+    display:grid;grid-template-columns:auto 1fr auto;gap:12px 14px;align-items:start;
+    padding:14px 0;border-bottom:1px solid var(--ls-line);width:100%;
+  }
+  .cofre-item:last-child{border-bottom:0}
+  .cofre-item.is-expired{background:linear-gradient(90deg,rgba(210,59,59,.06),transparent);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:10px}
+  .cofre-item.is-warn{background:linear-gradient(90deg,rgba(201,145,31,.07),transparent);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:10px}
+  .cofre-item .ci-check{padding-top:4px}
+  .cofre-item .ci-body{min-width:0}
+  .cofre-item .ci-name{font-weight:700;color:var(--ls-navy);font-size:13.5px;word-break:break-word}
+  .cofre-item .ci-meta{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:6px;align-items:center}
+  .cofre-item .ci-obs{font-size:12px;color:var(--ls-muted);margin-top:4px;word-break:break-word}
+  .cofre-item .ci-actions{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+  .cofre-tipo{
+    display:inline-block;font-size:10.5px;font-weight:700;text-transform:uppercase;
+    letter-spacing:.35px;padding:2px 7px;border-radius:6px;background:#e8f0fe;color:#1a4fa0;
+  }
+  .cofre-file-tag{font-size:11.5px;color:var(--ls-muted);font-weight:600}
+  .cofre-file-tag a{color:var(--ls-navy-3);font-weight:700;text-decoration:none}
+  .cofre-file-tag a:hover{text-decoration:underline}
+  .cofre-empty{padding:28px 12px;text-align:center;color:var(--ls-muted);font-size:13px}
   .placeholder-ico{font-size:40px;margin-bottom:10px;color:var(--ls-gold)}
   .spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
   @keyframes spin{to{transform:rotate(360deg)}}
@@ -1097,6 +1129,8 @@
     .chart-box{height:220px}
     .checklist-item{flex-direction:column;align-items:stretch;gap:8px}
     .checklist-item input[type=date]{max-width:100%}
+    .cofre-item{grid-template-columns:auto 1fr;gap:10px}
+    .cofre-item .ci-actions{grid-column:1 / -1;flex-direction:row;justify-content:flex-start;flex-wrap:wrap}
     .pill-group{width:100%}
     .pill-group label{flex:1 1 auto;text-align:center}
     .dropzone{padding:18px 14px}

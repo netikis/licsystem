@@ -1110,6 +1110,11 @@
         if(!data || typeof data !== "object") return true;
         return !Array.isArray(data.documentos) || !data.documentos.length;
       }
+      if(key === "cofre"){
+        if(!data || typeof data !== "object") return true;
+        if(Array.isArray(data.items)) return !data.items.length;
+        return !Object.keys(data).filter(function(k){ return k !== "v" && k !== "items"; }).length;
+      }
       return this.isListEmpty(data);
     },
 
@@ -1154,10 +1159,14 @@
         return;
       }
       if(key === "cofre"){
-        LICSYSTEM.cofre.data = (data && typeof data === "object" && !Array.isArray(data)) ? data : {};
-        try{ localStorage.setItem(COFRE_KEY, JSON.stringify(LICSYSTEM.cofre.data)); }catch(e){}
+        if(LICSYSTEM.cofre){
+          // Persiste localmente o envelope da nuvem (já migrado para v2)
+          LICSYSTEM.cofre.applyData(data, { skipPersist: false });
+        } else {
+          try{ localStorage.setItem(COFRE_KEY, JSON.stringify(data && typeof data === "object" ? data : {})); }catch(e){}
+        }
         this.touchMeta("cofre", ts);
-        try{ LICSYSTEM.cofre.render(); }catch(e){}
+        try{ if(LICSYSTEM.cofre) LICSYSTEM.cofre.render(); }catch(e){}
         return;
       }
       if(key === "docsChecklist"){
@@ -5530,58 +5539,559 @@
 
   /* ============================ COFRE ============================ */
   var COFRE_DOCS = [
-    {key:"cnpj", label:"CNPJ (Cartão)"},
-    {key:"cndFederal", label:"CND Federal"},
-    {key:"cndEstadual", label:"CND Estadual"},
-    {key:"cndMunicipal", label:"CND Municipal"},
-    {key:"fgts", label:"FGTS (CRF)"},
-    {key:"cndt", label:"INSS / CNDT"},
-    {key:"balanco", label:"Balanço Patrimonial"},
-    {key:"contratoSocial", label:"Contrato Social"}
+    {key:"cnpj", label:"CNPJ (Cartão)", tipo:"habilitacao"},
+    {key:"cndFederal", label:"CND Federal", tipo:"certidao"},
+    {key:"cndEstadual", label:"CND Estadual", tipo:"certidao"},
+    {key:"cndMunicipal", label:"CND Municipal", tipo:"certidao"},
+    {key:"fgts", label:"FGTS (CRF)", tipo:"certidao"},
+    {key:"cndt", label:"INSS / CNDT", tipo:"certidao"},
+    {key:"balanco", label:"Balanço Patrimonial", tipo:"habilitacao"},
+    {key:"contratoSocial", label:"Contrato Social", tipo:"contrato"}
   ];
+  var COFRE_MAX_FILE = 400 * 1024; // 400 KB — cabe no localStorage/Firestore sync
   LICSYSTEM.cofre = {
-    data:{},
-    load:function(){
-      try{ LICSYSTEM.cofre.data = JSON.parse(localStorage.getItem(COFRE_KEY) || "{}") || {}; }catch(e){ LICSYSTEM.cofre.data={}; }
+    data: { v: 2, items: [] },
+    _pendingFile: null,
+    _selected: {},
+
+    emptyData: function(){
+      return { v: 2, items: [] };
     },
-    statusOf:function(dateStr){
-      if(!dateStr) return {cls:"b-red", txt:"Sem data"};
+
+    tipoLabel: function(tipo){
+      var map = {
+        habilitacao: "Habilitação",
+        certidao: "Certidão",
+        contrato: "Contrato",
+        tecnica: "Técnica",
+        outro: "Outro"
+      };
+      return map[tipo] || "Outro";
+    },
+
+    normalizeItem: function(d, idx){
+      d = d || {};
+      var id = String(d.id || d.key || ("cof_" + Date.now() + "_" + (idx || 0)));
+      var key = d.key != null && d.key !== "" ? String(d.key) : null;
+      var tipo = String(d.tipo || "outro").toLowerCase();
+      if(["habilitacao","certidao","contrato","tecnica","outro"].indexOf(tipo) === -1) tipo = "outro";
+      return {
+        id: id,
+        key: key,
+        nome: String(d.nome || d.label || "Documento").trim().slice(0, 220) || "Documento",
+        tipo: tipo,
+        validade: String(d.validade || d.date || "").trim().slice(0, 12),
+        link: String(d.link || "").trim().slice(0, 500),
+        obs: String(d.obs || "").trim().slice(0, 400),
+        arquivoNome: String(d.arquivoNome || "").trim().slice(0, 220),
+        arquivoMime: String(d.arquivoMime || "").trim().slice(0, 120),
+        arquivoData: typeof d.arquivoData === "string" ? d.arquivoData : "",
+        fixed: !!d.fixed
+      };
+    },
+
+    migrateLegacy: function(raw){
+      if(!raw || typeof raw !== "object" || Array.isArray(raw)) return this.emptyData();
+      if(Array.isArray(raw.items)){
+        return {
+          v: 2,
+          items: raw.items.map(function(it, i){ return LICSYSTEM.cofre.normalizeItem(it, i); })
+        };
+      }
+      // Legacy flat map: { cnpj: "2025-01-01", ... }
+      var items = COFRE_DOCS.map(function(doc, i){
+        return LICSYSTEM.cofre.normalizeItem({
+          id: doc.key,
+          key: doc.key,
+          nome: doc.label,
+          tipo: doc.tipo || "outro",
+          validade: raw[doc.key] || "",
+          fixed: true
+        }, i);
+      });
+      // Keep any unknown keys as custom docs
+      Object.keys(raw).forEach(function(k, i){
+        if(k === "v" || k === "items") return;
+        if(COFRE_DOCS.some(function(d){ return d.key === k; })) return;
+        var val = raw[k];
+        if(typeof val === "string"){
+          items.push(LICSYSTEM.cofre.normalizeItem({
+            id: "legacy_" + k,
+            key: k,
+            nome: k,
+            validade: val
+          }, 100 + i));
+        }
+      });
+      return { v: 2, items: items };
+    },
+
+    applyData: function(data, opts){
+      opts = opts || {};
+      LICSYSTEM.cofre.data = LICSYSTEM.cofre.migrateLegacy(data);
+      if(!opts.skipPersist){
+        try{ localStorage.setItem(COFRE_KEY, JSON.stringify(LICSYSTEM.cofre.data)); }catch(e){}
+      }
+      if(LICSYSTEM.state.currentView === "cofre" || LICSYSTEM.state._cofreRendered){
+        try{ LICSYSTEM.cofre.render(); }catch(e){}
+      }
+    },
+
+    load: function(){
+      try{
+        var raw = JSON.parse(localStorage.getItem(COFRE_KEY) || "null");
+        if(raw && typeof raw === "object"){
+          // Persist local se migrar do formato antigo { chave: data }
+          var isV2 = Array.isArray(raw.items);
+          LICSYSTEM.cofre.applyData(raw, { skipPersist: isV2 });
+        } else {
+          LICSYSTEM.cofre.data = LICSYSTEM.cofre.emptyData();
+        }
+      }catch(e){
+        LICSYSTEM.cofre.data = LICSYSTEM.cofre.emptyData();
+      }
+    },
+
+    items: function(){
+      return (LICSYSTEM.cofre.data && LICSYSTEM.cofre.data.items) || [];
+    },
+
+    findById: function(id){
+      id = String(id || "");
+      return LICSYSTEM.cofre.items().filter(function(it){ return it.id === id; })[0] || null;
+    },
+
+    findByKey: function(key){
+      key = String(key || "");
+      if(!key) return null;
+      return LICSYSTEM.cofre.items().filter(function(it){
+        return it.key === key || it.id === key;
+      })[0] || null;
+    },
+
+    getValidade: function(key){
+      var it = LICSYSTEM.cofre.findByKey(key);
+      return it ? (it.validade || "") : "";
+    },
+
+    getLabel: function(key){
+      var it = LICSYSTEM.cofre.findByKey(key);
+      if(it) return it.nome;
+      var fixed = COFRE_DOCS.filter(function(d){ return d.key === key; })[0];
+      return fixed ? fixed.label : key;
+    },
+
+    statusOf: function(dateStr){
+      if(!dateStr) return {cls:"b-red", txt:"Sem data", kind:"none"};
       var d = new Date(dateStr+"T00:00:00");
+      if(isNaN(d.getTime())) return {cls:"b-red", txt:"Sem data", kind:"none"};
       var now = new Date(); now.setHours(0,0,0,0);
       var diff = Math.round((d - now)/86400000);
-      if(diff < 0) return {cls:"b-red", txt:"Vencido"};
-      if(diff <= 15) return {cls:"b-yellow", txt:"Vence em "+diff+"d"};
-      return {cls:"b-green", txt:"Válido"};
+      if(diff < 0) return {cls:"b-red", txt:"Vencido", kind:"expired"};
+      if(diff <= 15) return {cls:"b-yellow", txt:"Vence em "+diff+"d", kind:"warn"};
+      return {cls:"b-green", txt:"Válido", kind:"ok"};
     },
-    render:function(){
-      var box = el("cofreList");
-      var html="";
-      COFRE_DOCS.forEach(function(doc){
-        var val = LICSYSTEM.cofre.data[doc.key] || "";
-        var st = LICSYSTEM.cofre.statusOf(val);
-        html+='<div class="checklist-item">'+
-          '<div class="ci-name">'+utils.escapeHtml(doc.label)+'</div>'+
-          '<input type="date" data-key="'+doc.key+'" value="'+utils.escapeHtml(val)+'">'+
-          '<span class="badge-status '+st.cls+'">'+utils.escapeHtml(st.txt)+'</span>'+
-          '</div>';
-      });
-      box.innerHTML = html;
-      box.querySelectorAll('input[type=date]').forEach(function(inp){
-        inp.addEventListener("change", function(){
-          LICSYSTEM.cofre.data[inp.getAttribute("data-key")] = inp.value;
-          LICSYSTEM.cofre.render();
-        });
-      });
-    },
-    save:function(){
+
+    persist: function(opts){
+      opts = opts || {};
       try{
         localStorage.setItem(COFRE_KEY, JSON.stringify(LICSYSTEM.cofre.data));
-        if(LICSYSTEM.cloudSync) LICSYSTEM.cloudSync.notifyLocalChange("cofre");
-        showAlertTmp("Documentos salvos.");
-      }catch(e){}
-      function showAlertTmp(){ /* subtle feedback */ }
+      }catch(e){
+        showAlert("cofreAlert","error","Não foi possível salvar (armazenamento cheio?). Remova arquivos grandes ou use link.");
+        return false;
+      }
+      if(!opts.skipCloud && LICSYSTEM.cloudSync){
+        LICSYSTEM.cloudSync.notifyLocalChange("cofre", {
+          updatedAt: Date.now(),
+          immediate: !!opts.immediate
+        });
+      }
+      return true;
     },
-    listDocs: function(){ return COFRE_DOCS.slice(); }
+
+    save: function(){
+      if(LICSYSTEM.cofre.persist({ immediate: true })){
+        showAlert("cofreAlert","ok","Cofre salvo" + (LICSYSTEM.cloudSync ? " e sincronizado." : "."));
+      }
+    },
+
+    seedDefaults: function(force){
+      var existing = LICSYSTEM.cofre.items();
+      if(existing.length && !force){
+        showAlert("cofreAlert","warn","Já existem documentos. Use Adicionar para incluir novos.");
+        return;
+      }
+      if(existing.length && force){
+        if(!confirm("Isso adiciona os documentos padrão que ainda não existem (não apaga os atuais). Continuar?")) return;
+      }
+      var keys = {};
+      existing.forEach(function(it){ if(it.key) keys[it.key] = true; });
+      var added = 0;
+      COFRE_DOCS.forEach(function(doc, i){
+        if(keys[doc.key]) return;
+        existing.push(LICSYSTEM.cofre.normalizeItem({
+          id: doc.key,
+          key: doc.key,
+          nome: doc.label,
+          tipo: doc.tipo || "outro",
+          validade: "",
+          fixed: true
+        }, i));
+        added++;
+      });
+      LICSYSTEM.cofre.data = { v: 2, items: existing };
+      LICSYSTEM.cofre.persist({ immediate: true });
+      LICSYSTEM.cofre.render();
+      showAlert("cofreAlert","ok", added ? (added + " documento(s) padrão adicionado(s).") : "Todos os padrões já estão no cofre.");
+    },
+
+    selectedIds: function(){
+      var box = el("cofreList");
+      if(!box) return [];
+      var ids = [];
+      box.querySelectorAll(".cofreSelChk:checked").forEach(function(chk){
+        ids.push(chk.getAttribute("data-id"));
+      });
+      return ids;
+    },
+
+    openModal: function(item){
+      var ov = el("cofreOverlay");
+      if(!ov) return;
+      hideAlert("cofreModalAlert");
+      LICSYSTEM.cofre._pendingFile = null;
+      var editing = !!item;
+      el("cofreModalTitle").textContent = editing ? "Editar documento" : "Adicionar documento";
+      el("cofreModalLead").textContent = editing
+        ? "Atualize validade, arquivo ou dados — útil para documentos vencidos."
+        : "Informe os dados do documento. Arquivo (PDF/imagem) ou link externo.";
+      el("cofreEditId").value = editing ? item.id : "";
+      el("cofreNome").value = editing ? (item.nome || "") : "";
+      el("cofreTipo").value = editing ? (item.tipo || "outro") : "habilitacao";
+      el("cofreValidade").value = editing ? (item.validade || "") : "";
+      el("cofreLink").value = editing ? (item.link || "") : "";
+      el("cofreObs").value = editing ? (item.obs || "") : "";
+      var fileInp = el("cofreArquivo");
+      if(fileInp) fileInp.value = "";
+      var info = el("cofreArquivoInfo");
+      if(info){
+        info.textContent = editing && item.arquivoNome
+          ? ("Arquivo atual: " + item.arquivoNome + " (envie outro para substituir)")
+          : "Nenhum arquivo anexado.";
+      }
+      ov.classList.add("open");
+      ov.setAttribute("aria-hidden","false");
+      try{ el("cofreNome").focus(); }catch(e){}
+    },
+
+    closeModal: function(){
+      var ov = el("cofreOverlay");
+      if(!ov) return;
+      ov.classList.remove("open");
+      ov.setAttribute("aria-hidden","true");
+      LICSYSTEM.cofre._pendingFile = null;
+    },
+
+    readFileAsDataUrl: function(file){
+      return new Promise(function(resolve, reject){
+        if(!file){ resolve(null); return; }
+        if(file.size > COFRE_MAX_FILE){
+          reject(new Error("Arquivo maior que 400 KB. Use um PDF/imagem menor ou informe um link."));
+          return;
+        }
+        var okMime = /^(application\/pdf|image\/)/i.test(file.type) || /\.(pdf|png|jpe?g|webp|gif)$/i.test(file.name || "");
+        if(!okMime){
+          reject(new Error("Formato não suportado. Use PDF ou imagem."));
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function(){ resolve({ nome: file.name, mime: file.type || "application/octet-stream", data: String(reader.result || "") }); };
+        reader.onerror = function(){ reject(new Error("Falha ao ler o arquivo.")); };
+        reader.readAsDataURL(file);
+      });
+    },
+
+    saveFromModal: function(){
+      var nome = String((el("cofreNome") && el("cofreNome").value) || "").trim();
+      if(!nome){
+        showAlert("cofreModalAlert","warn","Informe o nome do documento.");
+        return;
+      }
+      var editId = String((el("cofreEditId") && el("cofreEditId").value) || "");
+      var existing = editId ? LICSYSTEM.cofre.findById(editId) : null;
+      var fileInp = el("cofreArquivo");
+      var file = fileInp && fileInp.files && fileInp.files[0] ? fileInp.files[0] : null;
+
+      function commit(fileMeta){
+        var item = LICSYSTEM.cofre.normalizeItem({
+          id: existing ? existing.id : ("cof_" + Date.now()),
+          key: existing ? existing.key : null,
+          nome: nome,
+          tipo: (el("cofreTipo") && el("cofreTipo").value) || "outro",
+          validade: (el("cofreValidade") && el("cofreValidade").value) || "",
+          link: (el("cofreLink") && el("cofreLink").value) || "",
+          obs: (el("cofreObs") && el("cofreObs").value) || "",
+          arquivoNome: fileMeta ? fileMeta.nome : (existing ? existing.arquivoNome : ""),
+          arquivoMime: fileMeta ? fileMeta.mime : (existing ? existing.arquivoMime : ""),
+          arquivoData: fileMeta ? fileMeta.data : (existing ? existing.arquivoData : ""),
+          fixed: existing ? existing.fixed : false
+        });
+        var list = LICSYSTEM.cofre.items().slice();
+        if(existing){
+          list = list.map(function(it){ return it.id === existing.id ? item : it; });
+        } else {
+          list.push(item);
+        }
+        LICSYSTEM.cofre.data = { v: 2, items: list };
+        if(!LICSYSTEM.cofre.persist({ immediate: true })) return;
+        LICSYSTEM.cofre.closeModal();
+        LICSYSTEM.cofre.render();
+        showAlert("cofreAlert","ok", existing ? "Documento atualizado." : "Documento adicionado.");
+      }
+
+      if(file){
+        LICSYSTEM.cofre.readFileAsDataUrl(file).then(commit).catch(function(err){
+          showAlert("cofreModalAlert","error", err.message || "Erro ao ler arquivo.");
+        });
+      } else {
+        commit(null);
+      }
+    },
+
+    add: function(){ LICSYSTEM.cofre.openModal(null); },
+
+    editSelected: function(){
+      var ids = LICSYSTEM.cofre.selectedIds();
+      if(ids.length !== 1){
+        showAlert("cofreAlert","warn","Selecione exatamente um documento para editar.");
+        return;
+      }
+      var item = LICSYSTEM.cofre.findById(ids[0]);
+      if(!item){ showAlert("cofreAlert","error","Documento não encontrado."); return; }
+      LICSYSTEM.cofre.openModal(item);
+    },
+
+    editById: function(id){
+      var item = LICSYSTEM.cofre.findById(id);
+      if(!item) return;
+      LICSYSTEM.cofre.openModal(item);
+    },
+
+    removeSelected: function(){
+      var ids = LICSYSTEM.cofre.selectedIds();
+      if(!ids.length){
+        showAlert("cofreAlert","warn","Selecione ao menos um documento para remover.");
+        return;
+      }
+      var msg = ids.length === 1
+        ? "Remover este documento do cofre?"
+        : ("Remover " + ids.length + " documentos do cofre?");
+      if(!confirm(msg)) return;
+      var set = {};
+      ids.forEach(function(id){ set[id] = true; });
+      LICSYSTEM.cofre.data = {
+        v: 2,
+        items: LICSYSTEM.cofre.items().filter(function(it){ return !set[it.id]; })
+      };
+      LICSYSTEM.cofre.persist({ immediate: true });
+      LICSYSTEM.cofre.render();
+      showAlert("cofreAlert","ok", ids.length + " documento(s) removido(s).");
+    },
+
+    dataUrlToUint8: function(dataUrl){
+      try{
+        var parts = String(dataUrl || "").split(",");
+        var b64 = parts.length > 1 ? parts[1] : parts[0];
+        var bin = atob(b64);
+        var arr = new Uint8Array(bin.length);
+        for(var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        return arr;
+      }catch(e){ return null; }
+    },
+
+    safeFileName: function(name, fallback){
+      var n = String(name || fallback || "documento").replace(/[\\/:*?"<>|]+/g, "_").trim();
+      return n.slice(0, 120) || "documento";
+    },
+
+    exportZip: function(){
+      if(typeof JSZip === "undefined"){
+        showAlert("cofreAlert","error","Biblioteca JSZip não carregou. Verifique a conexão e recarregue a página.");
+        return;
+      }
+      var ids = LICSYSTEM.cofre.selectedIds();
+      var all = LICSYSTEM.cofre.items();
+      var list = ids.length
+        ? all.filter(function(it){ return ids.indexOf(it.id) !== -1; })
+        : all.slice();
+      if(!list.length){
+        showAlert("cofreAlert","warn","Nenhum documento para exportar.");
+        return;
+      }
+      showAlert("cofreAlert","info",'<span class="spinner"></span> Gerando ZIP…');
+      var zip = new JSZip();
+      var csv = ["nome;tipo;validade;status;link;arquivo;observacoes"];
+      var folder = zip.folder("documentos");
+      list.forEach(function(it, idx){
+        var st = LICSYSTEM.cofre.statusOf(it.validade);
+        var fname = "";
+        if(it.arquivoData){
+          var bytes = LICSYSTEM.cofre.dataUrlToUint8(it.arquivoData);
+          if(bytes){
+            var base = LICSYSTEM.cofre.safeFileName(it.arquivoNome || (it.nome + ".bin"), "doc_" + (idx + 1));
+            fname = ("0" + (idx + 1)).slice(-2) + "_" + base;
+            folder.file(fname, bytes);
+          }
+        }
+        csv.push([
+          it.nome,
+          LICSYSTEM.cofre.tipoLabel(it.tipo),
+          it.validade || "",
+          st.txt,
+          it.link || "",
+          fname || (it.arquivoNome || ""),
+          (it.obs || "").replace(/[\r\n;]+/g, " ")
+        ].map(function(c){ return '"' + String(c).replace(/"/g, '""') + '"'; }).join(";"));
+      });
+      zip.file("indice.csv", "\uFEFF" + csv.join("\r\n"));
+      zip.file("indice.txt", list.map(function(it, i){
+        var st = LICSYSTEM.cofre.statusOf(it.validade);
+        return (i + 1) + ". " + it.nome +
+          "\n   Tipo: " + LICSYSTEM.cofre.tipoLabel(it.tipo) +
+          "\n   Validade: " + (it.validade || "—") + " (" + st.txt + ")" +
+          "\n   Link: " + (it.link || "—") +
+          "\n   Arquivo: " + (it.arquivoNome || "—") +
+          "\n   Obs: " + (it.obs || "—") + "\n";
+      }).join("\n"));
+
+      zip.generateAsync({ type: "blob" }).then(function(blob){
+        var a = document.createElement("a");
+        var url = URL.createObjectURL(blob);
+        a.href = url;
+        a.download = "cofre-documentos-" + new Date().toISOString().slice(0, 10) + ".zip";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 1500);
+        showAlert("cofreAlert","ok", "ZIP exportado com " + list.length + " documento(s).");
+      }).catch(function(err){
+        showAlert("cofreAlert","error","Falha ao gerar ZIP: " + utils.escapeHtml(err.message || String(err)));
+      });
+    },
+
+    render: function(){
+      var box = el("cofreList");
+      if(!box) return;
+      var items = LICSYSTEM.cofre.items();
+      var selAll = el("cofreSelectAll");
+
+      if(!items.length){
+        box.innerHTML =
+          '<div class="cofre-empty">Nenhum documento no cofre.<br/>' +
+          'Clique em <b>Adicionar</b> ou em <b>Carregar padrões</b> (CNPJ, CNDs, FGTS…).</div>';
+        if(selAll) selAll.checked = false;
+        return;
+      }
+
+      var html = "";
+      items.forEach(function(it){
+        var st = LICSYSTEM.cofre.statusOf(it.validade);
+        var rowCls = "cofre-item";
+        if(st.kind === "expired" || st.kind === "none") rowCls += " is-expired";
+        else if(st.kind === "warn") rowCls += " is-warn";
+        var fileHtml = "";
+        if(it.arquivoData && it.arquivoNome){
+          fileHtml = '<span class="cofre-file-tag">📎 <a href="' + utils.escapeHtml(it.arquivoData) +
+            '" download="' + utils.escapeHtml(it.arquivoNome) + '" target="_blank" rel="noopener">'+
+            utils.escapeHtml(it.arquivoNome) + "</a></span>";
+        } else if(it.arquivoNome){
+          fileHtml = '<span class="cofre-file-tag">📎 ' + utils.escapeHtml(it.arquivoNome) + "</span>";
+        }
+        if(it.link){
+          var url = utils.normalizeHttpUrl ? utils.normalizeHttpUrl(it.link) : it.link;
+          if(url){
+            fileHtml += (fileHtml ? " · " : "") +
+              '<span class="cofre-file-tag">🔗 <a href="' + utils.escapeHtml(url) +
+              '" target="_blank" rel="noopener noreferrer">Abrir link</a></span>';
+          }
+        }
+        html +=
+          '<div class="' + rowCls + '" data-id="' + utils.escapeHtml(it.id) + '">' +
+            '<div class="ci-check"><input type="checkbox" class="cofreSelChk" data-id="' +
+              utils.escapeHtml(it.id) + '" /></div>' +
+            '<div class="ci-body">' +
+              '<div class="ci-name">' + utils.escapeHtml(it.nome) + "</div>" +
+              '<div class="ci-meta">' +
+                '<span class="cofre-tipo">' + utils.escapeHtml(LICSYSTEM.cofre.tipoLabel(it.tipo)) + "</span>" +
+                '<span class="badge-status ' + st.cls + '">' + utils.escapeHtml(st.txt) + "</span>" +
+                (it.validade
+                  ? '<span class="muted small">Validade: ' + utils.escapeHtml(it.validade.split("-").reverse().join("/")) + "</span>"
+                  : '<span class="muted small">Sem validade</span>') +
+                fileHtml +
+              "</div>" +
+              (it.obs ? '<div class="ci-obs">' + utils.escapeHtml(it.obs) + "</div>" : "") +
+            "</div>" +
+            '<div class="ci-actions">' +
+              '<button type="button" class="btn btn-ghost btn-sm cofreEditOne" data-id="' +
+                utils.escapeHtml(it.id) + '">Editar</button>' +
+            "</div>" +
+          "</div>";
+      });
+      box.innerHTML = html;
+      if(selAll){
+        var checked = box.querySelectorAll(".cofreSelChk:checked").length;
+        selAll.checked = checked === items.length && items.length > 0;
+      }
+    },
+
+    wire: function(){
+      function bind(id, evt, fn){
+        var n = el(id);
+        if(n && !n._cofreBound){
+          n._cofreBound = true;
+          n.addEventListener(evt, fn);
+        }
+      }
+      bind("btnCofreAdd","click", function(){ LICSYSTEM.cofre.add(); });
+      bind("btnCofreEdit","click", function(){ LICSYSTEM.cofre.editSelected(); });
+      bind("btnCofreRemove","click", function(){ LICSYSTEM.cofre.removeSelected(); });
+      bind("btnCofreExportZip","click", function(){ LICSYSTEM.cofre.exportZip(); });
+      bind("btnCofreSeed","click", function(){ LICSYSTEM.cofre.seedDefaults(true); });
+      bind("btnCofreModalCancel","click", function(){ LICSYSTEM.cofre.closeModal(); });
+      bind("btnCofreModalSave","click", function(){ LICSYSTEM.cofre.saveFromModal(); });
+      bind("cofreSelectAll","change", function(){
+        var onAll = !!(el("cofreSelectAll") && el("cofreSelectAll").checked);
+        var box = el("cofreList");
+        if(!box) return;
+        box.querySelectorAll(".cofreSelChk").forEach(function(chk){ chk.checked = onAll; });
+      });
+      var list = el("cofreList");
+      if(list && !list._cofreWired){
+        list._cofreWired = true;
+        list.addEventListener("click", function(e){
+          var btn = e.target.closest(".cofreEditOne");
+          if(btn){
+            LICSYSTEM.cofre.editById(btn.getAttribute("data-id"));
+          }
+        });
+      }
+      var ov = el("cofreOverlay");
+      if(ov && !ov._cofreWired){
+        ov._cofreWired = true;
+        ov.addEventListener("click", function(e){
+          if(e.target === ov) LICSYSTEM.cofre.closeModal();
+        });
+      }
+    },
+
+    listDocs: function(){
+      var items = LICSYSTEM.cofre.items();
+      if(items.length){
+        return items.map(function(it){
+          return { key: it.key || it.id, label: it.nome };
+        });
+      }
+      return COFRE_DOCS.slice();
+    }
   };
 
   /* ============================ DOCS CHECKLIST (edital) ============================ */
@@ -5685,19 +6195,25 @@
       };
       var best = null;
       var bestScore = 0;
-      COFRE_DOCS.forEach(function(doc){
-        var labelN = LICSYSTEM.docsChecklist.normText(doc.label);
+      function scoreDoc(key, label){
+        var labelN = LICSYSTEM.docsChecklist.normText(label);
         var score = 0;
+        if(!labelN) return;
         if(n.indexOf(labelN) !== -1 || labelN.indexOf(n) !== -1) score = 8;
         var words = labelN.split(" ").filter(function(w){ return w.length > 2; });
         words.forEach(function(w){ if(n.indexOf(w) !== -1) score += 2; });
-        (aliases[doc.key] || []).forEach(function(a){
+        (aliases[key] || []).forEach(function(a){
           if(n.indexOf(a) !== -1) score += 5;
         });
         if(score > bestScore){
           bestScore = score;
-          best = doc;
+          best = { key: key, label: label };
         }
+      }
+      COFRE_DOCS.forEach(function(doc){ scoreDoc(doc.key, doc.label); });
+      // Também considera documentos customizados no cofre
+      LICSYSTEM.cofre.items().forEach(function(it){
+        scoreDoc(it.key || it.id, it.nome);
       });
       if(bestScore < 5) return null;
       return best;
@@ -5729,7 +6245,7 @@
         var match = LICSYSTEM.docsChecklist.matchCofre(item.nome);
         if(match){
           item.cofreKey = match.key;
-          var val = (LICSYSTEM.cofre.data && LICSYSTEM.cofre.data[match.key]) || "";
+          var val = LICSYSTEM.cofre.getValidade(match.key);
           var st = LICSYSTEM.cofre.statusOf(val);
           // Auto-sugerir OK se cofre tem data válida (não vencido)
           if(st && st.cls === "b-green" && !item.ok) item.ok = true;
@@ -5796,11 +6312,12 @@
 
       var html = "";
       docs.forEach(function(d){
-        var match = d.cofreKey ? COFRE_DOCS.filter(function(c){ return c.key === d.cofreKey; })[0] : null;
-        if(!match) match = LICSYSTEM.docsChecklist.matchCofre(d.nome);
+        var match = d.cofreKey && LICSYSTEM.cofre.findByKey(d.cofreKey)
+          ? { key: d.cofreKey, label: LICSYSTEM.cofre.getLabel(d.cofreKey) }
+          : LICSYSTEM.docsChecklist.matchCofre(d.nome);
         var cofreHint = "";
-        if(match){
-          var val = (LICSYSTEM.cofre.data && LICSYSTEM.cofre.data[match.key]) || "";
+        if(match && LICSYSTEM.cofre.findByKey(match.key)){
+          var val = LICSYSTEM.cofre.getValidade(match.key);
           var st = LICSYSTEM.cofre.statusOf(val);
           cofreHint =
             '<span class="docs-badge cofre">Encontrado no cofre: ' + utils.escapeHtml(match.label) +
@@ -6408,6 +6925,7 @@
 
     // Cofre
     on("btnSalvarCofre","click", LICSYSTEM.cofre.save);
+    try{ LICSYSTEM.cofre.wire(); }catch(e){}
 
     // Entregas (offcanvas)
     LICSYSTEM.entregas.wire();
@@ -6543,10 +7061,9 @@
       LICSYSTEM.orcamento.updateMeta();
     }
     if(view==="cofre"){
-      if(!LICSYSTEM.state._cofreRendered){
-        LICSYSTEM.state._cofreRendered = true;
-        LICSYSTEM.cofre.render();
-      }
+      try{ LICSYSTEM.cofre.load(); }catch(e){}
+      LICSYSTEM.state._cofreRendered = true;
+      LICSYSTEM.cofre.render();
     }
     if(view==="docsChecklist"){
       try{ LICSYSTEM.cofre.load(); }catch(e){}
