@@ -127,6 +127,56 @@
 
       <!-- ===================== CAPTAÇÃO ===================== -->
       <section id="view-captacao" class="view">
+        <!-- Perguntar editais (chat helper — PNCP) -->
+        <div class="card">
+          <div class="card-head">
+            <h2>💬 Perguntar editais</h2>
+            <span class="tag">PNCP · chat</span>
+          </div>
+          <div class="desc">
+            Pergunte em português ou use os atalhos. Lista editais com propostas em aberto no PNCP
+            (município ou <b>Norte Pioneiro do Paraná</b> — 26 municípios). O widget Voiceflow
+            “Suporte LICSYSTEM” precisa de um Custom Action apontando para
+            <code>/api/editais-chat</code> (veja <code>docs/voiceflow-editais-chat.md</code>).
+          </div>
+          <div id="chatEditalAlert" class="alert"></div>
+          <div class="form-row">
+            <div style="flex:2;min-width:220px">
+              <label class="fld">Pergunta</label>
+              <input type="text" id="chatEditalMsg" placeholder='Ex.: Quais licitações terão em Ibaiti' autocomplete="off" />
+            </div>
+            <div style="max-width:200px">
+              <label class="fld">Categoria (opcional)</label>
+              <select id="chatEditalCat">
+                <option value="">Todas</option>
+                <option value="reforma">Reformas / obras</option>
+                <option value="comida">Aquisições de comida</option>
+                <option value="cestas">Cestas básicas</option>
+                <option value="cafe">Café / lanche</option>
+                <option value="natal">Natal</option>
+                <option value="eletro">Eletrodomésticos</option>
+              </select>
+            </div>
+            <div style="max-width:190px;display:flex;align-items:flex-end">
+              <button class="btn btn-gold" id="btnChatEdital" style="width:100%">🔍 Buscar editais</button>
+            </div>
+          </div>
+          <div class="btn-row chat-edital-prompts" style="margin-top:0;flex-wrap:wrap;gap:8px;align-items:center">
+            <span class="small muted">Atalhos:</span>
+            <button type="button" class="btn btn-sm" data-chat-prompt="norte-pioneiro">Norte Pioneiro (todos)</button>
+            <button type="button" class="btn btn-sm" data-chat-prompt="norte-comida">Norte Pioneiro · comida/cestas</button>
+            <button type="button" class="btn btn-sm" data-chat-prompt="norte-reforma">Norte Pioneiro · reformas</button>
+            <button type="button" class="btn btn-sm" data-chat-prompt="norte-natal">Norte Pioneiro · Natal</button>
+            <button type="button" class="btn btn-sm" data-chat-prompt="norte-eletro">Norte Pioneiro · eletro</button>
+            <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-left:4px">
+              <input type="checkbox" id="chatEditalAmpliar" />
+              Ampliar modalidades
+            </label>
+          </div>
+          <div class="small muted" id="chatEditalMeta" style="margin:8px 0 4px"></div>
+          <div id="chatEditalResults"></div>
+        </div>
+
         <!-- Editais próximos (município + raio) -->
         <div class="card">
           <div class="card-head">
