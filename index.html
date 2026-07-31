@@ -127,10 +127,69 @@
 
       <!-- ===================== CAPTAÇÃO ===================== -->
       <section id="view-captacao" class="view">
+        <!-- Editais próximos (município + raio) -->
+        <div class="card">
+          <div class="card-head">
+            <h2>📍 Editais próximos</h2>
+            <span class="tag">PNCP · raio</span>
+          </div>
+          <div class="desc">
+            Informe o município de origem e busque editais com propostas em aberto (municipais e estaduais)
+            no PNCP dentro do raio informado (até 700 km). Use a cobertura <b>Paraná + divisas SP</b>
+            para cobrir o estado inteiro e a fronteira com São Paulo. Distância pelo município do órgão (IBGE).
+          </div>
+          <div id="proxAlert" class="alert"></div>
+          <div class="form-row">
+            <div style="flex:2;position:relative">
+              <label class="fld">Município de origem</label>
+              <input type="text" id="proxMunicipio" placeholder="Digite o nome (ex.: Curitiba)" autocomplete="off" />
+              <input type="hidden" id="proxIbge" value="" />
+              <div id="proxSuggest" class="suggest-box" hidden></div>
+              <div class="small muted" id="proxOrigemHint" style="margin-top:6px">Nenhum município salvo ainda.</div>
+            </div>
+            <div style="max-width:220px">
+              <label class="fld">Cobertura</label>
+              <select id="proxCobertura">
+                <option value="">Raio livre</option>
+                <option value="pr-sp">Paraná + divisas SP</option>
+              </select>
+            </div>
+            <div style="max-width:130px">
+              <label class="fld">Raio (km)</label>
+              <input type="number" id="proxRaio" min="10" max="700" step="10" value="250" />
+            </div>
+            <div style="flex:1.4">
+              <label class="fld">Palavras-chave (opcional)</label>
+              <input type="text" id="proxKeywords" placeholder="ex.: material elétrico, ferramenta" />
+            </div>
+            <div style="max-width:190px;display:flex;align-items:flex-end">
+              <button class="btn btn-gold" id="btnProxBuscar" style="width:100%">🔍 Buscar no raio</button>
+            </div>
+          </div>
+          <div class="btn-row" style="margin-top:0;flex-wrap:wrap;gap:8px;align-items:center">
+            <span class="small muted">Atalhos de raio:</span>
+            <button type="button" class="btn btn-sm" data-prox-raio="150">150 km</button>
+            <button type="button" class="btn btn-sm" data-prox-raio="250">250 km</button>
+            <button type="button" class="btn btn-sm" data-prox-raio="500">500 km</button>
+            <button type="button" class="btn btn-sm" data-prox-raio="700">700 km</button>
+            <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-left:8px">
+              <input type="checkbox" id="proxAmpliar" />
+              Ampliar modalidades (concorrência / pregão presencial)
+            </label>
+            <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="proxFederal" />
+              Incluir órgãos federais no raio
+            </label>
+          </div>
+          <div class="small muted" id="proxCoberturaHint" style="margin-top:6px"></div>
+          <div id="proxMeta" class="small muted" style="margin:8px 0 4px"></div>
+          <div id="proxResults"></div>
+        </div>
+
         <!-- Radar PNCP -->
         <div class="card">
           <div class="card-head"><h2>📡 Radar PNCP</h2><span class="tag">API Pública</span></div>
-          <div class="desc">Busque contratações publicadas no Portal Nacional de Contratações Públicas.</div>
+          <div class="desc">Busque contratações publicadas no Portal Nacional de Contratações Públicas por UF e palavras-chave.</div>
           <div id="pncpAlert" class="alert"></div>
           <div class="form-row">
             <div style="flex:2">
