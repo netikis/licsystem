@@ -35,6 +35,25 @@
     }
     var nav=document.getElementById('nav');
     nav.addEventListener('click', function(ev){
+      var actionBtn=ev.target.closest('button[data-ls-action]');
+      if(actionBtn){
+        var action=actionBtn.getAttribute('data-ls-action');
+        try{
+          if(action==='suporte' && window.LICSYSTEM && LICSYSTEM.voiceflow && typeof LICSYSTEM.voiceflow.openPanel==='function'){
+            LICSYSTEM.voiceflow.openPanel();
+          }else if(action==='chat-ia' && window.LICSYSTEM && LICSYSTEM.voiceflow && typeof LICSYSTEM.voiceflow.openChatIA==='function'){
+            LICSYSTEM.voiceflow.openChatIA();
+          }else if(window.__licsystemInitVoiceflow){
+            window.__licsystemInitVoiceflow();
+            setTimeout(function(){
+              if(action==='suporte' && LICSYSTEM.voiceflow) LICSYSTEM.voiceflow.openPanel();
+              else if(action==='chat-ia' && LICSYSTEM.voiceflow) LICSYSTEM.voiceflow.openChatIA();
+            }, 200);
+          }
+        }catch(e){}
+        if(MQ.matches) closeSidebar();
+        return;
+      }
       var b=ev.target.closest('button[data-view]');
       if(!b) return;
       activate(b.getAttribute('data-view'));

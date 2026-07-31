@@ -1,7 +1,7 @@
 /**
- * Suporte LICSYSTEM — chat flutuante.
- * Perguntas sobre editais/licitações (município ou Norte Pioneiro) consultam
- * POST /api/editais-chat (PNCP). Demais assuntos podem abrir o Voiceflow.
+ * Assistentes LICSYSTEM — entrada pelo menu Ferramentas (sem FAB no canto).
+ * Suporte: editais PNCP via POST /api/editais-chat.
+ * Chat IA: widget Voiceflow (launcher oculto; abre via menu).
  * Custom Action VF opcional: docs/voiceflow-editais-chat.md
  */
 (function () {
@@ -9,6 +9,12 @@
   var VF_RUNTIME = "https://general-runtime.voiceflow.com";
   var VF_VOICE = "https://runtime-api.voiceflow.com";
   var VF_BUNDLE = "https://cdn.voiceflow.com/widget-next/bundle.mjs";
+  /* Shadow DOM do VF: CSS da página não entra — stylesheet no load oculta o "Talk to AI" */
+  var VF_HIDE_LAUNCHER_CSS =
+    ".vfrc-launcher,.vfrc-launcher *,[class*='launcher']{" +
+    "display:none!important;opacity:0!important;visibility:hidden!important;" +
+    "pointer-events:none!important;width:0!important;height:0!important;" +
+    "overflow:hidden!important;position:absolute!important;left:-9999px!important;}";
   var scriptLoaded = false;
   var bootRequested = false;
   var panelBuilt = false;
@@ -94,6 +100,9 @@
       verify: { projectID: VF_PROJECT_ID },
       url: VF_RUNTIME,
       voice: { url: VF_VOICE },
+      assistant: {
+        stylesheet: "data:text/css;charset=utf-8," + encodeURIComponent(VF_HIDE_LAUNCHER_CSS),
+      },
       launch: {
         event: {
           type: "launch",
@@ -123,12 +132,16 @@
       try {
         window.voiceflow.chat.load(buildConfig(api.currentView));
         api.ready = true;
-        /* Esconde o launcher VF — o chat LICSYSTEM é a entrada principal */
+        /* Esconde widget até o menu Chat IA; stylesheet mantém launcher oculto ao reabrir */
         try {
+          if (typeof window.voiceflow.chat.close === "function") {
+            window.voiceflow.chat.close();
+          }
           if (typeof window.voiceflow.chat.hide === "function") {
             window.voiceflow.chat.hide();
           }
         } catch (eHide) {}
+        scheduleHideVfLauncher();
       } catch (e) {}
     };
 
@@ -145,7 +158,44 @@
       closePanel();
     };
 
+    api.openChatIA = function (text) {
+      openVoiceflowGeneral(text || "");
+    };
+
     return api;
+  }
+
+  function injectVfLauncherCss(root) {
+    if (!root || root.getElementById("ls-vf-hide-launcher")) return;
+    try {
+      var style = document.createElement("style");
+      style.id = "ls-vf-hide-launcher";
+      style.textContent = VF_HIDE_LAUNCHER_CSS;
+      root.appendChild(style);
+    } catch (e) {}
+  }
+
+  function scheduleHideVfLauncher() {
+    var tries = 0;
+    function tick() {
+      tries += 1;
+      var host =
+        document.getElementById("voiceflow-chat") ||
+        document.querySelector("[class*='vfrc']");
+      if (host && host.shadowRoot) {
+        injectVfLauncherCss(host.shadowRoot);
+        return;
+      }
+      var nodes = document.querySelectorAll("*");
+      for (var i = 0; i < nodes.length; i++) {
+        if (nodes[i].shadowRoot && nodes[i].shadowRoot.querySelector(".vfrc-launcher, [class*='launcher']")) {
+          injectVfLauncherCss(nodes[i].shadowRoot);
+          return;
+        }
+      }
+      if (tries < 40) setTimeout(tick, 250);
+    }
+    setTimeout(tick, 100);
   }
 
   function injectBundle(onReady) {
@@ -179,10 +229,6 @@
     var root = document.createElement("div");
     root.id = "lsSupportRoot";
     root.innerHTML =
-      '<button type="button" id="lsSupportFab" aria-label="Abrir Suporte LICSYSTEM" title="Suporte LICSYSTEM">' +
-      '<span class="ls-fab-icon" aria-hidden="true">💬</span>' +
-      '<span class="ls-fab-label">Suporte</span>' +
-      "</button>" +
       '<div id="lsSupportPanel" role="dialog" aria-labelledby="lsSupportTitle" hidden>' +
       '<div class="ls-sup-head">' +
       '<div class="ls-sup-brand">' +
@@ -206,23 +252,19 @@
       '<button type="submit" id="lsSupportSend" class="ls-sup-send">Enviar</button>' +
       "</form>" +
       '<div class="ls-sup-foot">' +
-      '<button type="button" class="ls-sup-link" id="lsSupportOpenVf">Assistente geral (Voiceflow)</button>' +
+      '<button type="button" class="ls-sup-link" id="lsSupportOpenVf">Abrir Chat IA (menu Ferramentas)</button>' +
       "</div>" +
       "</div>";
 
     document.body.appendChild(root);
 
-    document.getElementById("lsSupportFab").addEventListener("click", function () {
-      var panel = document.getElementById("lsSupportPanel");
-      if (panel && !panel.hidden) closePanel();
-      else openPanel();
-    });
     document.getElementById("lsSupportClose").addEventListener("click", closePanel);
     document.getElementById("lsSupportForm").addEventListener("submit", function (e) {
       e.preventDefault();
       sendUserMessage();
     });
     document.getElementById("lsSupportOpenVf").addEventListener("click", function () {
+      closePanel();
       openVoiceflowGeneral("");
     });
     document.getElementById("lsSupportChips").addEventListener("click", function (e) {
@@ -245,19 +287,20 @@
 
   function openPanel() {
     ensurePanel();
+    try {
+      if (window.voiceflow && window.voiceflow.chat && typeof window.voiceflow.chat.close === "function") {
+        window.voiceflow.chat.close();
+      }
+    } catch (e) {}
     var panel = document.getElementById("lsSupportPanel");
-    var fab = document.getElementById("lsSupportFab");
     if (panel) panel.hidden = false;
-    if (fab) fab.classList.add("is-open");
     var input = document.getElementById("lsSupportInput");
     if (input) setTimeout(function () { input.focus(); }, 50);
   }
 
   function closePanel() {
     var panel = document.getElementById("lsSupportPanel");
-    var fab = document.getElementById("lsSupportFab");
     if (panel) panel.hidden = true;
-    if (fab) fab.classList.remove("is-open");
   }
 
   function appendMsg(role, htmlOrText, asHtml) {
@@ -375,15 +418,18 @@
 
   function openVoiceflowGeneral(text) {
     var api = ensureLICSYSTEMVoiceflow();
+    closePanel();
     function go() {
       try {
         if (window.voiceflow && window.voiceflow.chat) {
+          scheduleHideVfLauncher();
           if (typeof window.voiceflow.chat.show === "function") {
             window.voiceflow.chat.show();
           }
           if (typeof window.voiceflow.chat.open === "function") {
             window.voiceflow.chat.open();
           }
+          scheduleHideVfLauncher();
           if (
             text &&
             typeof window.voiceflow.chat.interact === "function"
@@ -394,14 +440,18 @@
             });
           }
         } else {
+          ensurePanel();
+          openPanel();
           appendBot(
-            "O assistente geral (Voiceflow) não carregou. " +
-              "Para editais, pergunte pelo município (ex.: Quais licitações terão em Ibaiti) ou use Captação → Perguntar editais."
+            "O Chat IA (Voiceflow) não carregou. " +
+              "Para editais, use Ferramentas → Suporte LICSYSTEM ou Captação → Perguntar editais."
           );
         }
       } catch (e) {
+        ensurePanel();
+        openPanel();
         appendBot(
-          "Não foi possível abrir o Voiceflow agora. Use Captação → Perguntar editais para consultas PNCP."
+          "Não foi possível abrir o Chat IA agora. Use Captação → Perguntar editais para consultas PNCP."
         );
       }
     }
