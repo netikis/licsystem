@@ -5548,7 +5548,7 @@
     {key:"balanco", label:"Balanço Patrimonial", tipo:"habilitacao"},
     {key:"contratoSocial", label:"Contrato Social", tipo:"contrato"}
   ];
-  var COFRE_MAX_FILE = 400 * 1024; // 400 KB — cabe no localStorage/Firestore sync
+  var COFRE_MAX_FILE = 1.5 * 1024 * 1024; // 1,5 MB — base64 (~33% maior) no localStorage/Firebase RTDB
   LICSYSTEM.cofre = {
     data: { v: 2, items: [] },
     _pendingFile: null,
@@ -5796,7 +5796,7 @@
       return new Promise(function(resolve, reject){
         if(!file){ resolve(null); return; }
         if(file.size > COFRE_MAX_FILE){
-          reject(new Error("Arquivo maior que 400 KB. Use um PDF/imagem menor ou informe um link."));
+          reject(new Error("Máximo 1,5 MB. Para arquivos maiores, use o campo Link."));
           return;
         }
         var okMime = /^(application\/pdf|image\/)/i.test(file.type) || /\.(pdf|png|jpe?g|webp|gif)$/i.test(file.name || "");
