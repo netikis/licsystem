@@ -64,6 +64,10 @@
       <button data-view="arp"><span class="ico">📄</span> Atas de Registro</button>
       <button data-view="disputa"><span class="ico">⚔️</span> Sala de Disputa</button>
       <button data-view="ferramentas"><span class="ico">🛠️</span> Ferramentas</button>
+      <div class="nav-sub" role="group" aria-label="Assistentes">
+        <button type="button" data-ls-action="suporte"><span class="ico">💬</span> Suporte LICSYSTEM</button>
+        <button type="button" data-ls-action="chat-ia"><span class="ico">🤖</span> Chat IA</button>
+      </div>
     </nav>
     <div class="side-foot">LICSYSTEM &copy; Sistema Licitação<br/>v1.0 — frontend SPA</div>
   </aside>
@@ -142,7 +146,7 @@
               Pergunte em português ou use os atalhos. Lista propostas com encerramento no
               <b>horizonte anual</b> (~12 meses) no PNCP (município ou
               <b>Norte Pioneiro do Paraná</b> — 26 municípios). Alternativa: janela de 45 dias.
-              O botão flutuante <b>Suporte</b> usa a mesma API (<code>/api/editais-chat</code>).
+              Em <b>Ferramentas → Suporte LICSYSTEM</b> (menu lateral) usa a mesma API (<code>/api/editais-chat</code>).
             </div>
             <div id="chatEditalAlert" class="alert"></div>
             <div class="form-row">
