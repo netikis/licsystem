@@ -93,9 +93,15 @@
       <button data-view="arp"><span class="ico">📄</span> Atas de Registro</button>
       <button data-view="disputa"><span class="ico">⚔️</span> Sala de Disputa</button>
       <button data-view="ferramentas"><span class="ico">🛠️</span> Ferramentas</button>
-      <div class="nav-sub" role="group" aria-label="Assistentes">
-        <button type="button" data-ls-action="suporte"><span class="ico">💬</span> Suporte LICSYSTEM</button>
-        <button type="button" data-ls-action="chat-ia"><span class="ico">🤖</span> Chat IA</button>
+
+      <div class="nav-group" data-nav-group="chat">
+        <button type="button" class="nav-parent" data-nav-toggle="chat" aria-expanded="false">
+          <span class="ico">💬</span><span class="nav-label">Pergunte ao Chat</span><span class="nav-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="nav-children" role="group" aria-label="Pergunte ao Chat" hidden>
+          <button type="button" data-ls-action="suporte"><span class="ico">💬</span> Suporte LICSYSTEM</button>
+          <button type="button" data-ls-action="chat-ia"><span class="ico">🤖</span> Chat IA</button>
+        </div>
       </div>
     </nav>
     <div class="side-foot">LICSYSTEM &copy; Sistema Licitação<br/>v1.0 — frontend SPA</div>
