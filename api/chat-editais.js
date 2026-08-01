@@ -7,21 +7,16 @@
  * Opcional: { categoria, ampliar, esferas, limite }
  */
 var queryLib = require("./lib/editais-query");
+var safeJson = require("./lib/safe-json");
 
 var DEFAULT_MODEL = "gemini-2.5-flash-lite";
 
 function cors(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Accept");
+  safeJson.applyCors(res, "POST,OPTIONS");
 }
 
 function json(res, status, body) {
-  cors(res);
-  res.statusCode = status;
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  res.setHeader("Cache-Control", "no-store");
-  res.end(JSON.stringify(body));
+  safeJson.sendJson(res, status, body, "POST,OPTIONS");
 }
 
 function readBody(req) {
@@ -112,7 +107,7 @@ async function interpretWithGemini(apiKey, mensagem) {
   return extractJsonObject(text);
 }
 
-module.exports = async function handler(req, res) {
+async function handler(req, res) {
   if (req.method === "OPTIONS") {
     cors(res);
     res.statusCode = 204;
@@ -185,4 +180,6 @@ module.exports = async function handler(req, res) {
       error: err.message || String(err),
     });
   }
-};
+}
+
+module.exports = safeJson.wrapHandler(handler, "POST,OPTIONS");

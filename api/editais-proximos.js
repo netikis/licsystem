@@ -20,18 +20,28 @@
 var PNCP_BASE = "https://pncp.gov.br/api/consulta/v1";
 var PAGE_SIZE = 50;
 var MAX_PAGES_PER_UF_MOD = 2;
-var MAX_PAGES_PR_PRESET = 3; // PR com prioridade na cobertura pr-sp
-var MAX_PAGES_SP_PRESET = 2;
+var MAX_PAGES_PR_PRESET = 2;
+var MAX_PAGES_SP_PRESET = 1;
 var DEFAULT_RAIO_KM = 250;
 var MAX_RAIO_KM = 700;
 var PRESET_PR_SP_RAIO_KM = 500;
 var DEFAULT_MODALIDADES = [6]; // Pregão Eletrônico (rápido o bastante p/ serverless)
 var EXTRA_MODALIDADES = [4, 7]; // Concorrência Eletrônica, Pregão Presencial
-var MAX_UFS = 4;
-var MAX_MUN_FALLBACK = 72;
-var MUN_FALLBACK_CONCURRENCY = 6;
-var PNCP_FETCH_TIMEOUT_MS = 16000;
+var MAX_UFS = 2;
+/**
+ * PNCP por UF (PR/SP) costuma levar 40–55s por página — inviável no maxDuration 60s.
+ * Caminho padrão = só municípios próximos (IBGE), caps baixos.
+ */
+var MAX_MUN_FALLBACK = 10;
+var MAX_MUN_FALLBACK_PR_SP = 12;
+var MUN_FALLBACK_CONCURRENCY = 3;
+var UF_CONCURRENCY = 1;
+var PNCP_FETCH_TIMEOUT_MS = 14000;
+/** Orçamento interno: devolver JSON parcial antes do kill da Vercel (HTML). */
+var HANDLER_BUDGET_MS = 50000;
 var ESFERA_LABEL = { M: "Municipal", E: "Estadual", F: "Federal", D: "Distrital" };
+
+var safeJson = require("./lib/safe-json");
 
 var queryLib = null;
 try {
@@ -43,26 +53,21 @@ try {
 var LEILAO_MODALIDADES =
   (queryLib && queryLib.LEILAO_MODALIDADES) || [1, 13]; // Leilão Eletrônico / Presencial
 var resolveJanela = queryLib && queryLib.resolveJanela;
-var fetchPropostasUfRobusto =
-  queryLib && queryLib.fetchPropostasUfRobusto;
-var fetchPropostasMunicipioRobusto =
-  queryLib && queryLib.fetchPropostasMunicipioRobusto;
 
 var _municipios = null;
 var _byIbge = null;
 
 function cors(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Accept");
+  safeJson.applyCors(res, "GET,OPTIONS");
 }
 
 function json(res, status, body) {
-  cors(res);
-  res.statusCode = status;
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  res.setHeader("Cache-Control", "no-store");
-  res.end(JSON.stringify(body));
+  safeJson.sendJson(res, status, body, "GET,OPTIONS");
+}
+
+function budgetLeft(deadline) {
+  if (!deadline) return true;
+  return Date.now() < deadline;
 }
 
 function loadMunicipios() {
@@ -124,10 +129,8 @@ function pncpLink(item) {
   return item.linkSistemaOrigem || item.linkProcessoEletronico || null;
 }
 
+/** Uma tentativa, timeout curto — sem retries do editais-query (estoura 60s). */
 async function fetchPncpJson(url) {
-  if (queryLib && queryLib.fetchPncpJson) {
-    return queryLib.fetchPncpJson(url);
-  }
   var ctrl =
     typeof AbortController !== "undefined" ? new AbortController() : null;
   var timer = null;
@@ -155,10 +158,22 @@ async function fetchPncpJson(url) {
     }
     if (!r.ok) {
       var msg =
-        (body && (body.message || body.error)) || "HTTP " + r.status;
+        (body && (body.message || body.error)) ||
+        (text && !body ? String(text).replace(/\s+/g, " ").slice(0, 120) : null) ||
+        "HTTP " + r.status;
       var err = new Error(String(msg));
       err.status = r.status;
       throw err;
+    }
+    /* PNCP às vezes devolve 200 com HTML/texto de erro de banco. */
+    if (!body || typeof body !== "object") {
+      var err2 = new Error(
+        text
+          ? String(text).replace(/\s+/g, " ").slice(0, 120)
+          : "PNCP resposta vazia"
+      );
+      err2.status = 502;
+      throw err2;
     }
     return body || {};
   } catch (e) {
@@ -176,12 +191,12 @@ async function fetchPncpJson(url) {
   }
 }
 
+/**
+ * Path rápido (sem chunks/retries do editais-query) — essencial p/ caber em 60s.
+ */
 async function fetchPropostasUf(uf, dataFinal, modalidade, maxPages) {
-  if (fetchPropostasUfRobusto) {
-    return fetchPropostasUfRobusto(uf, dataFinal, modalidade, maxPages);
-  }
   var pages = maxPages != null ? maxPages : MAX_PAGES_PER_UF_MOD;
-  pages = Math.max(1, Math.min(5, Number(pages) || MAX_PAGES_PER_UF_MOD));
+  pages = Math.max(1, Math.min(3, Number(pages) || MAX_PAGES_PER_UF_MOD));
   var out = [];
   for (var pagina = 1; pagina <= pages; pagina++) {
     var url =
@@ -207,15 +222,7 @@ async function fetchPropostasUf(uf, dataFinal, modalidade, maxPages) {
 }
 
 async function fetchPropostasMunicipio(ibge, dataFinal, modalidade, maxPages) {
-  if (fetchPropostasMunicipioRobusto) {
-    return fetchPropostasMunicipioRobusto(
-      ibge,
-      dataFinal,
-      modalidade,
-      maxPages
-    );
-  }
-  var pages = Math.max(1, Math.min(3, Number(maxPages) || 2));
+  var pages = Math.max(1, Math.min(2, Number(maxPages) || 1));
   var out = [];
   for (var pagina = 1; pagina <= pages; pagina++) {
     var url =
@@ -303,16 +310,21 @@ function compraKey(item) {
   );
 }
 
-async function runBatches(jobs, concurrency, runner) {
+async function runBatches(jobs, concurrency, runner, deadline) {
   var settled = [];
+  var truncated = false;
   for (var batchStart = 0; batchStart < jobs.length; batchStart += concurrency) {
+    if (!budgetLeft(deadline)) {
+      truncated = true;
+      break;
+    }
     var batch = jobs.slice(batchStart, batchStart + concurrency);
     var batchResult = await Promise.all(batch.map(runner));
     for (var bi = 0; bi < batchResult.length; bi++) {
       settled.push(batchResult[bi]);
     }
   }
-  return settled;
+  return { settled: settled, truncated: truncated };
 }
 
 /**
@@ -325,11 +337,13 @@ async function fetchFallbackByMunicipios(opts) {
   var coberturaPrSp = opts.coberturaPrSp;
   var dataFinal = opts.dataFinal;
   var modalidades = opts.modalidades;
+  var deadline = opts.deadline;
   var munList = loadMunicipios();
+  var munCap = coberturaPrSp ? MAX_MUN_FALLBACK_PR_SP : MAX_MUN_FALLBACK;
 
   var candidates = [];
   if (coberturaPrSp) {
-    /* PR: mais próximos da origem em todo o estado; SP: só no raio. */
+    /* PR: mais próximos da origem; SP: só no raio. Caps baixos p/ 60s. */
     var prAll = [];
     var spRaio = [];
     for (var i = 0; i < munList.length; i++) {
@@ -346,8 +360,8 @@ async function fetchFallbackByMunicipios(opts) {
     spRaio.sort(function (a, b) {
       return a.dist - b.dist;
     });
-    var prCap = Math.min(96, Math.max(MAX_MUN_FALLBACK, 80));
-    var spCap = 24;
+    var prCap = Math.min(munCap, 22);
+    var spCap = Math.min(8, Math.max(4, munCap - prCap));
     candidates = prAll.slice(0, prCap).concat(spRaio.slice(0, spCap));
   } else {
     candidates = Object.keys(nearbyMap)
@@ -363,7 +377,7 @@ async function fetchFallbackByMunicipios(opts) {
       .sort(function (a, b) {
         return a.dist - b.dist;
       })
-      .slice(0, MAX_MUN_FALLBACK);
+      .slice(0, munCap);
   }
 
   /* Garante origem. */
@@ -377,6 +391,7 @@ async function fetchFallbackByMunicipios(opts) {
         dist: 0,
         uf: origin.u || "",
       });
+      if (candidates.length > munCap) candidates = candidates.slice(0, munCap);
     }
   }
 
@@ -390,24 +405,33 @@ async function fetchFallbackByMunicipios(opts) {
     }
   }
 
-  var settled = await runBatches(jobs, MUN_FALLBACK_CONCURRENCY, function (job) {
-    return fetchPropostasMunicipio(job.ibge, dataFinal, job.modalidade, 2)
-      .then(function (chunk) {
-        return { ok: true, job: job, chunk: chunk };
-      })
-      .catch(function (e) {
-        return {
-          ok: false,
-          job: job,
-          error: e.message || String(e),
-        };
-      });
-  });
+  var batchOut = await runBatches(
+    jobs,
+    MUN_FALLBACK_CONCURRENCY,
+    function (job) {
+      return fetchPropostasMunicipio(job.ibge, dataFinal, job.modalidade, 1)
+        .then(function (chunk) {
+          return { ok: true, job: job, chunk: chunk };
+        })
+        .catch(function (e) {
+          return {
+            ok: false,
+            job: job,
+            error: e.message || String(e),
+          };
+        });
+    },
+    deadline
+  );
 
-  return { settled: settled, municipiosConsultados: candidates.length };
+  return {
+    settled: batchOut.settled,
+    municipiosConsultados: candidates.length,
+    truncated: batchOut.truncated,
+  };
 }
 
-module.exports = async function handler(req, res) {
+async function handler(req, res) {
   if (req.method === "OPTIONS") {
     cors(res);
     res.statusCode = 204;
@@ -416,6 +440,9 @@ module.exports = async function handler(req, res) {
   if (req.method !== "GET") {
     return json(res, 405, { ok: false, error: "Use GET" });
   }
+
+  var deadline = Date.now() + HANDLER_BUDGET_MS;
+  var timedOutPartial = false;
 
   try {
     loadMunicipios();
@@ -501,10 +528,8 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    var modalidades = DEFAULT_MODALIDADES.slice();
-    if (String(q.extra || "") === "1" || String(q.ampliar || "") === "1") {
-      modalidades = DEFAULT_MODALIDADES.concat(EXTRA_MODALIDADES);
-    }
+    var ampliarFlag =
+      String(q.extra || "") === "1" || String(q.ampliar || "") === "1";
     var leiloesFlag =
       String(q.leiloes || q.incluirLeiloes || "") === "1" ||
       String(q.leiloes || q.incluirLeiloes || "").toLowerCase() === "true";
@@ -513,15 +538,26 @@ module.exports = async function handler(req, res) {
       (queryLib &&
         queryLib.looksLikeLeilaoText &&
         queryLib.looksLikeLeilaoText(keywords.join(" ")));
-    if (querLeilao) {
-      modalidades = modalidades.concat(LEILAO_MODALIDADES);
-      var modSeenProx = Object.create(null);
-      modalidades = modalidades.filter(function (m) {
-        if (modSeenProx[m]) return false;
-        modSeenProx[m] = true;
-        return true;
-      });
+    /*
+     * Máx. 2 modalidades no serverless: PNCP lento.
+     * Leilão: 13 (+1 se ampliar). Senão: 6 (+4 se ampliar).
+     */
+    var modalidades;
+    if (querLeilao && !ampliarFlag) {
+      modalidades = [13, 6];
+    } else if (querLeilao && ampliarFlag) {
+      modalidades = [13, 1, 6];
+    } else if (ampliarFlag) {
+      modalidades = DEFAULT_MODALIDADES.concat(EXTRA_MODALIDADES).slice(0, 2);
+    } else {
+      modalidades = DEFAULT_MODALIDADES.slice();
     }
+    var modSeenProx = Object.create(null);
+    modalidades = modalidades.filter(function (m) {
+      if (modSeenProx[m]) return false;
+      modSeenProx[m] = true;
+      return true;
+    });
 
     /* dataFinal = limite do encerramento da proposta no PNCP (não "hoje"). */
     var janelaInfo = resolveJanela
@@ -548,15 +584,16 @@ module.exports = async function handler(req, res) {
     var municipiosFallback = 0;
 
     /*
-     * Consulta por UF no PNCP anda instável (500/429/timeout em volume).
-     * Usa IBGE municipal como caminho principal (confiável + rápido com
-     * dataFinal no ano civil). Opt-in: &ufPrimeiro=1 tenta UF antes.
+     * Padrão: NÃO consultar UF (PNCP PR/SP ~50s/página → HTML 500 na Vercel).
+     * Opt-in: &ufPrimeiro=1. Caminho principal = municípios IBGE próximos.
      */
+    var ufPrimeiroRaw = String(q.ufPrimeiro != null ? q.ufPrimeiro : q.tryUf || "0")
+      .trim()
+      .toLowerCase();
     var tryUfFirst =
-      String(q.ufPrimeiro || q.tryUf || "") === "1" ||
-      String(q.ufPrimeiro || "").toLowerCase() === "true";
+      ufPrimeiroRaw === "1" || ufPrimeiroRaw === "true";
 
-    if (tryUfFirst) {
+    if (tryUfFirst && budgetLeft(deadline)) {
       var jobs = [];
       for (var ui = 0; ui < ufList.length; ui++) {
         for (var mi = 0; mi < modalidades.length; mi++) {
@@ -564,24 +601,31 @@ module.exports = async function handler(req, res) {
         }
       }
 
-      var settled = await runBatches(jobs, 2, function (job) {
-        return fetchPropostasUf(
-          job.uf,
-          dataFinal,
-          job.modalidade,
-          pagesForUf(job.uf, coberturaPrSp)
-        )
-          .then(function (chunk) {
-            return { ok: true, job: job, chunk: chunk };
-          })
-          .catch(function (e) {
-            return {
-              ok: false,
-              job: job,
-              error: e.message || String(e),
-            };
-          });
-      });
+      var ufBatch = await runBatches(
+        jobs,
+        UF_CONCURRENCY,
+        function (job) {
+          return fetchPropostasUf(
+            job.uf,
+            dataFinal,
+            job.modalidade,
+            pagesForUf(job.uf, coberturaPrSp)
+          )
+            .then(function (chunk) {
+              return { ok: true, job: job, chunk: chunk };
+            })
+            .catch(function (e) {
+              return {
+                ok: false,
+                job: job,
+                error: e.message || String(e),
+              };
+            });
+        },
+        deadline
+      );
+      if (ufBatch.truncated) timedOutPartial = true;
+      var settled = ufBatch.settled;
 
       for (var si = 0; si < settled.length; si++) {
         var s = settled[si];
@@ -604,64 +648,90 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    var needMunFallback = !raw.length;
-    if (needMunFallback) {
-      estrategia = "municipio-fallback";
-      /* Se UF tomou 429, dá uma folga antes do fallback por município. */
-      if (
-        errors.some(function (e) {
-          return /429/.test(String(e.error || ""));
-        })
-      ) {
-        await new Promise(function (r) {
-          setTimeout(r, 800);
-        });
-      }
-      var fb = await fetchFallbackByMunicipios({
-        origin: origin,
-        nearbyMap: nearbyMap,
-        coberturaPrSp: coberturaPrSp,
-        dataFinal: dataFinal,
-        modalidades: modalidades,
-      });
-      municipiosFallback = fb.municipiosConsultados || 0;
-      var fbSettled = fb.settled || [];
-      var fbErrors = 0;
-      var fbOk = 0;
-      for (var fi = 0; fi < fbSettled.length; fi++) {
-        var fs = fbSettled[fi];
-        if (!fs.ok) {
-          fbErrors++;
-          if (errors.length < 24) {
+    var needMun = !raw.length && budgetLeft(deadline);
+    if (needMun) {
+      estrategia = "municipio";
+      /* 1) Origem primeiro — resposta rápida quando o PNCP responde. */
+      if (origin && origin.i && budgetLeft(deadline)) {
+        for (var om = 0; om < modalidades.length; om++) {
+          if (!budgetLeft(deadline)) break;
+          try {
+            var originChunk = await fetchPropostasMunicipio(
+              origin.i,
+              dataFinal,
+              modalidades[om],
+              2
+            );
+            for (var oi = 0; oi < originChunk.length; oi++) {
+              var oitem = originChunk[oi];
+              var okey = compraKey(oitem);
+              if (seen[okey]) continue;
+              seen[okey] = true;
+              raw.push(oitem);
+            }
+          } catch (oe) {
             errors.push({
-              ibge: fs.job.ibge,
-              modalidade: fs.job.modalidade,
-              error: fs.error,
+              ibge: origin.i,
+              modalidade: modalidades[om],
+              error: oe.message || String(oe),
             });
           }
-          continue;
         }
-        fbOk++;
-        var fchunk = fs.chunk || [];
-        for (var fj = 0; fj < fchunk.length; fj++) {
-          var fitem = fchunk[fj];
-          var fkey = compraKey(fitem);
-          if (seen[fkey]) continue;
-          seen[fkey] = true;
-          raw.push(fitem);
-        }
+        municipiosFallback = 1;
       }
-      if (!raw.length && fbSettled.length && fbOk === 0) {
-        return json(res, 502, {
-          ok: false,
-          error:
-            "PNCP indisponível ou rejeitou as consultas. Tente novamente em instantes.",
-          errosParciais: errors.slice(0, 12),
-          dataFinalPncp: dataFinal,
-          ufsConsultadas: ufList,
-          estrategia: estrategia,
+
+      /* 2) Vizinhos próximos se ainda couber no orçamento. */
+      if (budgetLeft(deadline)) {
+        estrategia = "municipio-raio";
+        if (
+          errors.some(function (e) {
+            return /429/.test(String(e.error || ""));
+          })
+        ) {
+          await new Promise(function (r) {
+            setTimeout(r, 300);
+          });
+        }
+        var fb = await fetchFallbackByMunicipios({
+          origin: origin,
+          nearbyMap: nearbyMap,
+          coberturaPrSp: coberturaPrSp,
+          dataFinal: dataFinal,
+          modalidades: modalidades,
+          deadline: deadline,
         });
+        municipiosFallback = fb.municipiosConsultados || municipiosFallback;
+        if (fb.truncated) timedOutPartial = true;
+        var fbSettled = fb.settled || [];
+        var fbOk = 0;
+        for (var fi = 0; fi < fbSettled.length; fi++) {
+          var fs = fbSettled[fi];
+          if (!fs.ok) {
+            if (errors.length < 24) {
+              errors.push({
+                ibge: fs.job.ibge,
+                modalidade: fs.job.modalidade,
+                error: fs.error,
+              });
+            }
+            continue;
+          }
+          fbOk++;
+          var fchunk = fs.chunk || [];
+          for (var fj = 0; fj < fchunk.length; fj++) {
+            var fitem = fchunk[fj];
+            var fkey = compraKey(fitem);
+            if (seen[fkey]) continue;
+            seen[fkey] = true;
+            raw.push(fitem);
+          }
+        }
       }
+
+      /* Se tudo falhou: ainda devolve 200 JSON (UI trata lista vazia + errosParciais).
+       * 502 só quando o handler quebra de verdade — evita HTML da Vercel. */
+    } else if (!raw.length && !budgetLeft(deadline)) {
+      timedOutPartial = true;
     }
 
     var results = [];
@@ -728,8 +798,8 @@ module.exports = async function handler(req, res) {
       querLeilao
         ? "Modalidades: " +
           modalidades.join(", ") +
-          " (inclui Leilão Eletrônico/Presencial)."
-        : "Por padrão consulta Pregão Eletrônico (mod. 6); use ampliar=1 para concorrência/pregão presencial; leiloes=1 ou termos de leilão/veículo/sucata incluem mods 1 e 13.",
+          " (leilão priorizado; PNCP por UF é lento demais para serverless)."
+        : "Por padrão consulta Pregão Eletrônico (mod. 6) nos municípios próximos; leiloes=1 prioriza leilão presencial (13); ampliar=1 adiciona mais modalidades.",
       "Distância pelo município da unidade do órgão (IBGE). Editais só em portais locais (fora do PNCP) não aparecem.",
       "Leilões de veículos/sucata muitas vezes circulam em sites especializados e podem não estar no PNCP.",
       "Raio máximo: " + MAX_RAIO_KM + " km (padrão " + DEFAULT_RAIO_KM + " km).",
@@ -756,11 +826,16 @@ module.exports = async function handler(req, res) {
           " UF(s) por consulta (limite serverless)."
       );
     }
-    if (estrategia === "municipio-fallback") {
+    if (estrategia === "municipio" || estrategia === "municipio-raio") {
       avisos.push(
-        "PNCP por UF falhou ou veio vazio — fallback: consulta por IBGE em " +
-          municipiosFallback +
-          " município(s) próximos (cobertura parcial)."
+        "Consulta por IBGE em " +
+          (municipiosFallback || "vários") +
+          " município(s) próximos (UF ampla é lenta demais para serverless)."
+      );
+    }
+    if (timedOutPartial) {
+      avisos.push(
+        "Consulta interrompida por limite de tempo serverless (~48s) — resultados podem estar incompletos. Tente janela 45 dias, raio menor ou menos modalidades."
       );
     }
     if (errors.length) {
@@ -792,6 +867,7 @@ module.exports = async function handler(req, res) {
       estrategia: estrategia,
       municipiosFallback:
         estrategia === "municipio-fallback" ? municipiosFallback : undefined,
+      parcialPorTempo: timedOutPartial || undefined,
       totalBrutoPncp: raw.length,
       total: results.length,
       editais: results,
@@ -804,4 +880,6 @@ module.exports = async function handler(req, res) {
       error: err.message || String(err),
     });
   }
-};
+}
+
+module.exports = safeJson.wrapHandler(handler, "GET,OPTIONS");

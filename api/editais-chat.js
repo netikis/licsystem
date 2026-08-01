@@ -20,19 +20,14 @@
  * Voiceflow: Custom Action / API step → GET ou POST neste endpoint (CORS liberado).
  */
 var queryLib = require("./lib/editais-query");
+var safeJson = require("./lib/safe-json");
 
 function cors(res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type,Accept");
+  safeJson.applyCors(res, "GET,POST,OPTIONS");
 }
 
 function json(res, status, body) {
-  cors(res);
-  res.statusCode = status;
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  res.setHeader("Cache-Control", "no-store");
-  res.end(JSON.stringify(body));
+  safeJson.sendJson(res, status, body, "GET,POST,OPTIONS");
 }
 
 function readBody(req) {
@@ -88,7 +83,7 @@ function mergeOpts(query, body) {
   };
 }
 
-module.exports = async function handler(req, res) {
+async function handler(req, res) {
   if (req.method === "OPTIONS") {
     cors(res);
     res.statusCode = 204;
@@ -144,4 +139,6 @@ module.exports = async function handler(req, res) {
       errosParciais: err.errosParciais || undefined,
     });
   }
-};
+}
+
+module.exports = safeJson.wrapHandler(handler, "GET,POST,OPTIONS");
