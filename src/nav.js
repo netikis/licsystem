@@ -7,6 +7,7 @@
       editaisProximos: { view: "pesquisas", section: "cardProxEditais" },
       radarPncp: { view: "pesquisas", section: "cardRadarPncp" }
     };
+    var PESQUISAS_CARDS = ["cardChatEditais", "cardProxEditais", "cardRadarPncp"];
     var CHILD_TO_GROUP = {
       perguntarEditais: "pesquisas",
       editaisProximos: "pesquisas",
@@ -22,6 +23,23 @@
       leiloesParticipo: "leilao",
       entregas: "entrega"
     };
+
+    function syncPesquisasCards(sectionId){
+      for(var i=0;i<PESQUISAS_CARDS.length;i++){
+        var card = document.getElementById(PESQUISAS_CARDS[i]);
+        if(!card) continue;
+        var show = !sectionId || PESQUISAS_CARDS[i] === sectionId;
+        card.classList.toggle("pesquisas-card-hidden", !show);
+        if(show) card.removeAttribute("hidden");
+        else card.setAttribute("hidden", "");
+      }
+    }
+    function clearActionActive(){
+      var actions = document.querySelectorAll("#nav button[data-ls-action]");
+      for(var i=0;i<actions.length;i++) actions[i].classList.remove("active");
+      var chatParent = document.querySelector('#nav .nav-group[data-nav-group="chat"] > .nav-parent');
+      if(chatParent) chatParent.classList.remove("nav-branch-active");
+    }
 
     function setSidebar(open){
       document.body.classList.toggle("sidebar-open", !!open);
@@ -99,6 +117,9 @@
       var resolved = VIEW_RESOLVE[view];
       var targetView = resolved ? resolved.view : view;
       var navKey = view;
+      var sectionId = resolved && resolved.section ? resolved.section : null;
+
+      clearActionActive();
 
       var btns=document.querySelectorAll("#nav button[data-view]");
       for(var i=0;i<btns.length;i++){
@@ -137,21 +158,16 @@
         catalogo:"Catálogo Interno",
         arp:"Atas de Registro (ARP)",
         disputa:"Sala de Disputa",
-        ferramentas:"Ferramentas"
+        ferramentas:"Ferramentas",
+        chat:"Pergunte ao Chat"
       };
       if(titleEl) titleEl.textContent = map[navKey]||map[targetView]||"LICSYSTEM";
       if(!opts.skipEnsureGroup) ensureGroupForView(navKey);
       try{ if(window.LICSYSTEM && LICSYSTEM.onViewChange) LICSYSTEM.onViewChange(targetView, navKey); }catch(e){}
-      if(resolved && resolved.section){
-        setTimeout(function(){
-          var sec = document.getElementById(resolved.section);
-          if(sec && typeof sec.scrollIntoView === "function"){
-            try{ sec.scrollIntoView({ behavior: "smooth", block: "start" }); }catch(e){ sec.scrollIntoView(true); }
-          }
-        }, 40);
-      }else{
-        try{ window.scrollTo(0,0); }catch(e){}
+      if(targetView === "pesquisas"){
+        syncPesquisasCards(sectionId);
       }
+      try{ window.scrollTo(0,0); }catch(e){}
       if(MQ.matches) closeSidebar();
     }
     var nav=document.getElementById("nav");
@@ -159,6 +175,21 @@
       var actionBtn=ev.target.closest("button[data-ls-action]");
       if(actionBtn){
         var action=actionBtn.getAttribute("data-ls-action");
+        clearActionActive();
+        var viewBtns=document.querySelectorAll("#nav button[data-view]");
+        for(var ai=0;ai<viewBtns.length;ai++){
+          viewBtns[ai].classList.remove("active");
+          viewBtns[ai].classList.remove("nav-branch-active");
+        }
+        actionBtn.classList.add("active");
+        closeOtherGroups("chat");
+        setGroupOpen("chat", true);
+        var chatParentBtn=document.querySelector('#nav .nav-group[data-nav-group="chat"] > .nav-parent');
+        if(chatParentBtn) chatParentBtn.classList.add("nav-branch-active");
+        var titleEl=document.getElementById("topTitle");
+        if(titleEl){
+          titleEl.textContent = action==="chat-ia" ? "Chat IA" : "Suporte LICSYSTEM";
+        }
         try{
           if(action==="suporte" && window.LICSYSTEM && LICSYSTEM.voiceflow && typeof LICSYSTEM.voiceflow.openPanel==="function"){
             LICSYSTEM.voiceflow.openPanel();
@@ -184,6 +215,12 @@
         var pv=parentBtn.getAttribute("data-view");
         // skipEnsureGroup: allow collapsing the branch without activate() forcing it open again
         if(pv) activate(pv, { skipEnsureGroup: true });
+        else if(gid==="chat" && willOpen){
+          clearActionActive();
+          parentBtn.classList.add("nav-branch-active");
+          var chatTitle=document.getElementById("topTitle");
+          if(chatTitle) chatTitle.textContent = "Pergunte ao Chat";
+        }
         return;
       }
       var b=ev.target.closest("button[data-view]");

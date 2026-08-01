@@ -1,5 +1,5 @@
 /**
- * Assistentes LICSYSTEM — entrada pelo menu Ferramentas (sem FAB no canto).
+ * Assistentes LICSYSTEM — entrada pelo menu Pergunte ao Chat (sem FAB no canto).
  * Suporte: editais PNCP via POST /api/editais-chat.
  * Chat IA: widget Voiceflow (launcher oculto; abre via menu).
  * Custom Action VF opcional: docs/voiceflow-editais-chat.md
@@ -252,7 +252,7 @@
       '<button type="submit" id="lsSupportSend" class="ls-sup-send">Enviar</button>' +
       "</form>" +
       '<div class="ls-sup-foot">' +
-      '<button type="button" class="ls-sup-link" id="lsSupportOpenVf">Abrir Chat IA (menu Ferramentas)</button>' +
+      '<button type="button" class="ls-sup-link" id="lsSupportOpenVf">Abrir Chat IA (Pergunte ao Chat)</button>' +
       "</div>" +
       "</div>";
 
@@ -444,7 +444,7 @@
           openPanel();
           appendBot(
             "O Chat IA (Voiceflow) não carregou. " +
-              "Para editais, use Ferramentas → Suporte LICSYSTEM ou Pesquisas de Editais → Perguntar editais."
+              "Para editais, use Pergunte ao Chat → Suporte LICSYSTEM ou Pesquisas de Editais → Perguntar editais."
           );
         }
       } catch (e) {

@@ -7682,7 +7682,10 @@
     catalogo:'Catálogo Interno',
     arp:'Atas de Registro (ARP)',
     disputa:'Sala de Disputa',
-    ferramentas:'Ferramentas'
+    ferramentas:'Ferramentas',
+    chat:'Pergunte ao Chat',
+    suporte:'Suporte LICSYSTEM',
+    'chat-ia':'Chat IA'
   };
   LICSYSTEM.VIEW_TITLES = VIEW_TITLES;
 
