@@ -894,6 +894,7 @@
   var ORC_KEY_LEGACY = "licsystem_orcamento_v1";
   var COFRE_KEY = "licsystem_cofre_v1";
   var DOCS_CHECKLIST_KEY = "licsystem_docs_checklist_v1";
+  var DOCS_ACCORDION_KEY = "licsystem_docs_accordion_v1";
   var LEILOES_PARTICIPO_KEY = "licsystem_leiloes_participo_v1";
   var CLOUD_META_KEY = "licsystem_cloud_meta_v1";
   var CLOUD_LAST_UID_KEY = "licsystem_cloud_last_uid";
@@ -1653,7 +1654,7 @@
       var box = el("dashPncpList");
       if(!box) return;
       var arr = LICSYSTEM.state.pncpAlerts;
-      if(!arr.length){ box.innerHTML='<span class="muted">Nenhuma oportunidade capturada ainda. Use o Radar PNCP em <b>Captação</b>.</span>'; return; }
+      if(!arr.length){ box.innerHTML='<span class="muted">Nenhuma oportunidade capturada ainda. Use o Radar PNCP em <b>Pesquisas de Editais</b>.</span>'; return; }
       var html='<div style="display:flex;flex-direction:column;gap:8px">';
       arr.slice(0,10).forEach(function(o){
         html+='<div style="padding:10px 12px;border:1px solid var(--ls-line);border-radius:10px">'+
@@ -6279,54 +6280,119 @@
       LICSYSTEM.docsChecklist.render();
     },
 
-    summary: function(){
-      var docs = LICSYSTEM.docsChecklist.data.documentos || [];
+    summary: function(docs){
+      var list = Array.isArray(docs) ? docs : (LICSYSTEM.docsChecklist.data.documentos || []);
       var ok = 0;
-      docs.forEach(function(d){ if(d.ok) ok++; });
-      return { total: docs.length, ok: ok, pend: Math.max(0, docs.length - ok) };
+      list.forEach(function(d){ if(d.ok) ok++; });
+      return { total: list.length, ok: ok, pend: Math.max(0, list.length - ok) };
     },
 
-    render: function(){
-      var box = el("docsList");
-      var meta = el("docsMeta");
-      var sum = el("docsSummary");
-      if(!box) return;
+    sameEdital: function(a, b){
+      a = a || {};
+      b = b || {};
+      var af = LICSYSTEM.docsChecklist.normText(a.filename);
+      var bf = LICSYSTEM.docsChecklist.normText(b.filename);
+      if(af && bf && af === bf) return true;
+      var an = LICSYSTEM.docsChecklist.normText(a.editalNome || a.titulo);
+      var bn = LICSYSTEM.docsChecklist.normText(b.editalNome || b.titulo);
+      return !!(an && bn && an === bn);
+    },
 
+    loadExpandStore: function(){
+      try{
+        var raw = JSON.parse(localStorage.getItem(DOCS_ACCORDION_KEY) || "{}");
+        return (raw && typeof raw === "object" && !Array.isArray(raw)) ? raw : {};
+      }catch(e){
+        return {};
+      }
+    },
+
+    isExpanded: function(sessionId){
+      var store = LICSYSTEM.docsChecklist.loadExpandStore();
+      return !!store[String(sessionId || "")];
+    },
+
+    setExpanded: function(sessionId, expanded){
+      var store = LICSYSTEM.docsChecklist.loadExpandStore();
+      var key = String(sessionId || "");
+      if(!key) return;
+      if(expanded) store[key] = true;
+      else delete store[key];
+      try{ localStorage.setItem(DOCS_ACCORDION_KEY, JSON.stringify(store)); }catch(e){}
+    },
+
+    collectSessions: function(){
       var data = LICSYSTEM.docsChecklist.data || LICSYSTEM.docsChecklist.emptyData();
-      var docs = data.documentos || [];
+      var chkDocs = data.documentos || [];
+      var hasChecklist = !!(chkDocs.length || data.editalNome || data.filename);
+      var usedChecklist = false;
+      var sessions = [];
+      var lpItems = (LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.items)
+        ? LICSYSTEM.leiloesParticipo.items.filter(function(it){
+            return it && it.status !== "arquivado" && Array.isArray(it.documentosExigidos) && it.documentosExigidos.length;
+          })
+        : [];
 
-      if(meta){
-        if(docs.length || data.editalNome || data.filename){
-          meta.style.display = "flex";
-          meta.innerHTML =
-            "<span><b>Edital:</b> " + utils.escapeHtml(data.editalNome || data.filename || "—") + "</span>" +
-            (data.filename ? "<span class='muted small'>" + utils.escapeHtml(data.filename) + "</span>" : "") +
-            (data.updatedAt ? "<span class='muted small'>Atualizado: " + utils.escapeHtml(new Date(data.updatedAt).toLocaleString("pt-BR")) + "</span>" : "");
+      lpItems.sort(function(a, b){
+        return (Number(b.updatedAt || b.dataAnalise || 0) || 0) - (Number(a.updatedAt || a.dataAnalise || 0) || 0);
+      });
+
+      lpItems.forEach(function(it){
+        var matchChk = hasChecklist && LICSYSTEM.docsChecklist.sameEdital(data, {
+          editalNome: it.titulo,
+          filename: it.filename
+        });
+        var docs;
+        var updatedAt;
+        if(matchChk){
+          docs = chkDocs.map(function(d, i){ return LICSYSTEM.docsChecklist.normalizeItem(d, i); });
+          updatedAt = data.updatedAt || it.updatedAt || it.dataAnalise || 0;
+          usedChecklist = true;
         } else {
-          meta.style.display = "none";
-          meta.innerHTML = "";
+          docs = (it.documentosExigidos || []).map(function(d, i){
+            return LICSYSTEM.docsChecklist.normalizeItem(d, i);
+          });
+          updatedAt = it.updatedAt || it.dataAnalise || 0;
         }
+        sessions.push({
+          id: String(it.id),
+          source: "leilao",
+          leilaoId: String(it.id),
+          editalNome: it.titulo || it.filename || "Edital",
+          filename: it.filename || "",
+          updatedAt: Number(updatedAt) || 0,
+          documentos: docs,
+          usesChecklist: matchChk
+        });
+      });
+
+      if(hasChecklist && !usedChecklist){
+        sessions.unshift({
+          id: "checklist",
+          source: "checklist",
+          leilaoId: null,
+          editalNome: data.editalNome || data.filename || "Checklist",
+          filename: data.filename || "",
+          updatedAt: Number(data.updatedAt) || 0,
+          documentos: chkDocs.map(function(d, i){ return LICSYSTEM.docsChecklist.normalizeItem(d, i); }),
+          usesChecklist: true
+        });
       }
 
-      var s = LICSYSTEM.docsChecklist.summary();
-      if(sum){
-        if(!docs.length){
-          sum.innerHTML = "";
-        } else {
-          sum.innerHTML =
-            '<span class="docs-pill">' + s.total + ' documento' + (s.total === 1 ? "" : "s") + "</span>" +
-            '<span class="docs-pill ok">' + s.ok + " OK</span>" +
-            '<span class="docs-pill pend">' + s.pend + " pendente" + (s.pend === 1 ? "" : "s") + "</span>";
-        }
-      }
+      return sessions;
+    },
 
-      if(!docs.length){
-        box.innerHTML = '<div class="muted small">Nenhum checklist ainda. Rode a <b>Análise IA</b> em um edital para gerar a lista, ou adicione um documento manualmente.</div>';
-        return;
+    findLeilao: function(leilaoId){
+      var items = (LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.items) || [];
+      for(var i = 0; i < items.length; i++){
+        if(String(items[i].id) === String(leilaoId)) return items[i];
       }
+      return null;
+    },
 
+    renderDocRows: function(docs, sessionId){
       var html = "";
-      docs.forEach(function(d){
+      (docs || []).forEach(function(d){
         var match = d.cofreKey && LICSYSTEM.cofre.findByKey(d.cofreKey)
           ? { key: d.cofreKey, label: LICSYSTEM.cofre.getLabel(d.cofreKey) }
           : LICSYSTEM.docsChecklist.matchCofre(d.nome);
@@ -6340,7 +6406,7 @@
           d.cofreKey = match.key;
         }
         html +=
-          '<div class="docs-row' + (d.ok ? " is-ok" : "") + '" data-id="' + utils.escapeHtml(d.id) + '">' +
+          '<div class="docs-row' + (d.ok ? " is-ok" : "") + '" data-id="' + utils.escapeHtml(d.id) + '" data-session="' + utils.escapeHtml(sessionId) + '">' +
             '<label class="docs-ok"><input type="checkbox" class="docsOkChk"' + (d.ok ? " checked" : "") + ' /> OK</label>' +
             '<div>' +
               '<div class="docs-name">' + utils.escapeHtml(d.nome) + "</div>" +
@@ -6356,41 +6422,193 @@
             "</div>" +
           "</div>";
       });
+      return html;
+    },
+
+    render: function(){
+      var box = el("docsList");
+      var meta = el("docsMeta");
+      var sum = el("docsSummary");
+      if(!box) return;
+
+      if(meta){
+        meta.style.display = "none";
+        meta.innerHTML = "";
+      }
+
+      var sessions = LICSYSTEM.docsChecklist.collectSessions();
+      var totalAll = 0;
+      var okAll = 0;
+      sessions.forEach(function(s){
+        var sm = LICSYSTEM.docsChecklist.summary(s.documentos);
+        totalAll += sm.total;
+        okAll += sm.ok;
+      });
+      var pendAll = Math.max(0, totalAll - okAll);
+
+      if(sum){
+        if(!sessions.length){
+          sum.innerHTML = "";
+        } else {
+          sum.innerHTML =
+            '<span class="docs-pill">' + sessions.length + " edital" + (sessions.length === 1 ? "" : "is") + "</span>" +
+            '<span class="docs-pill">' + totalAll + " documento" + (totalAll === 1 ? "" : "s") + "</span>" +
+            '<span class="docs-pill ok">' + okAll + " OK</span>" +
+            '<span class="docs-pill pend">' + pendAll + " pendente" + (pendAll === 1 ? "" : "s") + "</span>";
+        }
+      }
+
+      if(!sessions.length){
+        box.innerHTML = '<div class="muted small">Nenhum checklist ainda. Rode a <b>Análise IA</b> em um edital para gerar a lista, ou adicione um documento manualmente.</div>';
+        return;
+      }
+
+      var html = "";
+      sessions.forEach(function(sess){
+        var expanded = LICSYSTEM.docsChecklist.isExpanded(sess.id);
+        var sm = LICSYSTEM.docsChecklist.summary(sess.documentos);
+        var nome = sess.editalNome || sess.filename || "Edital";
+        var updatedTxt = sess.updatedAt
+          ? utils.escapeHtml(new Date(sess.updatedAt).toLocaleString("pt-BR"))
+          : "";
+        html +=
+          '<div class="docs-accordion' + (expanded ? " is-open" : "") + '" data-session="' + utils.escapeHtml(sess.id) + '">' +
+            '<button type="button" class="docs-acc-head" aria-expanded="' + (expanded ? "true" : "false") + '">' +
+              '<span class="docs-acc-chevron" aria-hidden="true">' + (expanded ? "▾" : "▸") + "</span>" +
+              '<span class="docs-acc-meta">' +
+                '<span class="docs-acc-title">Edital: <b class="docs-edital-name">' + utils.escapeHtml(nome) + "</b></span>" +
+                (sess.filename ? '<span class="docs-acc-file">' + utils.escapeHtml(sess.filename) + "</span>" : "") +
+                (updatedTxt ? '<span class="docs-acc-updated">Atualizado: ' + updatedTxt + "</span>" : "") +
+              "</span>" +
+              '<span class="docs-acc-pills">' +
+                '<span class="docs-pill">' + sm.total + "</span>" +
+                '<span class="docs-pill ok">' + sm.ok + " OK</span>" +
+                '<span class="docs-pill pend">' + sm.pend + " pend.</span>" +
+              "</span>" +
+            "</button>" +
+            '<div class="docs-acc-body"' + (expanded ? "" : " hidden") + ">" +
+              (sm.total
+                ? LICSYSTEM.docsChecklist.renderDocRows(sess.documentos, sess.id)
+                : '<div class="muted small">Nenhum documento neste edital.</div>') +
+            "</div>" +
+          "</div>";
+      });
       box.innerHTML = html;
+
+      box.querySelectorAll(".docs-acc-head").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var acc = btn.closest(".docs-accordion");
+          if(!acc) return;
+          var sid = acc.getAttribute("data-session");
+          var open = !acc.classList.contains("is-open");
+          acc.classList.toggle("is-open", open);
+          btn.setAttribute("aria-expanded", open ? "true" : "false");
+          var chev = btn.querySelector(".docs-acc-chevron");
+          if(chev) chev.textContent = open ? "▾" : "▸";
+          var body = acc.querySelector(".docs-acc-body");
+          if(body) body.hidden = !open;
+          LICSYSTEM.docsChecklist.setExpanded(sid, open);
+        });
+      });
 
       box.querySelectorAll(".docsOkChk").forEach(function(chk){
         chk.addEventListener("change", function(){
           var row = chk.closest(".docs-row");
           var id = row && row.getAttribute("data-id");
-          LICSYSTEM.docsChecklist.setOk(id, chk.checked);
+          var sid = row && row.getAttribute("data-session");
+          LICSYSTEM.docsChecklist.setOk(id, chk.checked, sid);
         });
       });
       box.querySelectorAll(".docsRemove").forEach(function(btn){
         btn.addEventListener("click", function(){
           var row = btn.closest(".docs-row");
           var id = row && row.getAttribute("data-id");
-          LICSYSTEM.docsChecklist.remove(id);
+          var sid = row && row.getAttribute("data-session");
+          LICSYSTEM.docsChecklist.remove(id, sid);
         });
       });
     },
 
-    setOk: function(id, ok){
-      var docs = LICSYSTEM.docsChecklist.data.documentos || [];
-      for(var i = 0; i < docs.length; i++){
-        if(docs[i].id === id){
-          docs[i].ok = !!ok;
-          break;
+    resolveSession: function(sessionId){
+      var sessions = LICSYSTEM.docsChecklist.collectSessions();
+      var sid = String(sessionId || "");
+      for(var i = 0; i < sessions.length; i++){
+        if(String(sessions[i].id) === sid) return sessions[i];
+      }
+      if(sessions.length === 1) return sessions[0];
+      return null;
+    },
+
+    setOk: function(id, ok, sessionId){
+      var sess = LICSYSTEM.docsChecklist.resolveSession(sessionId);
+      var ref = null;
+      if(sess){
+        for(var r = 0; r < (sess.documentos || []).length; r++){
+          if(String(sess.documentos[r].id) === String(id)){ ref = sess.documentos[r]; break; }
         }
       }
-      LICSYSTEM.docsChecklist.persist();
+
+      if(!sess || sess.usesChecklist || sess.source === "checklist"){
+        var docs = LICSYSTEM.docsChecklist.data.documentos || [];
+        for(var j = 0; j < docs.length; j++){
+          if(docs[j].id === id || (ref && LICSYSTEM.docsChecklist.normText(docs[j].nome) === LICSYSTEM.docsChecklist.normText(ref.nome))){
+            docs[j].ok = !!ok;
+            break;
+          }
+        }
+        LICSYSTEM.docsChecklist.persist();
+      }
+
+      if(sess && sess.leilaoId){
+        var item = LICSYSTEM.docsChecklist.findLeilao(sess.leilaoId);
+        if(item){
+          var lpDocs = item.documentosExigidos || [];
+          for(var k = 0; k < lpDocs.length; k++){
+            if(String(lpDocs[k].id) === String(id) ||
+              (ref && LICSYSTEM.docsChecklist.normText(lpDocs[k].nome) === LICSYSTEM.docsChecklist.normText(ref.nome))){
+              lpDocs[k].ok = !!ok;
+              break;
+            }
+          }
+          item.updatedAt = Date.now();
+          LICSYSTEM.leiloesParticipo.persist();
+        }
+      }
+
       LICSYSTEM.docsChecklist.render();
     },
 
-    remove: function(id){
-      LICSYSTEM.docsChecklist.data.documentos = (LICSYSTEM.docsChecklist.data.documentos || []).filter(function(d){
-        return d.id !== id;
-      });
-      LICSYSTEM.docsChecklist.persist();
+    remove: function(id, sessionId){
+      var sess = LICSYSTEM.docsChecklist.resolveSession(sessionId);
+      var ref = null;
+      if(sess){
+        for(var r = 0; r < (sess.documentos || []).length; r++){
+          if(String(sess.documentos[r].id) === String(id)){ ref = sess.documentos[r]; break; }
+        }
+      }
+
+      if(!sess || sess.usesChecklist || sess.source === "checklist"){
+        LICSYSTEM.docsChecklist.data.documentos = (LICSYSTEM.docsChecklist.data.documentos || []).filter(function(d){
+          if(d.id === id) return false;
+          if(ref && LICSYSTEM.docsChecklist.normText(d.nome) === LICSYSTEM.docsChecklist.normText(ref.nome)) return false;
+          return true;
+        });
+        LICSYSTEM.docsChecklist.persist();
+      }
+
+      if(sess && sess.leilaoId){
+        var item = LICSYSTEM.docsChecklist.findLeilao(sess.leilaoId);
+        if(item){
+          item.documentosExigidos = (item.documentosExigidos || []).filter(function(d){
+            if(String(d.id) === String(id)) return false;
+            if(ref && LICSYSTEM.docsChecklist.normText(d.nome) === LICSYSTEM.docsChecklist.normText(ref.nome)) return false;
+            return true;
+          });
+          item.updatedAt = Date.now();
+          LICSYSTEM.leiloesParticipo.persist();
+        }
+      }
+
       LICSYSTEM.docsChecklist.render();
     },
 
@@ -6418,10 +6636,27 @@
     },
 
     clearOk: function(){
-      if(!(LICSYSTEM.docsChecklist.data.documentos || []).length) return;
+      var sessions = LICSYSTEM.docsChecklist.collectSessions();
+      var any = false;
+      sessions.forEach(function(s){
+        (s.documentos || []).forEach(function(d){ if(d.ok) any = true; });
+      });
+      if(!any && !(LICSYSTEM.docsChecklist.data.documentos || []).length) return;
       if(!confirm("Limpar todos os OK marcados?")) return;
+
       (LICSYSTEM.docsChecklist.data.documentos || []).forEach(function(d){ d.ok = false; });
       LICSYSTEM.docsChecklist.persist();
+
+      sessions.forEach(function(s){
+        if(!s.leilaoId) return;
+        var item = LICSYSTEM.docsChecklist.findLeilao(s.leilaoId);
+        if(!item) return;
+        (item.documentosExigidos || []).forEach(function(d){ d.ok = false; });
+        item.updatedAt = Date.now();
+      });
+      if(LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.persist){
+        LICSYSTEM.leiloesParticipo.persist();
+      }
       LICSYSTEM.docsChecklist.render();
     },
 
@@ -6536,9 +6771,11 @@
         analysisSnippet: String(it.analysisSnippet || it.resumo || "").trim().slice(0, 600),
         documentosExigidos: docs.map(function(d, i){
           return {
+            id: String(d.id || ("lpdoc_" + String(it.id || idx || 0) + "_" + i)),
             nome: String(d.nome || "Documento").trim().slice(0, 220),
             tipo: String(d.tipo || "outro").slice(0, 40),
-            obs: String(d.obs || "").trim().slice(0, 400)
+            obs: String(d.obs || "").trim().slice(0, 400),
+            ok: !!d.ok
           };
         }).slice(0, 80),
         status: (it.status === "arquivado") ? "arquivado" : "participando",
@@ -7420,22 +7657,27 @@
 
     // Bell
     on("bell","click", function(){
-      if(window.__lsActivateView) window.__lsActivateView("captacao");
+      if(window.__lsActivateView) window.__lsActivateView("radarPncp");
     });
   }
 
   /* ============================ VIEW CHANGE HOOK ============================ */
   var VIEW_TITLES = {
     dashboard:'Dashboard',
-    captacao:'Captação de Editais',
+    pesquisas:'Pesquisas de Editais',
+    perguntarEditais:'Perguntar editais',
+    editaisProximos:'Editais próximos',
+    radarPncp:'Radar PNCP',
+    captacao:'Pesquisas de Editais',
     analiseIa:'Análise Inteligente de Editais',
     leiloesParticipo:'Leilão que Participo',
+    importarEdital:'Importar Edital (PDF)',
     orcamento:'Orçamento',
     cruzamento:'Cruzamento Inteligente (ML)',
     cofre:'Cofre de Documentos',
-    docsChecklist:'Documentos do Edital',
-    entregas:'Licitação',
-    histEntregas:'Histórico e Controle de Entregas',
+    docsChecklist:'Docs do Edital',
+    entregas:'Entrega',
+    histEntregas:'Histórico de Entregas',
     concorrencia:'Análise de Concorrência',
     catalogo:'Catálogo Interno',
     arp:'Atas de Registro (ARP)',

@@ -444,14 +444,14 @@
           openPanel();
           appendBot(
             "O Chat IA (Voiceflow) não carregou. " +
-              "Para editais, use Ferramentas → Suporte LICSYSTEM ou Captação → Perguntar editais."
+              "Para editais, use Ferramentas → Suporte LICSYSTEM ou Pesquisas de Editais → Perguntar editais."
           );
         }
       } catch (e) {
         ensurePanel();
         openPanel();
         appendBot(
-          "Não foi possível abrir o Chat IA agora. Use Captação → Perguntar editais para consultas PNCP."
+          "Não foi possível abrir o Chat IA agora. Use Pesquisas de Editais → Perguntar editais para consultas PNCP."
         );
       }
     }
@@ -499,7 +499,7 @@
         appendBot(
           "Não consegui consultar o PNCP agora (" +
             msg +
-            "). Tente de novo em instantes ou use Captação → Perguntar editais."
+            "). Tente de novo em instantes ou use Pesquisas de Editais → Perguntar editais."
         );
       })
       .then(function () {
