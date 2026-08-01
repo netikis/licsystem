@@ -54,6 +54,7 @@
       <button class="active" data-view="dashboard"><span class="ico">📊</span> Dashboard</button>
       <button data-view="captacao"><span class="ico">🎯</span> Captação</button>
       <button data-view="analiseIa"><span class="ico">🤖</span> Análise IA</button>
+      <button data-view="leiloesParticipo"><span class="ico">🏆</span> Leilão que Participo</button>
       <button data-view="orcamento"><span class="ico">🧮</span> Orçamento</button>
       <button data-view="cruzamento"><span class="ico">🔀</span> Cruzamento ML</button>
       <button data-view="cofre"><span class="ico">🔐</span> Cofre de Documentos</button>
@@ -390,6 +391,7 @@
                 <h3>Folha de Relatório</h3>
                 <div class="btn-row" style="margin:0">
                   <button type="button" class="btn btn-ghost btn-sm" id="btnIaDocs" disabled>📑 Documentos necessários</button>
+                  <button type="button" class="btn btn-gold btn-sm" id="btnIaParticipar" disabled>🏆 Vamos participar?</button>
                   <button type="button" class="btn btn-ghost btn-sm" id="btnIaCopiar" disabled>📋 Copiar Relatório</button>
                   <button type="button" class="btn btn-primary btn-sm" id="btnIaImprimir" disabled>🖨 Imprimir</button>
                 </div>
@@ -397,6 +399,27 @@
               <div id="iaReportSheet" class="ia-report-sheet ia-empty" aria-live="polite">
                 O relatório da análise aparecerá aqui após processar o edital.
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== LEILÃO QUE PARTICIPO ===================== -->
+      <section id="view-leiloesParticipo" class="view">
+        <div class="card">
+          <div class="card-head">
+            <h2>🏆 Leilão que Participo</h2>
+            <span class="tag">Pós Análise IA</span>
+          </div>
+          <div class="desc">
+            Editais em que você confirmou participação após a <b>Análise IA</b>.
+            Use <b>Vamos participar?</b> no relatório ou responda <b>SIM</b> após a lista de documentos.
+          </div>
+          <div id="leiloesAlert" class="alert"></div>
+          <div id="leiloesSummary" class="docs-summary"></div>
+          <div id="leiloesList" class="leiloes-list">
+            <div class="muted small" style="padding:18px;text-align:center">
+              Nenhum leilão marcado ainda. Analise um edital e confirme em <b>Vamos participar?</b>
             </div>
           </div>
         </div>
@@ -1162,6 +1185,19 @@
     <div class="btn-row">
       <button type="button" class="btn btn-ghost" id="btnDocsModalClose">Fechar</button>
       <button type="button" class="btn btn-gold" id="btnDocsModalGo">Ver o que tenho / Marcar OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: VAMOS PARTICIPAR? (pós Análise IA) ============ -->
+<div id="participarOverlay" aria-hidden="true">
+  <div class="docs-modal-card participar-modal-card" role="dialog" aria-modal="true" aria-labelledby="participarModalTitle">
+    <h3 id="participarModalTitle">🏆 Vamos participar?</h3>
+    <p id="participarModalLead">Deseja marcar este edital em <b>Leilão que Participo</b> para acompanhar a disputa?</p>
+    <div id="participarModalMeta" class="participar-meta"></div>
+    <div class="btn-row participar-actions">
+      <button type="button" class="btn btn-red" id="btnParticiparNao">NÃO</button>
+      <button type="button" class="btn btn-green" id="btnParticiparSim">SIM</button>
     </div>
   </div>
 </div>
