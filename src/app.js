@@ -897,6 +897,7 @@
   var DOCS_ACCORDION_KEY = "licsystem_docs_accordion_v1";
   var LEILOES_PARTICIPO_KEY = "licsystem_leiloes_participo_v1";
   var CLOUD_META_KEY = "licsystem_cloud_meta_v1";
+  var LAST_VIEW_KEY = "licsystem_last_view_v1";
   var CLOUD_LAST_UID_KEY = "licsystem_cloud_last_uid";
 
   /* ============================ CLOUD SYNC (Firebase RTDB per uid) ============================
@@ -7689,7 +7690,7 @@
   };
   LICSYSTEM.VIEW_TITLES = VIEW_TITLES;
 
-  LICSYSTEM.onViewChange = function(view){
+  LICSYSTEM.onViewChange = function(view, navKey){
     var prev = LICSYSTEM.state.currentView;
     view = view || "dashboard";
     // Ao sair do Orçamento: sincroniza inputs pendentes e grava (não limpa orcItems)
@@ -7697,6 +7698,7 @@
       try{ LICSYSTEM.orcamento.flushSave(); }catch(e){}
     }
     LICSYSTEM.state.currentView = view;
+    try{ localStorage.setItem(LAST_VIEW_KEY, navKey || view); }catch(e){}
     // Não remonta telas pesadas a cada clique no menu
     if(view==="dashboard"){
       if(!LICSYSTEM.state._dashReady){
@@ -9378,13 +9380,22 @@
       return map[code] || ((err && err.message) ? err.message : "Falha na autenticação.");
     },
 
+    beginChecking: function(){
+      document.body.classList.remove("auth-locked");
+      document.body.classList.add("auth-checking");
+      var btn = el("btnLogout");
+      if(btn) btn.style.display = "none";
+    },
+
     lock: function(){
+      document.body.classList.remove("auth-checking");
       document.body.classList.add("auth-locked");
       var btn = el("btnLogout");
       if(btn) btn.style.display = "none";
     },
 
     unlock: function(user){
+      document.body.classList.remove("auth-checking");
       document.body.classList.remove("auth-locked");
       LICSYSTEM.state.authUser = user || null;
       var email = (user && user.email) || "";
@@ -9483,10 +9494,12 @@
 
     start: function(onReady){
       LICSYSTEM.auth.wire();
-      LICSYSTEM.auth.lock();
+      // Não mostra login até o Firebase dizer se há sessão (evita flash no F5)
+      LICSYSTEM.auth.beginChecking();
       LICSYSTEM.auth._onReady = onReady;
 
       if(!utils.hasFirebaseConfig()){
+        LICSYSTEM.auth.lock();
         showAlert("authAlert","warn",
           "Firebase local sem chaves. Crie/atualize o <b>.env</b> e reinicie <code>npm run dev</code>."
         );
@@ -9571,6 +9584,14 @@
       LICSYSTEM.docsChecklist.load();
       LICSYSTEM.leiloesParticipo.load();
       LICSYSTEM.entregas.load();
+      // Restaura última tela após F5 (localStorage)
+      var lastView = "dashboard";
+      try{ lastView = localStorage.getItem(LAST_VIEW_KEY) || "dashboard"; }catch(e){}
+      if(lastView && lastView !== "dashboard" && typeof window.__lsActivateView === "function"){
+        window.__lsActivateView(lastView);
+      } else {
+        LICSYSTEM.state.currentView = "dashboard";
+      }
       // Orçamento só monta quando abrir a aba (planilha grande)
       setTimeout(function(){
         LICSYSTEM.ferramentas.getPerfil(true).catch(function(){});

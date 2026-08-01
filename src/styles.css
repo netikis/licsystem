@@ -125,7 +125,8 @@
   }
   #sidebar-overlay.show{opacity:1;pointer-events:auto}
   /* ---------- Auth gate ---------- */
-  body.auth-locked #app{visibility:hidden;pointer-events:none}
+  body.auth-locked #app,
+  body.auth-checking #app{visibility:hidden;pointer-events:none}
   #authGate{
     display:none;position:fixed;inset:0;z-index:9999;
     align-items:center;justify-content:center;padding:24px;
@@ -134,7 +135,24 @@
       radial-gradient(ellipse 70% 50% at 90% 80%, rgba(36,64,107,.45), transparent 50%),
       linear-gradient(160deg, #0f1a2e 0%, var(--ls-navy) 45%, #1a2f4d 100%);
   }
-  body.auth-locked #authGate{display:flex}
+  body.auth-locked #authGate,
+  body.auth-checking #authGate{display:flex}
+  /* Enquanto o Firebase restaura a sessão: spinner, sem formulário de login */
+  body.auth-checking .auth-card{display:none}
+  body.auth-checking #authChecking{display:flex}
+  body.auth-locked #authChecking{display:none}
+  #authChecking{display:none}
+  .auth-checking-panel{
+    width:100%;max-width:420px;background:#fff;border-radius:18px;
+    box-shadow:var(--shadow-lg);padding:32px 28px 26px;color:var(--ls-text);
+    flex-direction:column;align-items:flex-start;
+  }
+  .auth-checking-spinner{
+    width:28px;height:28px;margin-top:8px;border-radius:50%;
+    border:3px solid #e5e7eb;border-top-color:var(--ls-navy);
+    animation:authSpin .7s linear infinite;
+  }
+  @keyframes authSpin{to{transform:rotate(360deg)}}
   .auth-card{
     width:100%;max-width:420px;background:#fff;border-radius:18px;
     box-shadow:var(--shadow-lg);padding:32px 28px 26px;color:var(--ls-text);
