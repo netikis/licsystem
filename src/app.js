@@ -4289,19 +4289,41 @@
 
     COLLAPSE_KEY: "licsystem_captacao_collapse_v1",
 
+    PESQUISAS_CARD_IDS: [
+      "cardChatEditais",
+      "cardProxEditais",
+      "cardRadarPncp"
+    ],
+
+    collapseSummaryIdForKey: function (key) {
+      if (key === "prox-editais") return "proxCollapseSummary";
+      if (key === "radar-pncp") return "radarCollapseSummary";
+      return "chatCollapseSummary";
+    },
+
     updateCollapseSummary: function (which, text) {
-      var id = which === "prox" ? "proxCollapseSummary" : "chatCollapseSummary";
+      var id =
+        which === "prox"
+          ? "proxCollapseSummary"
+          : which === "radar"
+            ? "radarCollapseSummary"
+            : "chatCollapseSummary";
       var sum = el(id);
       if (!sum) return;
       sum.textContent = text || "";
       var card =
-        which === "prox" ? el("cardProxEditais") : el("cardChatEditais");
+        which === "prox"
+          ? el("cardProxEditais")
+          : which === "radar"
+            ? el("cardRadarPncp")
+            : el("cardChatEditais");
       var collapsed = card && card.classList.contains("is-collapsed");
       sum.hidden = !collapsed || !text;
     },
 
-    applyCardCollapse: function (card, collapsed) {
+    applyCardCollapse: function (card, collapsed, opts) {
       if (!card) return;
+      opts = opts || {};
       var btn = card.querySelector(".card-collapse-btn");
       var key = card.getAttribute("data-collapse-key");
       card.classList.toggle("is-collapsed", !!collapsed);
@@ -4310,12 +4332,12 @@
         btn.textContent = collapsed ? "▸ Expandir" : "▾ Minimizar";
         btn.title = collapsed ? "Expandir painel" : "Minimizar painel";
       }
-      var sumId =
-        key === "prox-editais" ? "proxCollapseSummary" : "chatCollapseSummary";
+      var sumId = LICSYSTEM.captacao.collapseSummaryIdForKey(key);
       var sum = el(sumId);
       if (sum) {
         sum.hidden = !collapsed || !String(sum.textContent || "").trim();
       }
+      if (opts.skipPersist) return;
       try {
         var store = JSON.parse(
           localStorage.getItem(LICSYSTEM.captacao.COLLAPSE_KEY) || "{}"
@@ -4328,21 +4350,30 @@
       } catch (e) {}
     },
 
+    /** Force all Pesquisas cards minimized (F5 / parent view). */
+    minimizeAllPesquisasCards: function () {
+      LICSYSTEM.captacao.PESQUISAS_CARD_IDS.forEach(function (id) {
+        LICSYSTEM.captacao.applyCardCollapse(el(id), true, {
+          skipPersist: true
+        });
+      });
+    },
+
+    /** Expand one card for submenu use; keep siblings minimized. */
+    expandPesquisasCard: function (cardId) {
+      LICSYSTEM.captacao.PESQUISAS_CARD_IDS.forEach(function (id) {
+        LICSYSTEM.captacao.applyCardCollapse(el(id), id !== cardId, {
+          skipPersist: true
+        });
+      });
+    },
+
     initCardCollapse: function () {
-      var store = {};
-      try {
-        store = JSON.parse(
-          localStorage.getItem(LICSYSTEM.captacao.COLLAPSE_KEY) || "{}"
-        );
-      } catch (e) {
-        store = {};
-      }
-      ["cardChatEditais", "cardProxEditais"].forEach(function (id) {
+      // Always start minimized on load — ignore prior expanded localStorage.
+      LICSYSTEM.captacao.PESQUISAS_CARD_IDS.forEach(function (id) {
         var card = el(id);
         if (!card) return;
-        var key = card.getAttribute("data-collapse-key");
-        var collapsed = !!(key && store[key]);
-        LICSYSTEM.captacao.applyCardCollapse(card, collapsed);
+        LICSYSTEM.captacao.applyCardCollapse(card, true);
         var btn = card.querySelector(".card-collapse-btn");
         if (btn && !btn._collapseWired) {
           btn._collapseWired = true;

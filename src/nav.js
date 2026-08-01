@@ -33,6 +33,15 @@
         if(show) card.removeAttribute("hidden");
         else card.setAttribute("hidden", "");
       }
+      try{
+        var cap = window.LICSYSTEM && LICSYSTEM.captacao;
+        if(!cap) return;
+        if(sectionId && typeof cap.expandPesquisasCard === "function"){
+          cap.expandPesquisasCard(sectionId);
+        }else if(typeof cap.minimizeAllPesquisasCards === "function"){
+          cap.minimizeAllPesquisasCards();
+        }
+      }catch(e){}
     }
     function clearActionActive(){
       var actions = document.querySelectorAll("#nav button[data-ls-action]");
