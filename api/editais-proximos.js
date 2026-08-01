@@ -40,6 +40,8 @@ try {
   queryLib = null;
 }
 
+var LEILAO_MODALIDADES =
+  (queryLib && queryLib.LEILAO_MODALIDADES) || [1, 13]; // Leilão Eletrônico / Presencial
 var resolveJanela = queryLib && queryLib.resolveJanela;
 var fetchPropostasUfRobusto =
   queryLib && queryLib.fetchPropostasUfRobusto;
@@ -489,10 +491,36 @@ module.exports = async function handler(req, res) {
         return fold(s).trim();
       })
       .filter(Boolean);
+    if (queryLib && queryLib.expandLeilaoKeywords) {
+      keywords = queryLib.expandLeilaoKeywords(keywords);
+      var kwSeen = Object.create(null);
+      keywords = keywords.filter(function (k) {
+        if (!k || kwSeen[k]) return false;
+        kwSeen[k] = true;
+        return true;
+      });
+    }
 
     var modalidades = DEFAULT_MODALIDADES.slice();
     if (String(q.extra || "") === "1" || String(q.ampliar || "") === "1") {
       modalidades = DEFAULT_MODALIDADES.concat(EXTRA_MODALIDADES);
+    }
+    var leiloesFlag =
+      String(q.leiloes || q.incluirLeiloes || "") === "1" ||
+      String(q.leiloes || q.incluirLeiloes || "").toLowerCase() === "true";
+    var querLeilao =
+      leiloesFlag ||
+      (queryLib &&
+        queryLib.looksLikeLeilaoText &&
+        queryLib.looksLikeLeilaoText(keywords.join(" ")));
+    if (querLeilao) {
+      modalidades = modalidades.concat(LEILAO_MODALIDADES);
+      var modSeenProx = Object.create(null);
+      modalidades = modalidades.filter(function (m) {
+        if (modSeenProx[m]) return false;
+        modSeenProx[m] = true;
+        return true;
+      });
     }
 
     /* dataFinal = limite do encerramento da proposta no PNCP (não "hoje"). */
@@ -671,10 +699,13 @@ module.exports = async function handler(req, res) {
 
       var objeto = fold(o.objetoCompra || o.objeto || "");
       if (keywords.length) {
-        var hit = keywords.some(function (k) {
-          return objeto.indexOf(k) !== -1;
-        });
-        if (!hit) continue;
+        var hitKw =
+          queryLib && queryLib.keywordMatchesObjeto
+            ? queryLib.keywordMatchesObjeto(objeto, keywords)
+            : keywords.some(function (k) {
+                return objeto.indexOf(k) !== -1;
+              });
+        if (!hitKw) continue;
       }
 
       results.push(mapItem(o, dist));
@@ -694,8 +725,13 @@ module.exports = async function handler(req, res) {
         dataFinal +
         ").",
       "Para janela anual o dataFinal é limitado ao ano civil corrente (o PNCP costuma falhar com horizonte rolling 365 dias no ano seguinte).",
-      "Por padrão consulta Pregão Eletrônico (mod. 6); use ampliar=1 para incluir concorrência/pregão presencial.",
+      querLeilao
+        ? "Modalidades: " +
+          modalidades.join(", ") +
+          " (inclui Leilão Eletrônico/Presencial)."
+        : "Por padrão consulta Pregão Eletrônico (mod. 6); use ampliar=1 para concorrência/pregão presencial; leiloes=1 ou termos de leilão/veículo/sucata incluem mods 1 e 13.",
       "Distância pelo município da unidade do órgão (IBGE). Editais só em portais locais (fora do PNCP) não aparecem.",
+      "Leilões de veículos/sucata muitas vezes circulam em sites especializados e podem não estar no PNCP.",
       "Raio máximo: " + MAX_RAIO_KM + " km (padrão " + DEFAULT_RAIO_KM + " km).",
     ];
     if (coberturaPrSp) {

@@ -10,6 +10,7 @@
  *   categoria              reforma,comida,cestas,cafe,natal,eletro (vírgula)
  *   q | keywords           palavras-chave extras (vírgula)
  *   ampliar=1              inclui concorrência / pregão presencial
+ *   leiloes=1              inclui Leilão Eletrônico (1) e Presencial (13)
  *   janela                 "ano" (padrão, ~365 dias) | "45"
  *   esferas                M,E (default) ou M,E,F
  *   limite                 máx. itens (default 80)
@@ -73,6 +74,12 @@ function mergeOpts(query, body) {
     categoria: b.categoria || b.categorias || q.categoria || q.categorias,
     q: b.q || b.keywords || q.q || q.keywords,
     ampliar: b.ampliar != null ? b.ampliar : b.extra != null ? b.extra : q.ampliar || q.extra,
+    leiloes:
+      b.leiloes != null
+        ? b.leiloes
+        : b.incluirLeiloes != null
+          ? b.incluirLeiloes
+          : q.leiloes || q.incluirLeiloes,
     esferas: b.esferas || q.esferas,
     limite: b.limite || b.limit || q.limite || q.limit,
     paginas: b.paginas || b.pages || q.paginas || q.pages,

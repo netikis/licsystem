@@ -139,6 +139,7 @@ module.exports = async function handler(req, res) {
       categoria: body.categoria || body.categorias,
       q: body.keywords,
       ampliar: body.ampliar || body.extra,
+      leiloes: body.leiloes || body.incluirLeiloes,
       esferas: body.esferas,
       limite: body.limite || body.limit,
       municipio: body.municipio,
