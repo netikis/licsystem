@@ -52,15 +52,42 @@
     </div>
     <nav id="nav">
       <button class="active" data-view="dashboard"><span class="ico">📊</span> Dashboard</button>
-      <button data-view="captacao"><span class="ico">🎯</span> Captação</button>
+
+      <div class="nav-group" data-nav-group="pesquisas">
+        <button type="button" class="nav-parent" data-view="pesquisas" data-nav-toggle="pesquisas" aria-expanded="false">
+          <span class="ico">🔎</span><span class="nav-label">Pesquisas de Editais</span><span class="nav-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="nav-children" role="group" aria-label="Pesquisas de Editais" hidden>
+          <button type="button" data-view="perguntarEditais"><span class="ico">💬</span> Perguntar editais</button>
+          <button type="button" data-view="editaisProximos"><span class="ico">📍</span> Editais próximos</button>
+          <button type="button" data-view="radarPncp"><span class="ico">📡</span> Radar PNCP</button>
+        </div>
+      </div>
+
       <button data-view="analiseIa"><span class="ico">🤖</span> Análise IA</button>
-      <button data-view="leiloesParticipo"><span class="ico">🏆</span> Leilão que Participo</button>
-      <button data-view="orcamento"><span class="ico">🧮</span> Orçamento</button>
-      <button data-view="cruzamento"><span class="ico">🔀</span> Cruzamento ML</button>
+
+      <div class="nav-group" data-nav-group="leilao">
+        <button type="button" class="nav-parent" data-view="leiloesParticipo" data-nav-toggle="leilao" aria-expanded="false">
+          <span class="ico">🏆</span><span class="nav-label">Leilão que Participo</span><span class="nav-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="nav-children" role="group" aria-label="Leilão que Participo" hidden>
+          <button type="button" data-view="docsChecklist"><span class="ico">✅</span> Docs do Edital</button>
+          <button type="button" data-view="importarEdital"><span class="ico">📥</span> Importar Edital (PDF)</button>
+          <button type="button" data-view="orcamento"><span class="ico">🧮</span> Orçamento</button>
+          <button type="button" data-view="cruzamento"><span class="ico">🔀</span> Cruzamento ML</button>
+        </div>
+      </div>
+
+      <div class="nav-group" data-nav-group="entrega">
+        <button type="button" class="nav-parent" data-view="entregas" data-nav-toggle="entrega" aria-expanded="false">
+          <span class="ico">🚚</span><span class="nav-label">Entrega</span><span class="nav-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="nav-children" role="group" aria-label="Entrega" hidden>
+          <button type="button" data-view="histEntregas"><span class="ico">📦</span> Histórico de Entregas</button>
+        </div>
+      </div>
+
       <button data-view="cofre"><span class="ico">🔐</span> Cofre de Documentos</button>
-      <button data-view="docsChecklist"><span class="ico">✅</span> Docs do Edital</button>
-      <button data-view="entregas"><span class="ico">🚚</span> Licitação</button>
-      <button data-view="histEntregas"><span class="ico">📦</span> Histórico Entregas</button>
       <button data-view="concorrencia"><span class="ico">🔎</span> Concorrência</button>
       <button data-view="catalogo"><span class="ico">📚</span> Catálogo</button>
       <button data-view="arp"><span class="ico">📄</span> Atas de Registro</button>
@@ -126,13 +153,13 @@
             <h2>Radar de Oportunidades</h2>
             <span class="tag" id="pncpTag">PNCP</span>
           </div>
-          <div class="desc">Alertas de novas contratações capturados no Radar PNCP (aba Captação).</div>
-          <div id="dashPncpList" class="small muted">Nenhuma oportunidade capturada ainda. Use o Radar PNCP em <b>Captação</b>.</div>
+          <div class="desc">Alertas de novas contratações capturados no Radar PNCP (Pesquisas de Editais).</div>
+          <div id="dashPncpList" class="small muted">Nenhuma oportunidade capturada ainda. Use o Radar PNCP em <b>Pesquisas de Editais</b>.</div>
         </div>
       </section>
 
-      <!-- ===================== CAPTAÇÃO ===================== -->
-      <section id="view-captacao" class="view">
+      <!-- ===================== PESQUISAS DE EDITAIS ===================== -->
+      <section id="view-pesquisas" class="view">
         <!-- Perguntar editais (chat helper — PNCP) -->
         <div class="card" id="cardChatEditais" data-collapse-key="chat-editais">
           <div class="card-head">
@@ -144,12 +171,6 @@
             <button type="button" class="btn btn-ghost btn-sm card-collapse-btn" id="btnCollapseChat" aria-expanded="true" aria-controls="chatCardBody" title="Minimizar painel">▾ Minimizar</button>
           </div>
           <div class="card-collapsible-body" id="chatCardBody">
-            <div class="desc">
-              Pergunte em português ou use os atalhos. Lista propostas com encerramento no
-              <b>horizonte anual</b> (~12 meses) no PNCP (município ou
-              <b>Norte Pioneiro do Paraná</b> — 26 municípios). Alternativa: janela de 45 dias.
-              Em <b>Ferramentas → Suporte LICSYSTEM</b> (menu lateral) usa a mesma API (<code>/api/editais-chat</code>).
-            </div>
             <div id="chatEditalAlert" class="alert"></div>
             <div class="form-row">
               <div style="flex:2;min-width:220px">
@@ -214,12 +235,6 @@
             <button type="button" class="btn btn-ghost btn-sm card-collapse-btn" id="btnCollapseProx" aria-expanded="true" aria-controls="proxCardBody" title="Minimizar painel">▾ Minimizar</button>
           </div>
           <div class="card-collapsible-body" id="proxCardBody">
-            <div class="desc">
-              Informe o município de origem e busque propostas com encerramento no
-              <b>horizonte anual</b> (municipais e estaduais) no PNCP dentro do raio
-              (até 700 km). Use a cobertura <b>Paraná + divisas SP</b> para cobrir o estado
-              inteiro e a fronteira com São Paulo. Distância pelo município do órgão (IBGE).
-            </div>
             <div id="proxAlert" class="alert"></div>
             <div class="form-row">
               <div style="flex:2;min-width:200px">
@@ -287,9 +302,8 @@
         </div>
 
         <!-- Radar PNCP -->
-        <div class="card">
+        <div class="card" id="cardRadarPncp">
           <div class="card-head"><h2>📡 Radar PNCP</h2><span class="tag">API Pública</span></div>
-          <div class="desc">Busque contratações publicadas no Portal Nacional de Contratações Públicas por UF e palavras-chave.</div>
           <div id="pncpAlert" class="alert"></div>
           <div class="form-row">
             <div style="flex:2">
@@ -305,52 +319,6 @@
             </div>
           </div>
           <div id="pncpResults"></div>
-        </div>
-
-        <!-- Importação de Edital PDF -->
-        <div class="card">
-          <div class="card-head"><h2>📥 Importar Edital (PDF)</h2></div>
-          <div class="desc">Extraia e filtre os itens do edital diretamente do PDF.</div>
-          <div class="form-row">
-            <div style="flex:2">
-              <label class="fld">Arquivo PDF do edital</label>
-              <input type="file" id="pdfFile" accept="application/pdf" />
-            </div>
-            <div style="flex:2">
-              <label class="fld">Palavras-chave (filtro, separadas por vírgula)</label>
-              <input type="text" id="pdfKeywords" placeholder="ex.: parafuso, tinta, cabo" />
-            </div>
-          </div>
-          <div class="btn-row">
-            <button class="btn btn-primary" id="btnExtrair">📄 Extrair texto e filtrar</button>
-            <button class="btn btn-ghost" id="btnMostrarTudo">Mostrar todas as linhas</button>
-            <button class="btn btn-ghost" id="btnGoogleSel">🔎 Pesquisar selecionados no Google</button>
-            <button class="btn btn-gold" id="btnExportCaptacao">⬇️ Exportar selecionados (PDF)</button>
-            <button class="btn btn-green" id="btnParaOrcamento">➡️ Enviar p/ Orçamento</button>
-          </div>
-          <div id="pdfStatus" class="alert"></div>
-          <div class="tbl-wrap" style="margin-top:12px">
-            <table id="captacaoTable">
-              <thead>
-                <tr>
-                  <th style="width:36px"><input type="checkbox" id="capCheckAll" /></th>
-                  <th style="width:60px">#</th>
-                  <th>Item / Descrição</th>
-                  <th style="width:150px">Ações</th>
-                </tr>
-              </thead>
-              <tbody id="captacaoBody">
-                <tr><td colspan="4" class="muted" style="text-align:center;padding:24px">Nenhum item extraído. Selecione um PDF e clique em "Extrair texto e filtrar".</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="pager" id="capPager" style="display:none">
-            <div class="pager-info" id="capPagerInfo"></div>
-            <div class="pager-btns">
-              <button type="button" class="btn btn-ghost btn-sm" id="capPrev">← Anterior</button>
-              <button type="button" class="btn btn-ghost btn-sm" id="capNext">Próxima →</button>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -420,6 +388,53 @@
           <div id="leiloesList" class="leiloes-list">
             <div class="muted small" style="padding:18px;text-align:center">
               Nenhum leilão marcado ainda. Analise um edital e confirme em <b>Vamos participar?</b>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== IMPORTAR EDITAL (PDF) ===================== -->
+      <section id="view-importarEdital" class="view">
+        <div class="card">
+          <div class="card-head"><h2>📥 Importar Edital (PDF)</h2></div>
+          <div class="form-row">
+            <div style="flex:2">
+              <label class="fld">Arquivo PDF do edital</label>
+              <input type="file" id="pdfFile" accept="application/pdf" />
+            </div>
+            <div style="flex:2">
+              <label class="fld">Palavras-chave (filtro, separadas por vírgula)</label>
+              <input type="text" id="pdfKeywords" placeholder="ex.: parafuso, tinta, cabo" />
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="btnExtrair">📄 Extrair texto e filtrar</button>
+            <button class="btn btn-ghost" id="btnMostrarTudo">Mostrar todas as linhas</button>
+            <button class="btn btn-ghost" id="btnGoogleSel">🔎 Pesquisar selecionados no Google</button>
+            <button class="btn btn-gold" id="btnExportCaptacao">⬇️ Exportar selecionados (PDF)</button>
+            <button class="btn btn-green" id="btnParaOrcamento">➡️ Enviar p/ Orçamento</button>
+          </div>
+          <div id="pdfStatus" class="alert"></div>
+          <div class="tbl-wrap" style="margin-top:12px">
+            <table id="captacaoTable">
+              <thead>
+                <tr>
+                  <th style="width:36px"><input type="checkbox" id="capCheckAll" /></th>
+                  <th style="width:60px">#</th>
+                  <th>Item / Descrição</th>
+                  <th style="width:150px">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="captacaoBody">
+                <tr><td colspan="4" class="muted" style="text-align:center;padding:24px">Nenhum item extraído. Selecione um PDF e clique em "Extrair texto e filtrar".</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager" id="capPager" style="display:none">
+            <div class="pager-info" id="capPagerInfo"></div>
+            <div class="pager-btns">
+              <button type="button" class="btn btn-ghost btn-sm" id="capPrev">← Anterior</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="capNext">Próxima →</button>
             </div>
           </div>
         </div>
@@ -611,7 +626,7 @@
       <section id="view-entregas" class="view">
         <div class="card">
           <div class="card-head">
-            <h2>🚚 Controle de Entrega de Licitações</h2>
+            <h2>🚚 Entrega</h2>
             <button type="button" class="btn btn-gold btn-sm" id="btnNovaEntrega">+ Nova Entrega</button>
           </div>
           <div class="desc">Registre empenho, nota fiscal, anexos e destinação logística. Dados locais por enquanto — prontos para Firebase Storage / Firestore.</div>
