@@ -894,11 +894,12 @@
   var ORC_KEY_LEGACY = "licsystem_orcamento_v1";
   var COFRE_KEY = "licsystem_cofre_v1";
   var DOCS_CHECKLIST_KEY = "licsystem_docs_checklist_v1";
+  var LEILOES_PARTICIPO_KEY = "licsystem_leiloes_participo_v1";
   var CLOUD_META_KEY = "licsystem_cloud_meta_v1";
   var CLOUD_LAST_UID_KEY = "licsystem_cloud_last_uid";
 
   /* ============================ CLOUD SYNC (Firebase RTDB per uid) ============================
-   * Paths: users/{uid}/orcamento|catalogo|cofre|docsChecklist|arp|entregas|histEntregas
+   * Paths: users/{uid}/orcamento|catalogo|cofre|docsChecklist|leiloesParticipo|arp|entregas|histEntregas
    * Envelope: { updatedAt:ms, cleared?:bool, writeId?:string, data:... }
    * Merge: newest updatedAt wins; empty local never overwrites cloud unless Limpar (cleared).
    * Live: after login, onValue listeners apply newer remote envelopes without re-login.
@@ -913,7 +914,7 @@
   LICSYSTEM.cloudSync = {
     DEBOUNCE_MS: 900,
     REMOTE_DEFER_MS: 700,
-    KEYS: ["orcamento", "catalogo", "cofre", "docsChecklist", "arp", "entregas", "histEntregas"],
+    KEYS: ["orcamento", "catalogo", "cofre", "docsChecklist", "leiloesParticipo", "arp", "entregas", "histEntregas"],
     _uid: null,
     _onlineWired: false,
     _pulling: false,
@@ -1082,6 +1083,11 @@
           if(dchk == null) return null;
           return { updatedAt: this.metaTs("docsChecklist"), data: dchk && typeof dchk === "object" ? dchk : {} };
         }
+        if(key === "leiloesParticipo"){
+          var lp = JSON.parse(localStorage.getItem(LEILOES_PARTICIPO_KEY) || "null");
+          if(lp == null) return null;
+          return { updatedAt: this.metaTs("leiloesParticipo"), data: Array.isArray(lp) ? lp : [] };
+        }
         if(key === "arp"){
           var arp = JSON.parse(localStorage.getItem("licsystem_arp_v1") || "null");
           if(arp == null) return null;
@@ -1176,6 +1182,15 @@
           );
         }
         this.touchMeta("docsChecklist", ts);
+        return;
+      }
+      if(key === "leiloesParticipo"){
+        if(LICSYSTEM.leiloesParticipo){
+          LICSYSTEM.leiloesParticipo.applyData(Array.isArray(data) ? data : [], { skipPersist: false });
+        } else {
+          try{ localStorage.setItem(LEILOES_PARTICIPO_KEY, JSON.stringify(Array.isArray(data) ? data : [])); }catch(e){}
+        }
+        this.touchMeta("leiloesParticipo", ts);
         return;
       }
       if(key === "arp"){
@@ -6449,11 +6464,19 @@
       LICSYSTEM.docsChecklist._pendingDocs = arr;
     },
 
-    closeModal: function(){
+    closeModal: function(opts){
+      opts = opts || {};
       var ov = el("docsOverlay");
       if(!ov) return;
+      var wasOpen = ov.classList.contains("open");
       ov.classList.remove("open");
       ov.setAttribute("aria-hidden", "true");
+      if(wasOpen && !opts.skipParticiparAsk && LICSYSTEM.analiseIa && LICSYSTEM.analiseIa._pendingParticiparAsk){
+        LICSYSTEM.analiseIa._pendingParticiparAsk = false;
+        setTimeout(function(){
+          try{ LICSYSTEM.leiloesParticipo.showParticiparModal(); }catch(e){}
+        }, 180);
+      }
     },
 
     goFromModal: function(){
@@ -6469,6 +6492,371 @@
       LICSYSTEM.docsChecklist.closeModal();
       if(window.__lsActivateView) window.__lsActivateView("docsChecklist");
       else LICSYSTEM.docsChecklist.render();
+    }
+  };
+
+  /* ============================ LEILÃO QUE PARTICIPO ============================ */
+  LICSYSTEM.leiloesParticipo = {
+    items: [],
+
+    load: function(){
+      try{
+        var raw = JSON.parse(localStorage.getItem(LEILOES_PARTICIPO_KEY) || "null");
+        LICSYSTEM.leiloesParticipo.applyData(Array.isArray(raw) ? raw : [], { skipPersist: true });
+      }catch(e){
+        LICSYSTEM.leiloesParticipo.items = [];
+      }
+    },
+
+    applyData: function(list, opts){
+      opts = opts || {};
+      var arr = Array.isArray(list) ? list : [];
+      LICSYSTEM.leiloesParticipo.items = arr.map(function(it, i){
+        return LICSYSTEM.leiloesParticipo.normalizeItem(it, i);
+      });
+      if(!opts.skipPersist){
+        try{ localStorage.setItem(LEILOES_PARTICIPO_KEY, JSON.stringify(LICSYSTEM.leiloesParticipo.items)); }catch(e){}
+      }
+      if(LICSYSTEM.state.currentView === "leiloesParticipo"){
+        try{ LICSYSTEM.leiloesParticipo.render(); }catch(e){}
+      }
+    },
+
+    normalizeItem: function(it, idx){
+      it = it || {};
+      var docs = Array.isArray(it.documentosExigidos) ? it.documentosExigidos : [];
+      return {
+        id: String(it.id || ("lp_" + Date.now() + "_" + (idx || 0))),
+        titulo: String(it.titulo || it.editalNome || "Edital").trim().slice(0, 220),
+        orgao: String(it.orgao || "").trim().slice(0, 220),
+        municipio: String(it.municipio || "").trim().slice(0, 120),
+        filename: String(it.filename || "").trim().slice(0, 220),
+        dataAnalise: Number(it.dataAnalise || it.createdAt || Date.now()) || Date.now(),
+        resumo: String(it.resumo || it.analysisSnippet || "").trim().slice(0, 600),
+        analysisSnippet: String(it.analysisSnippet || it.resumo || "").trim().slice(0, 600),
+        documentosExigidos: docs.map(function(d, i){
+          return {
+            nome: String(d.nome || "Documento").trim().slice(0, 220),
+            tipo: String(d.tipo || "outro").slice(0, 40),
+            obs: String(d.obs || "").trim().slice(0, 400)
+          };
+        }).slice(0, 80),
+        status: (it.status === "arquivado") ? "arquivado" : "participando",
+        createdAt: Number(it.createdAt || it.dataAnalise || Date.now()) || Date.now(),
+        updatedAt: Number(it.updatedAt || Date.now()) || Date.now()
+      };
+    },
+
+    persist: function(opts){
+      opts = opts || {};
+      var ts = Date.now();
+      try{
+        localStorage.setItem(LEILOES_PARTICIPO_KEY, JSON.stringify(LICSYSTEM.leiloesParticipo.items));
+      }catch(e){}
+      if(!opts.skipCloud && LICSYSTEM.cloudSync){
+        LICSYSTEM.cloudSync.notifyLocalChange("leiloesParticipo", {
+          updatedAt: ts,
+          immediate: !!opts.immediate
+        });
+      }
+    },
+
+    extractMetaFromReport: function(md){
+      var text = String(md || "");
+      var out = { orgao: "", municipio: "", resumo: "" };
+      if(!text.trim()) return out;
+
+      function grab(re){
+        var m = text.match(re);
+        return m && m[1] ? String(m[1]).replace(/\*\*/g, "").replace(/`/g, "").trim() : "";
+      }
+
+      out.orgao = grab(/(?:[Oo]rg[aã]o|[Ee]ntidade|[Pp]refeitura|[Uu]nidade\s+[Gg]estora)\s*[:\-–]\s*([^\n|]{3,120})/);
+      out.municipio = grab(/(?:[Mm]unic[ií]pio|[Cc]idade|[Ll]ocalidade)\s*[:\-–]\s*([^\n|]{2,80})/);
+      if(!out.municipio){
+        var mun2 = text.match(/\b([A-ZÁÉÍÓÚÂÊÔÃÕÇ][A-Za-zÁÉÍÓÚÂÊÔÃÕÇáéíóúâêôãõç ]{2,40})\s*\/\s*(AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)\b/);
+        if(mun2) out.municipio = (mun2[1] + "/" + mun2[2]).trim();
+      }
+
+      // Resumo: preferseção "Resumo Simples", senão primeiros ~280 chars úteis
+      var resumoSec = text.match(/(?:#{1,4}\s*)?(?:\d+\.\s*)?Resumo\s+Simples[\s\S]{0,40}?([\s\S]{40,500}?)(?=\n#{1,4}\s|\n```|\n\*\*Alerta|\n---|\s*$)/i);
+      if(resumoSec && resumoSec[1]){
+        out.resumo = resumoSec[1]
+          .replace(/^[-*•]\s+/gm, "")
+          .replace(/\*\*/g, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 400);
+      } else {
+        out.resumo = text
+          .replace(/```[\s\S]*?```/g, " ")
+          .replace(/#{1,6}\s*/g, "")
+          .replace(/\*\*/g, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 280);
+      }
+      return out;
+    },
+
+    buildFromAnalysis: function(){
+      var filename = (LICSYSTEM.analiseIa.file && LICSYSTEM.analiseIa.file.name) || "";
+      var docs = LICSYSTEM.analiseIa.documentosExigidos || [];
+      if(!docs.length && LICSYSTEM.docsChecklist && LICSYSTEM.docsChecklist.data){
+        docs = LICSYSTEM.docsChecklist.data.documentos || [];
+      }
+      var parsed = LICSYSTEM.leiloesParticipo.extractMetaFromReport(LICSYSTEM.analiseIa.relatorioMd || "");
+      var titulo =
+        parsed.orgao ||
+        (LICSYSTEM.docsChecklist && LICSYSTEM.docsChecklist.data && LICSYSTEM.docsChecklist.data.editalNome) ||
+        (filename ? filename.replace(/\.pdf$/i, "") : "") ||
+        "Edital analisado";
+      return {
+        titulo: titulo,
+        orgao: parsed.orgao || "",
+        municipio: parsed.municipio || "",
+        filename: filename || (LICSYSTEM.docsChecklist && LICSYSTEM.docsChecklist.data && LICSYSTEM.docsChecklist.data.filename) || "",
+        dataAnalise: Date.now(),
+        resumo: parsed.resumo || "",
+        analysisSnippet: parsed.resumo || "",
+        documentosExigidos: docs,
+        status: "participando"
+      };
+    },
+
+    findDuplicate: function(entry){
+      var fn = String(entry.filename || "").toLowerCase();
+      var tit = String(entry.titulo || "").toLowerCase();
+      for(var i = 0; i < LICSYSTEM.leiloesParticipo.items.length; i++){
+        var it = LICSYSTEM.leiloesParticipo.items[i];
+        if(it.status === "arquivado") continue;
+        if(fn && String(it.filename || "").toLowerCase() === fn) return it;
+        if(tit && String(it.titulo || "").toLowerCase() === tit) return it;
+      }
+      return null;
+    },
+
+    addFromAnalysis: function(){
+      if(!(LICSYSTEM.analiseIa && LICSYSTEM.analiseIa.relatorioMd)){
+        showAlert("iaAlert", "warn", "Analise um edital antes de confirmar participação.");
+        return null;
+      }
+      var draft = LICSYSTEM.leiloesParticipo.buildFromAnalysis();
+      var dup = LICSYSTEM.leiloesParticipo.findDuplicate(draft);
+      var now = Date.now();
+      if(dup){
+        dup.titulo = draft.titulo;
+        dup.orgao = draft.orgao || dup.orgao;
+        dup.municipio = draft.municipio || dup.municipio;
+        dup.filename = draft.filename || dup.filename;
+        dup.dataAnalise = now;
+        dup.resumo = draft.resumo || dup.resumo;
+        dup.analysisSnippet = draft.analysisSnippet || dup.analysisSnippet;
+        dup.documentosExigidos = draft.documentosExigidos;
+        dup.status = "participando";
+        dup.updatedAt = now;
+        LICSYSTEM.leiloesParticipo.persist({ immediate: true });
+        LICSYSTEM.leiloesParticipo.render();
+        return dup;
+      }
+      var item = LICSYSTEM.leiloesParticipo.normalizeItem({
+        id: "lp_" + now + "_" + Math.random().toString(36).slice(2, 7),
+        titulo: draft.titulo,
+        orgao: draft.orgao,
+        municipio: draft.municipio,
+        filename: draft.filename,
+        dataAnalise: now,
+        resumo: draft.resumo,
+        analysisSnippet: draft.analysisSnippet,
+        documentosExigidos: draft.documentosExigidos,
+        status: "participando",
+        createdAt: now,
+        updatedAt: now
+      });
+      LICSYSTEM.leiloesParticipo.items.unshift(item);
+      LICSYSTEM.leiloesParticipo.persist({ immediate: true });
+      LICSYSTEM.leiloesParticipo.render();
+      return item;
+    },
+
+    archive: function(id){
+      var found = null;
+      for(var i = 0; i < LICSYSTEM.leiloesParticipo.items.length; i++){
+        if(LICSYSTEM.leiloesParticipo.items[i].id === id){
+          found = LICSYSTEM.leiloesParticipo.items[i];
+          break;
+        }
+      }
+      if(!found) return;
+      if(!confirm("Arquivar este leilão da lista de participação?")) return;
+      found.status = "arquivado";
+      found.updatedAt = Date.now();
+      LICSYSTEM.leiloesParticipo.persist({ immediate: true });
+      LICSYSTEM.leiloesParticipo.render();
+      showAlert("leiloesAlert", "ok", "Leilão arquivado.");
+    },
+
+    remove: function(id){
+      if(!confirm("Remover este leilão permanentemente da lista?")) return;
+      LICSYSTEM.leiloesParticipo.items = LICSYSTEM.leiloesParticipo.items.filter(function(it){
+        return it.id !== id;
+      });
+      LICSYSTEM.leiloesParticipo.persist({ immediate: true });
+      LICSYSTEM.leiloesParticipo.render();
+      showAlert("leiloesAlert", "ok", "Leilão removido.");
+    },
+
+    openDocs: function(id){
+      var item = null;
+      for(var i = 0; i < LICSYSTEM.leiloesParticipo.items.length; i++){
+        if(LICSYSTEM.leiloesParticipo.items[i].id === id){ item = LICSYSTEM.leiloesParticipo.items[i]; break; }
+      }
+      if(!item) return;
+      if(item.documentosExigidos && item.documentosExigidos.length){
+        try{
+          LICSYSTEM.docsChecklist.setFromAnalysis(item.documentosExigidos, {
+            editalNome: item.titulo || item.filename || "Edital",
+            filename: item.filename || ""
+          });
+        }catch(e){}
+      }
+      if(window.__lsActivateView) window.__lsActivateView("docsChecklist");
+      else LICSYSTEM.docsChecklist.render();
+    },
+
+    showParticiparModal: function(){
+      if(!(LICSYSTEM.analiseIa && LICSYSTEM.analiseIa.relatorioMd)){
+        showAlert("iaAlert", "warn", "Não há análise ativa. Analise um PDF primeiro.");
+        return;
+      }
+      var ov = el("participarOverlay");
+      var metaBox = el("participarModalMeta");
+      var lead = el("participarModalLead");
+      if(!ov) return;
+      var draft = LICSYSTEM.leiloesParticipo.buildFromAnalysis();
+      if(lead){
+        lead.innerHTML = "Deseja marcar este edital em <b>Leilão que Participo</b> para acompanhar a disputa?";
+      }
+      if(metaBox){
+        var bits = [];
+        bits.push("<div><b>Edital:</b> " + utils.escapeHtml(draft.titulo || "—") + "</div>");
+        if(draft.orgao) bits.push("<div><b>Órgão:</b> " + utils.escapeHtml(draft.orgao) + "</div>");
+        if(draft.municipio) bits.push("<div><b>Município:</b> " + utils.escapeHtml(draft.municipio) + "</div>");
+        if(draft.filename) bits.push("<div class='muted small'>" + utils.escapeHtml(draft.filename) + "</div>");
+        if(draft.documentosExigidos && draft.documentosExigidos.length){
+          bits.push("<div class='muted small'>" + draft.documentosExigidos.length + " documento(s) exigido(s) serão vinculados</div>");
+        }
+        if(draft.resumo){
+          bits.push("<div class='participar-resumo'>" + utils.escapeHtml(draft.resumo) + "</div>");
+        }
+        metaBox.innerHTML = bits.join("");
+      }
+      ov.classList.add("open");
+      ov.setAttribute("aria-hidden", "false");
+    },
+
+    closeParticiparModal: function(){
+      var ov = el("participarOverlay");
+      if(!ov) return;
+      ov.classList.remove("open");
+      ov.setAttribute("aria-hidden", "true");
+    },
+
+    confirmSim: function(){
+      var item = LICSYSTEM.leiloesParticipo.addFromAnalysis();
+      LICSYSTEM.leiloesParticipo.closeParticiparModal();
+      if(!item) return;
+      showAlert("iaAlert", "ok", "Salvo em Leilão que Participo.");
+      if(window.__lsActivateView) window.__lsActivateView("leiloesParticipo");
+      showAlert("leiloesAlert", "ok", "Participação confirmada: " + (item.titulo || "edital") + ".");
+    },
+
+    confirmNao: function(){
+      LICSYSTEM.leiloesParticipo.closeParticiparModal();
+      showAlert("iaAlert", "info", "Ok — edital não foi adicionado à lista.");
+    },
+
+    render: function(){
+      var box = el("leiloesList");
+      var sum = el("leiloesSummary");
+      if(!box) return;
+
+      var active = LICSYSTEM.leiloesParticipo.items.filter(function(it){ return it.status !== "arquivado"; });
+      var archived = LICSYSTEM.leiloesParticipo.items.filter(function(it){ return it.status === "arquivado"; });
+
+      if(sum){
+        if(!LICSYSTEM.leiloesParticipo.items.length){
+          sum.innerHTML = "";
+        } else {
+          sum.innerHTML =
+            '<span class="docs-pill">' + active.length + " participando</span>" +
+            (archived.length ? '<span class="docs-pill pend">' + archived.length + " arquivado" + (archived.length === 1 ? "" : "s") + "</span>" : "");
+        }
+      }
+
+      if(!active.length && !archived.length){
+        box.innerHTML = '<div class="muted small" style="padding:18px;text-align:center">Nenhum leilão marcado ainda. Analise um edital e confirme em <b>Vamos participar?</b></div>';
+        return;
+      }
+
+      function cardHtml(it, isArch){
+        var dataStr = "";
+        try{ dataStr = new Date(it.dataAnalise).toLocaleString("pt-BR"); }catch(e){ dataStr = "—"; }
+        var docsN = (it.documentosExigidos || []).length;
+        var sub = [];
+        if(it.orgao && it.orgao !== it.titulo) sub.push(it.orgao);
+        if(it.municipio) sub.push(it.municipio);
+        if(it.filename) sub.push(it.filename);
+        return (
+          '<div class="leilao-item' + (isArch ? " is-archived" : "") + '" data-id="' + utils.escapeHtml(it.id) + '">' +
+            '<div class="leilao-main">' +
+              '<div class="leilao-title">' + utils.escapeHtml(it.titulo || "Edital") + "</div>" +
+              (sub.length ? '<div class="leilao-sub">' + utils.escapeHtml(sub.join(" · ")) + "</div>" : "") +
+              '<div class="leilao-meta">' +
+                '<span class="docs-badge">' + (isArch ? "Arquivado" : "Participando") + "</span>" +
+                '<span class="muted small">Análise: ' + utils.escapeHtml(dataStr) + "</span>" +
+                (docsN ? '<span class="muted small">' + docsN + " doc(s)</span>" : "") +
+              "</div>" +
+              (it.resumo ? '<div class="leilao-resumo">' + utils.escapeHtml(it.resumo) + "</div>" : "") +
+            "</div>" +
+            '<div class="leilao-actions">' +
+              (docsN ? '<button type="button" class="btn btn-ghost btn-sm lpDocs" title="Abrir checklist">📑 Docs</button>' : "") +
+              (!isArch ? '<button type="button" class="btn btn-ghost btn-sm lpArchive" title="Arquivar">Arquivar</button>' : "") +
+              '<button type="button" class="btn btn-ghost btn-sm lpRemove" title="Remover">✕</button>' +
+            "</div>" +
+          "</div>"
+        );
+      }
+
+      var html = "";
+      active.forEach(function(it){ html += cardHtml(it, false); });
+      if(archived.length){
+        html += '<div class="leiloes-arch-label muted small">Arquivados</div>';
+        archived.forEach(function(it){ html += cardHtml(it, true); });
+      }
+      box.innerHTML = html;
+
+      box.querySelectorAll(".lpDocs").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var row = btn.closest(".leilao-item");
+          var id = row && row.getAttribute("data-id");
+          LICSYSTEM.leiloesParticipo.openDocs(id);
+        });
+      });
+      box.querySelectorAll(".lpArchive").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var row = btn.closest(".leilao-item");
+          var id = row && row.getAttribute("data-id");
+          LICSYSTEM.leiloesParticipo.archive(id);
+        });
+      });
+      box.querySelectorAll(".lpRemove").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var row = btn.closest(".leilao-item");
+          var id = row && row.getAttribute("data-id");
+          LICSYSTEM.leiloesParticipo.remove(id);
+        });
+      });
     }
   };
 
@@ -6826,6 +7214,11 @@
     on("btnIaCopiar","click", function(){ LICSYSTEM.analiseIa.copiarRelatorio(); });
     on("btnIaImprimir","click", function(){ LICSYSTEM.analiseIa.imprimirRelatorio(); });
     on("btnIaDocs","click", function(){ LICSYSTEM.analiseIa.openDocsModal(); });
+    on("btnIaParticipar","click", function(){
+      LICSYSTEM.analiseIa._pendingParticiparAsk = false;
+      try{ LICSYSTEM.docsChecklist.closeModal({ skipParticiparAsk: true }); }catch(e){}
+      LICSYSTEM.leiloesParticipo.showParticiparModal();
+    });
 
     // Checklist documentos do edital
     on("btnDocsSalvar","click", function(){ LICSYSTEM.docsChecklist.save(); });
@@ -6836,8 +7229,18 @@
     on("docsOverlay","click", function(e){
       if(e.target === el("docsOverlay")) LICSYSTEM.docsChecklist.closeModal();
     });
+    on("btnParticiparSim","click", function(){ LICSYSTEM.leiloesParticipo.confirmSim(); });
+    on("btnParticiparNao","click", function(){ LICSYSTEM.leiloesParticipo.confirmNao(); });
+    on("participarOverlay","click", function(e){
+      if(e.target === el("participarOverlay")) LICSYSTEM.leiloesParticipo.confirmNao();
+    });
     document.addEventListener("keydown", function(e){
       if(e.key === "Escape"){
+        var pov = el("participarOverlay");
+        if(pov && pov.classList.contains("open")){
+          LICSYSTEM.leiloesParticipo.confirmNao();
+          return;
+        }
         var ov = el("docsOverlay");
         if(ov && ov.classList.contains("open")) LICSYSTEM.docsChecklist.closeModal();
       }
@@ -7026,6 +7429,7 @@
     dashboard:'Dashboard',
     captacao:'Captação de Editais',
     analiseIa:'Análise Inteligente de Editais',
+    leiloesParticipo:'Leilão que Participo',
     orcamento:'Orçamento',
     cruzamento:'Cruzamento Inteligente (ML)',
     cofre:'Cofre de Documentos',
@@ -7068,6 +7472,9 @@
     if(view==="docsChecklist"){
       try{ LICSYSTEM.cofre.load(); }catch(e){}
       LICSYSTEM.docsChecklist.render();
+    }
+    if(view==="leiloesParticipo"){
+      try{ LICSYSTEM.leiloesParticipo.render(); }catch(e){}
     }
     if(view==="ferramentas") LICSYSTEM.ferramentas.carregarView();
     if(view==="entregas") LICSYSTEM.entregas.renderLista();
@@ -8341,9 +8748,11 @@
       var c = el("btnIaCopiar");
       var p = el("btnIaImprimir");
       var d = el("btnIaDocs");
+      var part = el("btnIaParticipar");
       if(c) c.disabled = !enabled;
       if(p) p.disabled = !enabled;
       if(d) d.disabled = !enabled;
+      if(part) part.disabled = !enabled;
     },
 
     limparRelatorio: function(){
@@ -8360,6 +8769,7 @@
     limpar: function(){
       LICSYSTEM.analiseIa.file = null;
       LICSYSTEM.analiseIa.text = "";
+      LICSYSTEM.analiseIa._pendingParticiparAsk = false;
       var inp = el("iaPdfFile");
       if(inp) inp.value = "";
       var meta = el("iaFileMeta");
@@ -8367,6 +8777,7 @@
       LICSYSTEM.analiseIa.limparRelatorio();
       hideAlert("iaAlert");
       LICSYSTEM.analiseIa.setBusy(false);
+      try{ LICSYSTEM.leiloesParticipo.closeParticiparModal(); }catch(e){}
     },
 
     normDocsList: function(list){
@@ -8652,6 +9063,8 @@
         if(docs.length){
           try{ LICSYSTEM.docsChecklist.setFromAnalysis(docs, meta); }catch(e){}
         }
+        // Após fechar o modal de documentos, pergunta "Vamos participar?"
+        LICSYSTEM.analiseIa._pendingParticiparAsk = true;
         // Modal pós-análise com lista + atalho para marcar OK
         setTimeout(function(){
           LICSYSTEM.docsChecklist.showModal(docs, meta);
@@ -8911,6 +9324,7 @@
       LICSYSTEM.cofre.render();
       LICSYSTEM.state._cofreRendered = true;
       LICSYSTEM.docsChecklist.load();
+      LICSYSTEM.leiloesParticipo.load();
       LICSYSTEM.entregas.load();
       // Orçamento só monta quando abrir a aba (planilha grande)
       setTimeout(function(){
