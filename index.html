@@ -178,14 +178,14 @@
       <!-- ===================== PESQUISAS DE EDITAIS ===================== -->
       <section id="view-pesquisas" class="view">
         <!-- Perguntar editais (chat helper — PNCP) -->
-        <div class="card" id="cardChatEditais" data-collapse-key="chat-editais">
+        <div class="card is-collapsed" id="cardChatEditais" data-collapse-key="chat-editais">
           <div class="card-head">
             <div class="card-head-main">
               <h2>💬 Perguntar editais</h2>
               <span class="tag">PNCP · chat</span>
               <span class="card-collapse-summary muted small" id="chatCollapseSummary" hidden></span>
             </div>
-            <button type="button" class="btn btn-ghost btn-sm card-collapse-btn" id="btnCollapseChat" aria-expanded="true" aria-controls="chatCardBody" title="Minimizar painel">▾ Minimizar</button>
+            <button type="button" class="btn btn-ghost btn-sm card-collapse-btn" id="btnCollapseChat" aria-expanded="false" aria-controls="chatCardBody" title="Expandir painel">▸ Expandir</button>
           </div>
           <div class="card-collapsible-body" id="chatCardBody">
             <div id="chatEditalAlert" class="alert"></div>
@@ -242,14 +242,14 @@
         </div>
 
         <!-- Editais próximos (município + raio) -->
-        <div class="card" id="cardProxEditais" data-collapse-key="prox-editais">
+        <div class="card is-collapsed" id="cardProxEditais" data-collapse-key="prox-editais">
           <div class="card-head">
             <div class="card-head-main">
               <h2>📍 Editais próximos</h2>
               <span class="tag">PNCP · raio</span>
               <span class="card-collapse-summary muted small" id="proxCollapseSummary" hidden></span>
             </div>
-            <button type="button" class="btn btn-ghost btn-sm card-collapse-btn" id="btnCollapseProx" aria-expanded="true" aria-controls="proxCardBody" title="Minimizar painel">▾ Minimizar</button>
+            <button type="button" class="btn btn-ghost btn-sm card-collapse-btn" id="btnCollapseProx" aria-expanded="false" aria-controls="proxCardBody" title="Expandir painel">▸ Expandir</button>
           </div>
           <div class="card-collapsible-body" id="proxCardBody">
             <div id="proxAlert" class="alert"></div>
@@ -319,23 +319,32 @@
         </div>
 
         <!-- Radar PNCP -->
-        <div class="card" id="cardRadarPncp">
-          <div class="card-head"><h2>📡 Radar PNCP</h2><span class="tag">API Pública</span></div>
-          <div id="pncpAlert" class="alert"></div>
-          <div class="form-row">
-            <div style="flex:2">
-              <label class="fld">Palavras-chave de interesse (separadas por vírgula)</label>
-              <input type="text" id="pncpKeywords" placeholder="ex.: material construção, cimento, ferramenta" />
+        <div class="card is-collapsed" id="cardRadarPncp" data-collapse-key="radar-pncp">
+          <div class="card-head">
+            <div class="card-head-main">
+              <h2>📡 Radar PNCP</h2>
+              <span class="tag">API Pública</span>
+              <span class="card-collapse-summary muted small" id="radarCollapseSummary" hidden></span>
             </div>
-            <div style="max-width:160px">
-              <label class="fld">UF</label>
-              <select id="pncpUf"></select>
-            </div>
-            <div style="max-width:170px;display:flex;align-items:flex-end">
-              <button class="btn btn-gold" id="btnPncp" style="width:100%">🔍 Buscar no PNCP</button>
-            </div>
+            <button type="button" class="btn btn-ghost btn-sm card-collapse-btn" id="btnCollapseRadar" aria-expanded="false" aria-controls="radarCardBody" title="Expandir painel">▸ Expandir</button>
           </div>
-          <div id="pncpResults"></div>
+          <div class="card-collapsible-body" id="radarCardBody">
+            <div id="pncpAlert" class="alert"></div>
+            <div class="form-row">
+              <div style="flex:2">
+                <label class="fld">Palavras-chave de interesse (separadas por vírgula)</label>
+                <input type="text" id="pncpKeywords" placeholder="ex.: material construção, cimento, ferramenta" />
+              </div>
+              <div style="max-width:160px">
+                <label class="fld">UF</label>
+                <select id="pncpUf"></select>
+              </div>
+              <div style="max-width:170px;display:flex;align-items:flex-end">
+                <button class="btn btn-gold" id="btnPncp" style="width:100%">🔍 Buscar no PNCP</button>
+              </div>
+            </div>
+            <div id="pncpResults"></div>
+          </div>
         </div>
       </section>
 
