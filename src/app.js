@@ -4472,48 +4472,202 @@
     },
 
     /* ---------- Radar PNCP ---------- */
-    buscarPncp:function(){
-      var kw = (el("pncpKeywords").value||"").split(",").map(function(s){return utils.fold(s).toLowerCase().trim();}).filter(Boolean);
-      var uf = el("pncpUf").value;
+    /**
+     * dataFinal do endpoint /contratacoes/proposta = limite do encerramento.
+     * Usar "hoje" zera o horizonte. Rolling hoje+365 no ano seguinte costuma 500.
+     * Padrão: fim do ano civil (igual editais-proximos / editais-query).
+     */
+    _pncpDataFinalProposta:function(){
       var today = new Date();
-      var start = new Date(); start.setDate(start.getDate()-15);
-      var dIni = utils.ymd(start), dFim = utils.ymd(today);
-      hideAlert("pncpAlert");
-      el("pncpResults").innerHTML = '<div class="muted small"><span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Consultando PNCP…</div>';
-
-      var url1 = "https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao?dataInicial="+dIni+"&dataFinal="+dFim+"&codigoModalidadeContratacao=6"+(uf?"&uf="+uf:"")+"&pagina=1&tamanhoPagina=20";
-      var url2 = "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta?dataFinal="+dFim+"&codigoModalidadeContratacao=6"+(uf?"&uf="+uf:"")+"&pagina=1&tamanhoPagina=20";
-
-      fetch(url1).then(function(r){
-        if(!r.ok) throw new Error("HTTP "+r.status);
-        return r.json();
-      }).then(function(j){ LICSYSTEM.captacao._handlePncp(j, kw, uf); })
-      .catch(function(){
-        // fallback: propostas em aberto
-        fetch(url2).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
-          .then(function(j){ LICSYSTEM.captacao._handlePncp(j, kw, uf); })
-          .catch(function(err){
-            el("pncpResults").innerHTML="";
-            showAlert("pncpAlert","error","Não foi possível consultar o PNCP ("+utils.escapeHtml(err.message)+"). Se você abriu via <b>file://</b>, o navegador pode bloquear a requisição (CORS). Tente abrir por um servidor local (ex.: <code>npm run dev:api</code>).");
-          });
+      var yearEnd = new Date(today.getFullYear(), 11, 31);
+      if(today.getMonth() >= 10){
+        var cap = new Date(yearEnd.getTime());
+        cap.setDate(cap.getDate() + 120);
+        return utils.ymd(cap);
+      }
+      return utils.ymd(yearEnd);
+    },
+    /** "CESTA BASICA, CAFÉ" → [["cesta","basica"],["cafe"]] (vírgula=OU, espaços=E). */
+    _pncpParseKeywords:function(raw){
+      return String(raw || "")
+        .split(/[,;]/)
+        .map(function(group){
+          return utils.fold(group).toLowerCase().trim().split(/\s+/).filter(Boolean);
+        })
+        .filter(function(g){ return g.length; });
+    },
+    _pncpTextHaystack:function(o){
+      var parts = [
+        o.objetoCompra,
+        o.objeto,
+        o.objetoContratacao,
+        o.informacaoComplementar,
+        o.descricao,
+        o.titulo
+      ];
+      return utils.fold(parts.filter(Boolean).join(" ")).toLowerCase();
+    },
+    /** Grupo casa se TODOS os tokens aparecem; qualquer grupo basta (OU). */
+    _pncpKeywordMatch:function(haystack, kwGroups){
+      if(!kwGroups || !kwGroups.length) return true;
+      return kwGroups.some(function(tokens){
+        return tokens.every(function(t){ return haystack.indexOf(t) !== -1; });
       });
     },
+    _pncpFetchPropostaPage:function(dataFinal, uf, page, pageSize){
+      var url =
+        "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta?dataFinal=" +
+        encodeURIComponent(dataFinal) +
+        "&codigoModalidadeContratacao=6" +
+        (uf ? "&uf=" + encodeURIComponent(uf) : "") +
+        "&pagina=" +
+        page +
+        "&tamanhoPagina=" +
+        pageSize;
+      return fetch(url).then(function(r){
+        if(!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      });
+    },
+    buscarPncp:function(){
+      var kwGroups = LICSYSTEM.captacao._pncpParseKeywords(
+        (el("pncpKeywords") && el("pncpKeywords").value) || ""
+      );
+      var uf = (el("pncpUf") && el("pncpUf").value) || "";
+      var dataFinal = LICSYSTEM.captacao._pncpDataFinalProposta();
+      var PAGE_SIZE = 50;
+      /* PR costuma ter milhares de propostas; páginas iniciais raramente trazem o match. */
+      var MAX_PAGES = uf === "PR" || uf === "SP" ? 12 : 8;
+      hideAlert("pncpAlert");
+      el("pncpResults").innerHTML =
+        '<div class="muted small"><span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Consultando propostas abertas no PNCP (até ' +
+        utils.escapeHtml(dataFinal) +
+        ")…</div>";
 
-    _handlePncp:function(json, kw, uf){
-      var arr = (json && (json.data || json.items || json.resultado)) || [];
+      var all = [];
+      var seen = Object.create(null);
+      var totalRegistros = null;
+      var pagesFetched = 0;
+
+      function pageKey(o){
+        return [
+          o.numeroControlePNCP || "",
+          o.numeroCompra || "",
+          o.anoCompra || "",
+          (o.orgaoEntidade && o.orgaoEntidade.cnpj) || "",
+          o.objetoCompra || o.objeto || ""
+        ].join("|");
+      }
+
+      function fetchPages(page){
+        if(page > MAX_PAGES) return Promise.resolve();
+        return LICSYSTEM.captacao
+          ._pncpFetchPropostaPage(dataFinal, uf, page, PAGE_SIZE)
+          .then(function(json){
+            pagesFetched++;
+            if(totalRegistros == null && json && json.totalRegistros != null){
+              totalRegistros = Number(json.totalRegistros) || 0;
+            }
+            var arr = (json && (json.data || json.items || json.resultado)) || [];
+            if(!Array.isArray(arr)) arr = [];
+            for(var i = 0; i < arr.length; i++){
+              var o = arr[i];
+              var k = pageKey(o);
+              if(seen[k]) continue;
+              seen[k] = true;
+              all.push(o);
+            }
+            var totalPaginas =
+              json && json.totalPaginas != null
+                ? Number(json.totalPaginas)
+                : null;
+            var moreByMeta =
+              totalPaginas != null
+                ? page < totalPaginas
+                : arr.length >= PAGE_SIZE;
+            if(moreByMeta && page < MAX_PAGES && arr.length){
+              return fetchPages(page + 1);
+            }
+          });
+      }
+
+      fetchPages(1)
+        .then(function(){
+          LICSYSTEM.captacao._handlePncp(all, kwGroups, uf, {
+            dataFinal: dataFinal,
+            pagesFetched: pagesFetched,
+            totalRegistros: totalRegistros,
+            maxPages: MAX_PAGES
+          });
+        })
+        .catch(function(err){
+          el("pncpResults").innerHTML = "";
+          showAlert(
+            "pncpAlert",
+            "error",
+            "Não foi possível consultar o PNCP (" +
+              utils.escapeHtml(err.message || String(err)) +
+              "). Se você abriu via <b>file://</b>, o navegador pode bloquear a requisição (CORS). Tente abrir por um servidor local (ex.: <code>npm run dev:api</code>)."
+          );
+        });
+    },
+
+    _handlePncp:function(arr, kwGroups, uf, meta){
+      meta = meta || {};
       if(!Array.isArray(arr)) arr = [];
       var matches = arr.filter(function(o){
-        var obj = utils.fold(o.objetoCompra || o.objeto || o.objetoContratacao || "").toLowerCase();
-        if(!kw.length) return true;
-        return kw.some(function(k){ return obj.indexOf(k) !== -1; });
+        return LICSYSTEM.captacao._pncpKeywordMatch(
+          LICSYSTEM.captacao._pncpTextHaystack(o),
+          kwGroups
+        );
       });
       var box = el("pncpResults");
+      var kwLabel = kwGroups
+        .map(function(g){ return g.join(" "); })
+        .join(", ");
+      var horizonte =
+        meta.dataFinal
+          ? "propostas com encerramento até " + meta.dataFinal
+          : "período consultado";
+      var scanned =
+        arr.length +
+        " registro(s) varridos" +
+        (meta.pagesFetched ? " em " + meta.pagesFetched + " página(s)" : "") +
+        (meta.totalRegistros != null
+          ? " (PNCP informa " + meta.totalRegistros + " no total)"
+          : "");
+
       if(!matches.length){
-        box.innerHTML='<div class="muted small">Nenhuma contratação encontrada para os filtros informados ('+arr.length+' registros no período).</div>';
-        showAlert("pncpAlert","info","Consulta concluída — nenhuma oportunidade correspondente às palavras-chave.");
+        if(!arr.length){
+          box.innerHTML =
+            '<div class="muted small">PNCP não retornou propostas abertas para os filtros (' +
+            utils.escapeHtml(horizonte) +
+            (uf ? ", UF " + utils.escapeHtml(uf) : "") +
+            ").</div>";
+          showAlert(
+            "pncpAlert",
+            "info",
+            "Consulta concluída — nenhuma proposta aberta no horizonte PNCP."
+          );
+          return;
+        }
+        box.innerHTML =
+          '<div class="muted small">O PNCP retornou dados, mas nenhum objeto correspondeu às palavras-chave' +
+          (kwLabel ? " (<b>" + utils.escapeHtml(kwLabel) + "</b>)" : "") +
+          ". " +
+          utils.escapeHtml(scanned) +
+          "; " +
+          utils.escapeHtml(horizonte) +
+          ". A busca ignora acentos e exige todos os termos de cada grupo (vírgula = qualquer grupo).</div>";
+        showAlert(
+          "pncpAlert",
+          "info",
+          "Consulta concluída — " +
+            arr.length +
+            " registro(s) no PNCP, nenhum com as palavras-chave informadas."
+        );
         return;
       }
-      // register alerts + bell
       matches.forEach(function(o){
         LICSYSTEM.state.pncpAlerts.push({
           orgao:(o.orgaoEntidade && o.orgaoEntidade.razaoSocial) || o.nomeOrgao || o.orgao || "Órgão público",
@@ -4523,7 +4677,15 @@
       });
       LICSYSTEM.updateBell();
       LICSYSTEM.dashboard.renderPncp();
-      showAlert("pncpAlert","ok","🎯 "+matches.length+" oportunidade(s) PNCP encontradas! Alertas adicionados ao sino.");
+      showAlert(
+        "pncpAlert",
+        "ok",
+        "🎯 " +
+          matches.length +
+          " oportunidade(s) PNCP encontradas! Alertas adicionados ao sino. (" +
+          scanned +
+          ")"
+      );
       var html='<div style="display:flex;flex-direction:column;gap:10px">';
       matches.forEach(function(o){
         var orgao=(o.orgaoEntidade && o.orgaoEntidade.razaoSocial) || o.nomeOrgao || o.orgao || "Órgão público";
