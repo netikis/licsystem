@@ -9619,7 +9619,8 @@
       var lastView = "dashboard";
       try{ lastView = localStorage.getItem(LAST_VIEW_KEY) || "dashboard"; }catch(e){}
       if(lastView && lastView !== "dashboard" && typeof window.__lsActivateView === "function"){
-        window.__lsActivateView(lastView);
+        // skipEnsureGroup: keep all nav accordions collapsed after F5
+        window.__lsActivateView(lastView, { skipEnsureGroup: true });
       } else {
         LICSYSTEM.state.currentView = "dashboard";
       }

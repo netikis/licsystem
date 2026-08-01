@@ -111,12 +111,13 @@
       setGroupOpen(groupId, true);
     }
     function restoreNavGroups(){
-      var map = loadOpenGroups();
+      // Always start collapsed on F5/load — do not restore open branches from localStorage.
       var groups = document.querySelectorAll("#nav .nav-group[data-nav-group]");
       for(var i=0;i<groups.length;i++){
         var id = groups[i].getAttribute("data-nav-group");
-        setGroupOpen(id, !!map[id], { skipPersist: true });
+        if(id) setGroupOpen(id, false, { skipPersist: true });
       }
+      saveOpenGroups({});
     }
 
     function activate(view, opts){
