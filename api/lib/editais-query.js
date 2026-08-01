@@ -4,22 +4,30 @@
  *
  * Importante: no endpoint /contratacoes/proposta, dataFinal é o limite superior
  * da data de encerramento da proposta. Usar "hoje" exclui editais com abertura
- * futura (ex.: Ibaiti encerrando em agosto). Padrão = janela anual (~365 dias).
+ * futura (ex.: Ibaiti encerrando em agosto). Padrão = janela anual com dataFinal
+ * no ano civil (rolling hoje+365 no ano seguinte costuma gerar HTTP 500 no PNCP).
  */
 var PNCP_BASE = "https://pncp.gov.br/api/consulta/v1";
 var PAGE_SIZE = 50;
 var MAX_PAGES = 4;
 /** Janela curta (toggle UI / janela=45). */
 var JANELA_45_DIAS = 45;
-/** Janela anual padrão: hoje → hoje+365 (propostas com encerramento no horizonte). */
+/** Janela anual padrão: horizonte do ano civil (ver clamp em dataFinalProposta). */
 var JANELA_ANUAL_DIAS = 365;
 var MAX_DIAS_JANELA = 400;
-/** Tamanho do pedaço se o PNCP rejeitar intervalo largo (fallback). */
-var CHUNK_DIAS = 100;
+/**
+ * Pedacos de fallback se o PNCP rejeitar dataFinal largo.
+ * ~100 dias costuma devolver 500; 45 é mais estável.
+ */
+var CHUNK_DIAS = 45;
+/** Timeout por request ao PNCP (evita hang eterno no serverless). */
+var PNCP_FETCH_TIMEOUT_MS = 16000;
 var DEFAULT_MODALIDADES = [6];
 var EXTRA_MODALIDADES = [4, 7];
 /** Modalidades extras usadas por padrão em busca por município (não só ampliar=1). */
 var MUNICIPIO_EXTRA_MODALIDADES = [4, 7, 8];
+/** Leilão Eletrônico (1) e Leilão Presencial (13) — PNCP. */
+var LEILAO_MODALIDADES = [1, 13];
 var ESFERA_LABEL = { M: "Municipal", E: "Estadual", F: "Federal", D: "Distrital" };
 
 var CATEGORIA_KEYWORDS = {
@@ -46,7 +54,73 @@ var CATEGORIA_KEYWORDS = {
     "maquina de lavar",
     "eletro",
   ],
+  /** Alienação / leilão de veículos, sucata e bens móveis. */
+  leilao: [
+    "leilao",
+    "leiloes",
+    "sucata",
+    "sucatas",
+    "veiculo",
+    "veiculos",
+    "automovel",
+    "automoveis",
+    "documentado",
+    "documentados",
+    "frota",
+    "alienacao",
+    "alienacoes",
+    "inservivel",
+    "inserviveis",
+  ],
 };
+
+function looksLikeLeilaoText(text) {
+  return /leil|sucat|veicul|automov|frota|alienac|documentad|inserviv/.test(
+    fold(text)
+  );
+}
+
+function expandLeilaoKeywords(keys) {
+  var list = Array.isArray(keys) ? keys.slice() : [];
+  var blob = list.join(" ");
+  if (!looksLikeLeilaoText(blob)) return list;
+  var syns = CATEGORIA_KEYWORDS.leilao;
+  for (var i = 0; i < syns.length; i++) list.push(syns[i]);
+  return list;
+}
+
+function looksLikeVeiculoSucataText(text) {
+  return /sucat|veicul|automov|frota|documentad/.test(fold(text));
+}
+
+function haystackVeiculoSucata(objetoFolded) {
+  return /sucat|veicul|automov|frota|documentad|maquin|moveis|bem movel|bens moveis|inserviv/.test(
+    objetoFolded || ""
+  );
+}
+
+/** Match OR: frase inteira ou, em domínio leilão, qualquer token ≥4 chars. */
+function keywordMatchesObjeto(objetoFolded, keywords) {
+  if (!keywords || !keywords.length) return true;
+  var hit = keywords.some(function (k) {
+    var term = fold(k).trim();
+    if (!term) return false;
+    if (objetoFolded.indexOf(term) !== -1) return true;
+    var parts = term.split(/\s+/).filter(Boolean);
+    if (parts.length > 1 && looksLikeLeilaoText(term)) {
+      return parts.some(function (p) {
+        return p.length >= 4 && objetoFolded.indexOf(p) !== -1;
+      });
+    }
+    return false;
+  });
+  if (!hit) return false;
+  /* Se a busca pede veículo/sucata, evita só leilão de terreno/imóvel. */
+  if (looksLikeVeiculoSucataText(keywords.join(" "))) {
+    return haystackVeiculoSucata(objetoFolded);
+  }
+  return true;
+}
 
 var _municipios = null;
 var _byIbge = null;
@@ -83,25 +157,58 @@ function ymd(d) {
   return "" + y + m + day;
 }
 
-/** dataFinal PNCP: hoje + N dias (propostas com encerramento futuro). */
+/**
+ * dataFinal PNCP: hoje + N dias (propostas com encerramento futuro).
+ *
+ * Importante (regra observada em 2026): rolling hoje+365 (ex.: 20270801 em ago/2026)
+ * faz o PNCP responder HTTP 500 / timeout. Janelas grandes devem ficar no ano civil
+ * corrente; em nov/dez permite avançar um pouco no ano seguinte.
+ */
 function dataFinalProposta(dias) {
   var n =
     dias != null && Number.isFinite(Number(dias))
       ? Number(dias)
       : JANELA_ANUAL_DIAS;
   n = Math.max(0, Math.min(MAX_DIAS_JANELA, n));
-  var d = new Date();
+  var today = new Date();
+  var d = new Date(today.getTime());
   d.setDate(d.getDate() + n);
+
+  if (n >= 90) {
+    var yearEnd = new Date(today.getFullYear(), 11, 31);
+    if (d.getTime() > yearEnd.getTime()) {
+      if (today.getMonth() >= 10) {
+        /* Nov/Dez: cobre início do ano seguinte (até ~120 dias além de 31/12). */
+        var cap = new Date(yearEnd.getTime());
+        cap.setDate(cap.getDate() + 120);
+        if (d.getTime() > cap.getTime()) d = cap;
+      } else {
+        d = yearEnd;
+      }
+    }
+  }
   return ymd(d);
+}
+
+function diasAteYmd(ymdStr) {
+  var s = String(ymdStr || "");
+  if (s.length !== 8) return null;
+  var t = new Date(
+    Number(s.slice(0, 4)),
+    Number(s.slice(4, 6)) - 1,
+    Number(s.slice(6, 8))
+  );
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
+  t.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.round((t - today) / 86400000));
 }
 
 /**
  * Resolve janela de encerramento (dataFinal PNCP).
- * Padrão "ano": hoje → hoje+365. Alternativa "45": próximos 45 dias.
+ * Padrão "ano": horizonte anual (clamp ao ano civil — ver dataFinalProposta).
+ * Alternativa "45": próximos 45 dias.
  * Também aceita dias/janelaDias numérico explícito.
- *
- * Preferência documentada: horizonte anual para acompanhar o que sai no ano;
- * perto do fim do ano o rolling 365 já cobre o Q1 seguinte.
  */
 function resolveJanela(opts) {
   opts = opts || {};
@@ -117,6 +224,8 @@ function resolveJanela(opts) {
   ) {
     var n = Math.max(0, Math.min(MAX_DIAS_JANELA, Number(diasOpt)));
     var is45 = n === JANELA_45_DIAS;
+    var dfNum = dataFinalProposta(n);
+    var diasEfetivos = diasAteYmd(dfNum);
     return {
       janela: is45 ? "45" : n >= 300 ? "ano" : "custom",
       label: is45
@@ -124,8 +233,8 @@ function resolveJanela(opts) {
         : n >= 300
           ? "janela anual"
           : n + " dias",
-      dias: n,
-      dataFinal: dataFinalProposta(n),
+      dias: diasEfetivos != null ? diasEfetivos : n,
+      dataFinal: dfNum,
     };
   }
 
@@ -135,20 +244,23 @@ function resolveJanela(opts) {
     raw === "curta" ||
     raw === "short"
   ) {
+    var df45 = dataFinalProposta(JANELA_45_DIAS);
     return {
       janela: "45",
       label: "45 dias",
       dias: JANELA_45_DIAS,
-      dataFinal: dataFinalProposta(JANELA_45_DIAS),
+      dataFinal: df45,
     };
   }
 
-  /* Padrão: janela anual (hoje + 365). */
+  /* Padrão: janela anual (ano civil / clamp PNCP). */
+  var dfAno = dataFinalProposta(JANELA_ANUAL_DIAS);
+  var diasAno = diasAteYmd(dfAno);
   return {
     janela: "ano",
     label: "janela anual",
-    dias: JANELA_ANUAL_DIAS,
-    dataFinal: dataFinalProposta(JANELA_ANUAL_DIAS),
+    dias: diasAno != null ? diasAno : JANELA_ANUAL_DIAS,
+    dataFinal: dfAno,
   };
 }
 
@@ -202,12 +314,19 @@ function pncpLink(item) {
   return item.linkSistemaOrigem || item.linkProcessoEletronico || null;
 }
 
-async function fetchPncpJson(url) {
+function sleep(ms) {
+  return new Promise(function (resolve) {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function fetchPncpJsonOnce(url, signal) {
   var r = await fetch(url, {
     headers: {
       Accept: "application/json",
       "User-Agent": "LICSYSTEM/1.0 (editais-chat)",
     },
+    signal: signal,
   });
   var text = await r.text();
   var body = null;
@@ -224,6 +343,48 @@ async function fetchPncpJson(url) {
     throw err;
   }
   return body || {};
+}
+
+async function fetchPncpJson(url) {
+  var attempts = 0;
+  var lastErr = null;
+  while (attempts < 3) {
+    attempts++;
+    var ctrl =
+      typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = null;
+    if (ctrl) {
+      timer = setTimeout(function () {
+        try {
+          ctrl.abort();
+        } catch (e) {}
+      }, PNCP_FETCH_TIMEOUT_MS);
+    }
+    try {
+      var body = await fetchPncpJsonOnce(url, ctrl ? ctrl.signal : undefined);
+      if (timer) clearTimeout(timer);
+      return body;
+    } catch (e) {
+      if (timer) clearTimeout(timer);
+      if (
+        e &&
+        (e.name === "AbortError" || /aborted/i.test(String(e.message || "")))
+      ) {
+        lastErr = new Error("PNCP timeout (" + PNCP_FETCH_TIMEOUT_MS + "ms)");
+        lastErr.status = 504;
+      } else {
+        lastErr = e;
+      }
+      var st = lastErr && lastErr.status;
+      /* 429/503: espera e tenta de novo. */
+      if ((st === 429 || st === 503) && attempts < 3) {
+        await sleep(400 * attempts);
+        continue;
+      }
+      throw lastErr;
+    }
+  }
+  throw lastErr || new Error("PNCP sem resposta");
 }
 
 /**
@@ -283,42 +444,97 @@ async function fetchPropostasMunicipio(ibge, dataFinal, modalidade, maxPages) {
   });
 }
 
+function isPncpRetryable(err) {
+  var st = err && err.status;
+  return (
+    st === 400 ||
+    st === 422 ||
+    st === 429 ||
+    st === 500 ||
+    st === 502 ||
+    st === 503 ||
+    st === 504
+  );
+}
+
 /**
- * Busca propostas por município; se dataFinal anual falhar (4xx), tenta chunks ~100 dias.
+ * Ordem de tentativa: alvo (já com clamp ao ano civil) → chunks curtos.
+ * Ano civil costuma responder; rolling +365 / pedaços longos costumam 500.
+ */
+function dataFinalTryOrder(dataFinal) {
+  var alvo = String(dataFinal || "");
+  var chunks = dataFinalChunks(alvo);
+  var ordered = [alvo];
+  var seen = Object.create(null);
+  seen[alvo] = true;
+  for (var i = 0; i < chunks.length; i++) {
+    if (seen[chunks[i]]) continue;
+    seen[chunks[i]] = true;
+    ordered.push(chunks[i]);
+  }
+  return ordered;
+}
+
+/**
+ * Busca propostas por município; se dataFinal falhar (4xx/5xx/timeout),
+ * tenta chunks menores e mantém o melhor conjunto obtido.
  */
 async function fetchPropostasMunicipioRobusto(ibge, dataFinal, modalidade, maxPages) {
-  try {
-    return await fetchPropostasMunicipio(ibge, dataFinal, modalidade, maxPages);
-  } catch (e) {
-    var st = e && e.status;
-    if (st !== 400 && st !== 422 && st !== 500) throw e;
-    var chunks = dataFinalChunks(dataFinal);
-    if (chunks.length <= 1) throw e;
-    var merged = [];
-    var seenLocal = Object.create(null);
-    var lastErr = e;
-    for (var i = 0; i < chunks.length; i++) {
-      try {
-        var part = await fetchPropostasMunicipio(
-          ibge,
-          chunks[i],
-          modalidade,
-          maxPages
-        );
-        for (var j = 0; j < part.length; j++) {
-          var k = compraKey(part[j]);
-          if (seenLocal[k]) continue;
-          seenLocal[k] = true;
-          merged.push(part[j]);
-        }
-        lastErr = null;
-      } catch (e2) {
-        lastErr = e2;
+  var ordered = dataFinalTryOrder(dataFinal);
+  var best = null;
+  var lastErr = null;
+
+  for (var i = 0; i < ordered.length; i++) {
+    try {
+      var part = await fetchPropostasMunicipio(
+        ibge,
+        ordered[i],
+        modalidade,
+        maxPages
+      );
+      if (best == null || (part && part.length >= best.length)) {
+        best = part || [];
       }
+      lastErr = null;
+      /* Alvo ok → pronto. Chunk ok → ainda tenta o restante só se alvo falhou. */
+      if (i === 0) return best;
+    } catch (e) {
+      lastErr = e;
+      if (!isPncpRetryable(e)) throw e;
     }
-    if (lastErr && !merged.length) throw lastErr;
-    return merged;
   }
+  if (best != null) return best;
+  throw lastErr || new Error("PNCP sem resposta");
+}
+
+/**
+ * Mesma lógica robusta por UF (editais-proximos / fallback).
+ */
+async function fetchPropostasUfRobusto(uf, dataFinal, modalidade, maxPages) {
+  var ordered = dataFinalTryOrder(dataFinal);
+  var best = null;
+  var lastErr = null;
+
+  for (var i = 0; i < ordered.length; i++) {
+    try {
+      var part = await fetchPropostasUf(
+        uf,
+        ordered[i],
+        modalidade,
+        maxPages
+      );
+      if (best == null || (part && part.length >= best.length)) {
+        best = part || [];
+      }
+      lastErr = null;
+      if (i === 0) return best;
+    } catch (e) {
+      lastErr = e;
+      if (!isPncpRetryable(e)) throw e;
+    }
+  }
+  if (best != null) return best;
+  throw lastErr || new Error("PNCP sem resposta");
 }
 
 function itemMatchesMunicipio(o, targetIbges, targetNamesFolded) {
@@ -395,6 +611,15 @@ function resolveKeywords(opts) {
       if (id === "cestasbasicas" || id === "cestabasia") id = "cestas";
       if (id === "eletrodomesticos") id = "eletro";
       if (id === "reformas") id = "reforma";
+      if (
+        id === "leiloes" ||
+        id === "veiculos" ||
+        id === "sucata" ||
+        id === "sucatas" ||
+        id === "alienacao"
+      ) {
+        id = "leilao";
+      }
       if (CATEGORIA_KEYWORDS[id]) {
         cats.push(id);
         keys = keys.concat(CATEGORIA_KEYWORDS[id]);
@@ -410,6 +635,10 @@ function resolveKeywords(opts) {
       if (t) keys.push(t);
     });
   }
+  if (idAliasLeilao(rawCat) || looksLikeLeilaoText(keys.join(" "))) {
+    if (cats.indexOf("leilao") === -1) cats.push("leilao");
+    keys = expandLeilaoKeywords(keys.concat(CATEGORIA_KEYWORDS.leilao));
+  }
   // dedupe
   var seen = Object.create(null);
   var uniq = [];
@@ -419,6 +648,23 @@ function resolveKeywords(opts) {
     uniq.push(keys[i]);
   }
   return { keywords: uniq, categorias: cats };
+}
+
+function idAliasLeilao(rawCat) {
+  if (!rawCat) return false;
+  return String(rawCat)
+    .split(/[,;|]/)
+    .some(function (c) {
+      var id = fold(c).trim().replace(/\s+/g, "");
+      return (
+        id === "leilao" ||
+        id === "leiloes" ||
+        id === "veiculos" ||
+        id === "sucata" ||
+        id === "sucatas" ||
+        id === "alienacao"
+      );
+    });
 }
 
 function findMunicipioByName(nome, ufPrefer) {
@@ -500,6 +746,9 @@ function parseMensagem(mensagem) {
   }
   if (/\bcafe\b/.test(folded)) {
     if (out.categorias.indexOf("cafe") === -1) out.categorias.push("cafe");
+  }
+  if (looksLikeLeilaoText(folded)) {
+    if (out.categorias.indexOf("leilao") === -1) out.categorias.push("leilao");
   }
 
   if (!out.regiao) {
@@ -660,6 +909,15 @@ async function queryEditais(opts) {
   var ampliar =
     String(opts.extra || opts.ampliar || "") === "1" ||
     String(opts.extra || opts.ampliar || "").toLowerCase() === "true";
+  var leiloesFlag =
+    String(opts.leiloes || opts.incluirLeiloes || "") === "1" ||
+    String(opts.leiloes || opts.incluirLeiloes || "").toLowerCase() === "true";
+  var querLeilao =
+    leiloesFlag ||
+    (kw.categorias && kw.categorias.indexOf("leilao") !== -1) ||
+    looksLikeLeilaoText(
+      (kw.keywords || []).join(" ") + " " + (mensagem || "")
+    );
   /* Município: mais modalidades por padrão. Região: só pregão, salvo ampliar=1. */
   var modalidades =
     escopo.tipo === "municipio"
@@ -667,6 +925,9 @@ async function queryEditais(opts) {
       : ampliar
         ? DEFAULT_MODALIDADES.concat(EXTRA_MODALIDADES)
         : DEFAULT_MODALIDADES.slice();
+  if (querLeilao) {
+    modalidades = modalidades.concat(LEILAO_MODALIDADES);
+  }
   var modSeen = Object.create(null);
   modalidades = modalidades.filter(function (m) {
     if (modSeen[m]) return false;
@@ -748,6 +1009,23 @@ async function queryEditais(opts) {
     }
   }
 
+  /* Se todas as chamadas ao PNCP falharam, não mascarar como "0 editais". */
+  if (!raw.length && errors.length && errors.length >= jobs.length) {
+    var failMsg =
+      "PNCP indisponível ou rejeitou a consulta (" +
+      errors
+        .slice(0, 3)
+        .map(function (e) {
+          return e.error;
+        })
+        .join("; ") +
+      "). Tente novamente em instantes.";
+    var failErr = new Error(failMsg);
+    failErr.status = 502;
+    failErr.errosParciais = errors;
+    throw failErr;
+  }
+
   var results = [];
   for (var ri = 0; ri < raw.length; ri++) {
     var o = raw[ri];
@@ -758,12 +1036,7 @@ async function queryEditais(opts) {
     if (!itemMatchesMunicipio(o, targetIbges, targetNamesFolded)) continue;
 
     var objeto = fold(o.objetoCompra || o.objeto || "");
-    if (kw.keywords.length) {
-      var hit = kw.keywords.some(function (k) {
-        return objeto.indexOf(k) !== -1;
-      });
-      if (!hit) continue;
-    }
+    if (!keywordMatchesObjeto(objeto, kw.keywords)) continue;
 
     results.push(mapItem(o));
   }
@@ -789,12 +1062,18 @@ async function queryEditais(opts) {
       " (dataFinal PNCP até " +
       dataFinal +
       ").",
+    "Para janela anual o dataFinal é limitado ao ano civil corrente (o PNCP costuma falhar com horizonte rolling 365 dias no ano seguinte).",
     escopo.tipo === "municipio"
       ? "Consulta por código IBGE do município + modalidades " +
         modalidades.join(", ") +
         "."
-      : "Padrão: Pregão Eletrônico (mod. 6). Use ampliar=1 para concorrência/pregão presencial.",
+      : querLeilao
+        ? "Modalidades: " +
+          modalidades.join(", ") +
+          " (inclui Leilão Eletrônico/Presencial 1 e 13)."
+        : "Padrão: Pregão Eletrônico (mod. 6). Use ampliar=1 para concorrência/pregão presencial; leiloes=1 ou termos de leilão/veículo/sucata incluem mods 1 e 13.",
     "Editais só em portais locais (fora do PNCP) não aparecem.",
+    "Leilões de veículos/sucata muitas vezes circulam em sites especializados e podem não estar no PNCP.",
   ];
   if (escopo.tipo === "regiao") {
     avisos.push(
@@ -803,6 +1082,13 @@ async function queryEditais(opts) {
         ": " +
         norte.municipios.length +
         " municípios consultados individualmente no PNCP (AMUNORPI / IG INPI)."
+    );
+  }
+  if (errors.length) {
+    avisos.push(
+      "Avisos PNCP: " +
+        errors.length +
+        " consulta(s) parcial(is) falharam; resultados podem estar incompletos."
     );
   }
 
@@ -907,7 +1193,7 @@ function formatRespostaPt(escopo, editais, kw, amostra, janelaInfo) {
       );
     }
     lines.push(
-      "Tente sem categoria, ampliar modalidades ou outro município. Editais só em portais locais (fora do PNCP) não aparecem."
+      "Tente sem categoria, marcar Incluir leilões / ampliar modalidades ou outro município. Leilões de veículos e sucata muitas vezes não estão no PNCP (só em sites especializados ou portais locais)."
     );
     return lines.join(" ");
   }
@@ -958,7 +1244,15 @@ module.exports = {
   loadNortePioneiro: loadNortePioneiro,
   dataFinalProposta: dataFinalProposta,
   resolveJanela: resolveJanela,
+  fetchPropostasMunicipioRobusto: fetchPropostasMunicipioRobusto,
+  fetchPropostasUfRobusto: fetchPropostasUfRobusto,
+  fetchPncpJson: fetchPncpJson,
+  looksLikeLeilaoText: looksLikeLeilaoText,
+  expandLeilaoKeywords: expandLeilaoKeywords,
+  keywordMatchesObjeto: keywordMatchesObjeto,
   JANELA_ANUAL_DIAS: JANELA_ANUAL_DIAS,
   JANELA_45_DIAS: JANELA_45_DIAS,
+  PNCP_FETCH_TIMEOUT_MS: PNCP_FETCH_TIMEOUT_MS,
   CATEGORIA_KEYWORDS: CATEGORIA_KEYWORDS,
+  LEILAO_MODALIDADES: LEILAO_MODALIDADES,
 };
