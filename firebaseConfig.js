@@ -97,7 +97,14 @@ function initializeApp() {
 function ensureAuth() {
   return initializeApp().then(function () {
     return loadScript(FB_AUTH).then(function () {
-      return window.firebase;
+      var fb = window.firebase;
+      // LOCAL: sessão sobrevive a F5 / fechar aba (não usar SESSION/MEMORY)
+      var persist = fb.auth().setPersistence(fb.auth.Auth.Persistence.LOCAL);
+      return Promise.resolve(persist).then(function () {
+        return fb;
+      }).catch(function () {
+        return fb;
+      });
     });
   });
 }

@@ -11,9 +11,20 @@
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <!-- CSS: src/styles.css (minificado no build) -->
 </head>
-<body class="auth-locked">
+<body class="auth-checking">
 <!-- ============ LOGIN (bloqueia o app até autenticar) ============ -->
 <div id="authGate" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+  <div id="authChecking" class="auth-checking-panel" aria-live="polite">
+    <div class="auth-brand">
+      <div class="mark">LS</div>
+      <div>
+        <b>LICSYSTEM</b>
+        <span>Restaurando sessão…</span>
+      </div>
+    </div>
+    <p class="auth-lead">Aguarde um momento.</p>
+    <div class="auth-checking-spinner" aria-hidden="true"></div>
+  </div>
   <div class="auth-card">
     <div class="auth-brand">
       <div class="mark">LS</div>
