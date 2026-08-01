@@ -40,6 +40,46 @@
     return String(err);
   };
 
+  /**
+   * Lê Response: se não for JSON (HTML da Vercel etc.), devolve
+   * { ok:false, error:"HTTP N: texto…" } em vez de Unexpected token.
+   */
+  utils.parseApiResponse = function(r){
+    return r.text().then(function(text){
+      var trimmed = String(text == null ? "" : text).trim();
+      var j = null;
+      if (trimmed) {
+        try {
+          j = JSON.parse(trimmed);
+        } catch (e) {
+          var snippet = trimmed.replace(/\s+/g, " ").slice(0, 160);
+          var err = new Error(
+            "HTTP " +
+              r.status +
+              " (resposta não-JSON): " +
+              snippet +
+              (trimmed.length > 160 ? "…" : "")
+          );
+          err.status = r.status;
+          err.nonJson = true;
+          throw err;
+        }
+      } else {
+        j = {};
+      }
+      if (!r.ok) {
+        var msg =
+          utils.formatApiError((j && j.error) || j) || "HTTP " + r.status;
+        var err2 = new Error(msg);
+        err2.status = r.status;
+        err2.body = j;
+        err2.errosParciais = j && j.errosParciais;
+        throw err2;
+      }
+      return j;
+    });
+  };
+
   /** Dica de ambiente: em produção (Vercel) não sugerir npm run dev. */
   utils.apiHintHtml = function(){
     try {
@@ -3688,15 +3728,7 @@
 
       fetch(url, proxCtrl ? { signal: proxCtrl.signal } : undefined)
         .then(function (r) {
-          return r.json().then(function (j) {
-            if (!r.ok) {
-              var msg = utils.formatApiError((j && j.error) || j) || "HTTP " + r.status;
-              var err = new Error(msg);
-              err.errosParciais = j && j.errosParciais;
-              throw err;
-            }
-            return j;
-          });
+          return utils.parseApiResponse(r);
         })
         .then(function (j) {
           LICSYSTEM.captacao._renderProximos(j);
@@ -4094,15 +4126,7 @@
         signal: chatCtrl ? chatCtrl.signal : undefined,
       })
         .then(function (r) {
-          return r.json().then(function (j) {
-            if (!r.ok) {
-              var msg = utils.formatApiError((j && j.error) || j) || "HTTP " + r.status;
-              var err = new Error(msg);
-              err.errosParciais = j && j.errosParciais;
-              throw err;
-            }
-            return j;
-          });
+          return utils.parseApiResponse(r);
         })
         .then(function (j) {
           LICSYSTEM.captacao._renderChatEditais(j);
@@ -4565,142 +4589,122 @@
         return false;
       });
     },
+    /** @deprecated PNCP direto no browser — CORS bloqueia em produção. Use /api/radar-pncp. */
     _pncpFetchPropostaPage:function(dataFinal, uf, page, pageSize, modalidade){
       var mod = modalidade != null ? modalidade : 6;
       var url =
-        "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta?dataFinal=" +
-        encodeURIComponent(dataFinal) +
-        "&codigoModalidadeContratacao=" +
-        encodeURIComponent(mod) +
-        (uf ? "&uf=" + encodeURIComponent(uf) : "") +
-        "&pagina=" +
-        page +
-        "&tamanhoPagina=" +
-        pageSize;
+        "/api/radar-pncp?uf=" +
+        encodeURIComponent(uf || "") +
+        "&paginas=1&incluirLeiloes=" +
+        (mod === 1 || mod === 13 ? "1" : "0");
       return fetch(url).then(function(r){
-        if(!r.ok) throw new Error("HTTP " + r.status + " (mod. " + mod + ")");
-        return r.json();
+        return utils.parseApiResponse(r);
       });
     },
     buscarPncp:function(){
       var rawKw = (el("pncpKeywords") && el("pncpKeywords").value) || "";
-      var kwGroups = LICSYSTEM.captacao._pncpExpandKeywordGroups(
-        LICSYSTEM.captacao._pncpParseKeywords(rawKw),
-        rawKw
-      );
       var uf = (el("pncpUf") && el("pncpUf").value) || "";
-      var dataFinal = LICSYSTEM.captacao._pncpDataFinalProposta();
       var incluirLeiloes =
         !el("pncpIncluirLeiloes") ||
         !!(el("pncpIncluirLeiloes") && el("pncpIncluirLeiloes").checked) ||
         LICSYSTEM.captacao._pncpLooksLikeLeilao(rawKw);
       var modalidades = incluirLeiloes ? [1, 13, 6] : [6];
-      var PAGE_SIZE = 50;
-      /* Leilão tem poucos registros; pregão (6) precisa de mais páginas. */
-      var MAX_PAGES_PREGAO = uf === "PR" || uf === "SP" ? 12 : 8;
-      var MAX_PAGES_LEILAO = 4;
       hideAlert("pncpAlert");
       el("pncpResults").innerHTML =
-        '<div class="muted small"><span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Consultando propostas abertas no PNCP (mods ' +
+        '<div class="muted small"><span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Consultando PNCP via proxy (mods ' +
         utils.escapeHtml(modalidades.join(", ")) +
-        ", até " +
-        utils.escapeHtml(dataFinal) +
         ")…</div>";
 
-      var all = [];
-      var seen = Object.create(null);
-      var totalRegistros = 0;
-      var pagesFetched = 0;
+      var url =
+        "/api/radar-pncp?q=" +
+        encodeURIComponent(rawKw) +
+        "&uf=" +
+        encodeURIComponent(uf) +
+        "&incluirLeiloes=" +
+        (incluirLeiloes ? "1" : "0");
 
-      function pageKey(o){
-        return [
-          o.numeroControlePNCP || "",
-          o.numeroCompra || "",
-          o.anoCompra || "",
-          (o.orgaoEntidade && o.orgaoEntidade.cnpj) || "",
-          o.objetoCompra || o.objeto || ""
-        ].join("|");
+      var radarCtrl =
+        typeof AbortController !== "undefined" ? new AbortController() : null;
+      var radarTimer = null;
+      if (radarCtrl) {
+        radarTimer = setTimeout(function () {
+          try {
+            radarCtrl.abort();
+          } catch (e) {}
+        }, 90000);
       }
 
-      function fetchPagesForMod(modalidade, page, maxPages){
-        if(page > maxPages) return Promise.resolve();
-        return LICSYSTEM.captacao
-          ._pncpFetchPropostaPage(dataFinal, uf, page, PAGE_SIZE, modalidade)
-          .then(function(json){
-            pagesFetched++;
-            if(page === 1 && json && json.totalRegistros != null){
-              totalRegistros += Number(json.totalRegistros) || 0;
-            }
-            var arr = (json && (json.data || json.items || json.resultado)) || [];
-            if(!Array.isArray(arr)) arr = [];
-            for(var i = 0; i < arr.length; i++){
-              var o = arr[i];
-              if(o && o._lsModalidade == null) o._lsModalidade = modalidade;
-              var k = pageKey(o);
-              if(seen[k]) continue;
-              seen[k] = true;
-              all.push(o);
-            }
-            var totalPaginas =
-              json && json.totalPaginas != null
-                ? Number(json.totalPaginas)
-                : null;
-            var moreByMeta =
-              totalPaginas != null
-                ? page < totalPaginas
-                : arr.length >= PAGE_SIZE;
-            if(moreByMeta && page < maxPages && arr.length){
-              return fetchPagesForMod(modalidade, page + 1, maxPages);
-            }
-          });
-      }
-
-      function runMods(idx){
-        if(idx >= modalidades.length) return Promise.resolve();
-        var mod = modalidades[idx];
-        var maxP = mod === 6 ? MAX_PAGES_PREGAO : MAX_PAGES_LEILAO;
-        return fetchPagesForMod(mod, 1, maxP).then(function(){
-          return runMods(idx + 1);
-        });
-      }
-
-      runMods(0)
-        .then(function(){
-          LICSYSTEM.captacao._handlePncp(all, kwGroups, uf, {
-            dataFinal: dataFinal,
-            pagesFetched: pagesFetched,
-            totalRegistros: totalRegistros,
-            modalidades: modalidades,
-            leilaoDomain: LICSYSTEM.captacao._pncpLooksLikeLeilao(rawKw),
-            rawKeywords: rawKw
-          });
+      fetch(url, radarCtrl ? { signal: radarCtrl.signal } : undefined)
+        .then(function (r) {
+          return utils.parseApiResponse(r);
         })
-        .catch(function(err){
+        .then(function (j) {
+          LICSYSTEM.captacao._renderRadarPncp(j, rawKw, uf);
+        })
+        .catch(function (err) {
           el("pncpResults").innerHTML = "";
+          var aborted =
+            err &&
+            (err.name === "AbortError" ||
+              /aborted|timeout/i.test(String(err.message || "")));
           showAlert(
             "pncpAlert",
             "error",
-            "Não foi possível consultar o PNCP (" +
-              utils.escapeHtml(err.message || String(err)) +
-              "). Se você abriu via <b>file://</b>, o navegador pode bloquear a requisição (CORS). Tente abrir por um servidor local (ex.: <code>npm run dev:api</code>)."
+            aborted
+              ? "A consulta ao PNCP excedeu o tempo limite. Tente novamente ou reduza o escopo (UF)."
+              : "Não foi possível consultar o PNCP (" +
+                utils.escapeHtml(utils.formatApiError(err)) +
+                "). A busca usa o proxy <code>/api/radar-pncp</code> (mesmo domínio). " +
+                utils.apiHintHtml()
           );
+        })
+        .then(function () {
+          if (radarTimer) clearTimeout(radarTimer);
         });
+    },
+
+    _renderRadarPncp:function(j, rawKw, uf){
+      var list = (j && (j.editais || j.data)) || [];
+      var kwGroups = LICSYSTEM.captacao._pncpExpandKeywordGroups(
+        LICSYSTEM.captacao._pncpParseKeywords(rawKw || (j && j.rawKeywords) || ""),
+        rawKw || (j && j.rawKeywords) || ""
+      );
+      /* API já filtra; _handlePncp ainda renderiza (aceita itens mapeados). */
+      LICSYSTEM.captacao._handlePncp(list, [], uf || (j && j.uf) || "", {
+        dataFinal: (j && j.dataFinalPncp) || "",
+        pagesFetched: (j && j.pagesFetched) || 0,
+        totalRegistros: (j && j.totalRegistrosPncp) || (j && j.totalBrutoPncp) || list.length,
+        modalidades: (j && j.modalidades) || [],
+        leilaoDomain: !!(j && j.leilaoDomain),
+        rawKeywords: rawKw || (j && j.rawKeywords) || "",
+        fromProxy: true,
+        totalBruto: (j && j.totalBrutoPncp) || 0,
+        avisos: (j && j.avisos) || []
+      });
+      /* Se API já filtrou e passou lista vazia com bruto > 0, _handlePncp trata. */
+      if (kwGroups && !list.length && j && j.totalBrutoPncp) {
+        /* noop — _handlePncp já mostra mensagem */
+      }
     },
 
     _handlePncp:function(arr, kwGroups, uf, meta){
       meta = meta || {};
       if(!Array.isArray(arr)) arr = [];
+      var fromProxy = !!meta.fromProxy;
       var wantVeiculo = LICSYSTEM.captacao._pncpLooksLikeVeiculoSucata(meta.rawKeywords || "");
-      var matches = arr.filter(function(o){
-        var hay = LICSYSTEM.captacao._pncpTextHaystack(o);
-        if(!LICSYSTEM.captacao._pncpKeywordMatch(hay, kwGroups)) return false;
-        if(wantVeiculo && !LICSYSTEM.captacao._pncpHaystackVeiculoSucata(hay)) return false;
-        return true;
-      });
+      /* Proxy /api/radar-pncp já filtra no servidor — não refiltrar. */
+      var matches = fromProxy
+        ? arr.slice()
+        : arr.filter(function(o){
+            var hay = LICSYSTEM.captacao._pncpTextHaystack(o);
+            if(!LICSYSTEM.captacao._pncpKeywordMatch(hay, kwGroups)) return false;
+            if(wantVeiculo && !LICSYSTEM.captacao._pncpHaystackVeiculoSucata(hay)) return false;
+            return true;
+          });
       var box = el("pncpResults");
       var kwLabel = (meta.rawKeywords || "")
         .trim() ||
-        kwGroups
+        (kwGroups || [])
           .filter(function(g){ return g.length <= 3; })
           .slice(0, 8)
           .map(function(g){ return g.join(" "); })
@@ -4713,8 +4717,9 @@
         meta.modalidades && meta.modalidades.length
           ? "mods " + meta.modalidades.join(", ")
           : "mod. 6";
+      var bruto = meta.totalBruto != null ? Number(meta.totalBruto) : arr.length;
       var scanned =
-        arr.length +
+        (fromProxy ? bruto : arr.length) +
         " registro(s) varridos" +
         (meta.pagesFetched ? " em " + meta.pagesFetched + " página(s)" : "") +
         " (" +
@@ -4727,7 +4732,7 @@
         " <b>Importante:</b> leilões de veículos e sucata muitas vezes não estão no PNCP — circulam em sites especializados ou só no portal local do órgão.";
 
       if(!matches.length){
-        if(!arr.length){
+        if(!bruto){
           box.innerHTML =
             '<div class="muted small">PNCP não retornou propostas abertas para os filtros (' +
             utils.escapeHtml(horizonte) +
@@ -4762,7 +4767,7 @@
           "pncpAlert",
           "info",
           "Consulta concluída — " +
-            arr.length +
+            bruto +
             " registro(s) no PNCP, nenhum com as palavras-chave informadas."
         );
         return;
