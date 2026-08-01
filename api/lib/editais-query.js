@@ -1248,6 +1248,8 @@ module.exports = {
   fetchPropostasUfRobusto: fetchPropostasUfRobusto,
   fetchPncpJson: fetchPncpJson,
   looksLikeLeilaoText: looksLikeLeilaoText,
+  looksLikeVeiculoSucataText: looksLikeVeiculoSucataText,
+  haystackVeiculoSucata: haystackVeiculoSucata,
   expandLeilaoKeywords: expandLeilaoKeywords,
   keywordMatchesObjeto: keywordMatchesObjeto,
   JANELA_ANUAL_DIAS: JANELA_ANUAL_DIAS,
