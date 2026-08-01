@@ -228,6 +228,10 @@
                 <input type="checkbox" id="chatEditalAmpliar" />
                 Ampliar modalidades
               </label>
+              <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="chatEditalLeiloes" checked />
+                Incluir leilões
+              </label>
             </div>
             <div class="small muted" id="chatEditalMeta" style="margin:8px 0 4px"></div>
             <div id="chatEditalResults"></div>
@@ -301,6 +305,10 @@
                 Ampliar modalidades (concorrência / pregão presencial)
               </label>
               <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="proxLeiloes" checked />
+                Incluir leilões
+              </label>
+              <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer">
                 <input type="checkbox" id="proxFederal" />
                 Incluir órgãos federais no raio
               </label>
@@ -333,7 +341,7 @@
             <div class="form-row">
               <div style="flex:2">
                 <label class="fld">Palavras-chave de interesse (separadas por vírgula)</label>
-                <input type="text" id="pncpKeywords" placeholder="ex.: cesta basica, café, material construção" />
+                <input type="text" id="pncpKeywords" placeholder="ex.: leilao veiculo, sucata, cesta basica" />
               </div>
               <div style="max-width:160px">
                 <label class="fld">UF</label>
@@ -342,6 +350,13 @@
               <div style="max-width:170px;display:flex;align-items:flex-end">
                 <button class="btn btn-gold" id="btnPncp" style="width:100%">🔍 Buscar no PNCP</button>
               </div>
+            </div>
+            <div class="btn-row" style="margin-top:0;flex-wrap:wrap;gap:8px;align-items:center">
+              <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="pncpIncluirLeiloes" checked />
+                Incluir leilões (eletrônico e presencial)
+              </label>
+              <span class="small muted">Leilões de veículos/sucata muitas vezes só aparecem em sites especializados — o PNCP cobre só o que os órgãos cadastram lá.</span>
             </div>
             <div id="pncpResults"></div>
           </div>
