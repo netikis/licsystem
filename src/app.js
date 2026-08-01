@@ -3673,12 +3673,25 @@
         (ampliar ? "&ampliar=1" : "") +
         (federal ? "&esferas=M,E,F" : "&esferas=M,E");
 
-      fetch(url)
+      var proxCtrl =
+        typeof AbortController !== "undefined" ? new AbortController() : null;
+      var proxTimer = null;
+      if (proxCtrl) {
+        proxTimer = setTimeout(function () {
+          try {
+            proxCtrl.abort();
+          } catch (e) {}
+        }, 90000);
+      }
+
+      fetch(url, proxCtrl ? { signal: proxCtrl.signal } : undefined)
         .then(function (r) {
           return r.json().then(function (j) {
             if (!r.ok) {
               var msg = utils.formatApiError((j && j.error) || j) || "HTTP " + r.status;
-              throw new Error(msg);
+              var err = new Error(msg);
+              err.errosParciais = j && j.errosParciais;
+              throw err;
             }
             return j;
           });
@@ -3691,16 +3704,23 @@
           LICSYSTEM.captacao._proxList = [];
           LICSYSTEM.captacao.updateProxPager();
           LICSYSTEM.captacao.updateCollapseSummary("prox", "");
+          var aborted =
+            err &&
+            (err.name === "AbortError" || /aborted|timeout/i.test(String(err.message || "")));
           showAlert(
             "proxAlert",
             "error",
-            "Não foi possível buscar editais no PNCP (" +
-              utils.escapeHtml(utils.formatApiError(err)) +
-              "). A seleção de município funciona offline. " +
-              utils.apiHintHtml()
+            aborted
+              ? "A consulta ao PNCP excedeu o tempo limite (90s). O portal pode estar lento — tente de novo ou use janela 45 dias. " +
+                utils.apiHintHtml()
+              : "Não foi possível buscar editais no PNCP (" +
+                utils.escapeHtml(utils.formatApiError(err)) +
+                "). A seleção de município funciona offline. " +
+                utils.apiHintHtml()
           );
         })
         .then(function () {
+          if (proxTimer) clearTimeout(proxTimer);
           LICSYSTEM.captacao._proxBusy = false;
           if (btn) btn.disabled = false;
         });
@@ -3755,6 +3775,21 @@
       );
 
       if (!list.length) {
+        var proxErros = (j && j.errosParciais) || [];
+        var proxErroTxt = proxErros.length
+          ? " Falhas parciais no PNCP: " +
+            proxErros
+              .slice(0, 3)
+              .map(function (e) {
+                return (
+                  (e.uf || e.ibge || "?") +
+                  " — " +
+                  (e.error || "erro")
+                );
+              })
+              .join("; ") +
+            "."
+          : "";
         box.innerHTML =
           '<div class="muted small">Nenhuma proposta com encerramento no horizonte ' +
           utils.escapeHtml(j.janelaLabel || "anual") +
@@ -3764,12 +3799,22 @@
               j.totalBrutoPncp +
               " registro(s) nas UFs consultadas, mas nenhum ficou dentro do raio/filtros)."
             : ".") +
+          proxErroTxt +
+          (j.estrategia === "municipio-fallback"
+            ? " Estratégia: fallback por município (UF indisponível no PNCP)."
+            : "") +
           " Tente aumentar o raio, ampliar modalidades ou limpar as palavras-chave.</div>";
         LICSYSTEM.captacao.updateProxPager();
         showAlert(
           "proxAlert",
-          "info",
-          "Consulta concluída — nenhum edital no raio com os filtros atuais. Fonte: PNCP (dados reais; sem resultados inventados)."
+          proxErros.length && !j.totalBrutoPncp ? "error" : "info",
+          proxErros.length && !j.totalBrutoPncp
+            ? "PNCP falhou em parte das consultas — sem editais utilizáveis. " +
+              utils.escapeHtml(
+                (proxErros[0] && proxErros[0].error) || "Erro no portal"
+              ) +
+              "."
+            : "Consulta concluída — nenhum edital no raio com os filtros atuais. Fonte: PNCP (dados reais; sem resultados inventados)."
         );
         return;
       }
@@ -4027,16 +4072,30 @@
           ")… isso pode levar alguns segundos.</div>";
       }
 
+      var chatCtrl =
+        typeof AbortController !== "undefined" ? new AbortController() : null;
+      var chatTimer = null;
+      if (chatCtrl) {
+        chatTimer = setTimeout(function () {
+          try {
+            chatCtrl.abort();
+          } catch (e) {}
+        }, 90000);
+      }
+
       fetch("/api/editais-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify(body),
+        signal: chatCtrl ? chatCtrl.signal : undefined,
       })
         .then(function (r) {
           return r.json().then(function (j) {
             if (!r.ok) {
               var msg = utils.formatApiError((j && j.error) || j) || "HTTP " + r.status;
-              throw new Error(msg);
+              var err = new Error(msg);
+              err.errosParciais = j && j.errosParciais;
+              throw err;
             }
             return j;
           });
@@ -4049,16 +4108,23 @@
           LICSYSTEM.captacao._chatList = [];
           LICSYSTEM.captacao.updateChatPager();
           LICSYSTEM.captacao.updateCollapseSummary("chat", "");
+          var aborted =
+            err &&
+            (err.name === "AbortError" || /aborted|timeout/i.test(String(err.message || "")));
           showAlert(
             "chatEditalAlert",
             "error",
-            "Não foi possível consultar editais (" +
-              utils.escapeHtml(utils.formatApiError(err)) +
-              "). " +
-              utils.apiHintHtml()
+            aborted
+              ? "A consulta ao PNCP excedeu o tempo limite (90s). O portal pode estar lento — tente de novo (Norte Pioneiro consulta vários municípios). " +
+                utils.apiHintHtml()
+              : "Não foi possível consultar editais (" +
+                utils.escapeHtml(utils.formatApiError(err)) +
+                "). " +
+                utils.apiHintHtml()
           );
         })
         .then(function () {
+          if (chatTimer) clearTimeout(chatTimer);
           LICSYSTEM.captacao._chatBusy = false;
           if (btn) btn.disabled = false;
         });
@@ -4123,6 +4189,21 @@
               .join(", ") +
             "."
           : "";
+        var chatErros = (j && j.errosParciais) || [];
+        var chatErroTxt = chatErros.length
+          ? " Falhas parciais no PNCP: " +
+            chatErros
+              .slice(0, 3)
+              .map(function (e) {
+                return (
+                  (e.ibge || e.uf || "?") +
+                  " — " +
+                  (e.error || "erro")
+                );
+              })
+              .join("; ") +
+            "."
+          : "";
         box.innerHTML =
           '<div class="muted small">Nenhuma proposta com encerramento no horizonte ' +
           utils.escapeHtml(j.janelaLabel || "anual") +
@@ -4133,6 +4214,7 @@
               " registro(s) brutos; nenhum passou no filtro de município/categoria)."
             : ".") +
           amostraTxt +
+          chatErroTxt +
           (j.dataFinalPncp
             ? " dataFinal PNCP até " + j.dataFinalPncp + "."
             : "") +
@@ -4140,8 +4222,10 @@
         LICSYSTEM.captacao.updateChatPager();
         showAlert(
           "chatEditalAlert",
-          "info",
-          "Consulta concluída — sem resultados com os filtros atuais (dados reais do PNCP)."
+          chatErros.length && !j.totalBrutoPncp ? "error" : "info",
+          chatErros.length && !j.totalBrutoPncp
+            ? "PNCP falhou em parte das consultas — sem editais utilizáveis."
+            : "Consulta concluída — sem resultados com os filtros atuais (dados reais do PNCP)."
         );
         return;
       }
