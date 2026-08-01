@@ -3624,6 +3624,7 @@
       var cobertura = (el("proxCobertura") && el("proxCobertura").value) || "";
       var kw = (el("proxKeywords") && el("proxKeywords").value) || "";
       var ampliar = !!(el("proxAmpliar") && el("proxAmpliar").checked);
+      var leiloes = !el("proxLeiloes") || !!(el("proxLeiloes") && el("proxLeiloes").checked);
       var federal = !!(el("proxFederal") && el("proxFederal").checked);
       var janela = (el("proxJanela") && el("proxJanela").value) || "ano";
 
@@ -3671,6 +3672,7 @@
         (cobertura ? "&cobertura=" + encodeURIComponent(cobertura) : "") +
         (kw ? "&q=" + encodeURIComponent(kw) : "") +
         (ampliar ? "&ampliar=1" : "") +
+        (leiloes ? "&leiloes=1" : "") +
         (federal ? "&esferas=M,E,F" : "&esferas=M,E");
 
       var proxCtrl =
@@ -3803,7 +3805,7 @@
           (j.estrategia === "municipio-fallback"
             ? " Estratégia: fallback por município (UF indisponível no PNCP)."
             : "") +
-          " Tente aumentar o raio, ampliar modalidades ou limpar as palavras-chave.</div>";
+          " Tente aumentar o raio, marcar Incluir leilões, ampliar modalidades ou limpar as palavras-chave. Leilões de veículos/sucata muitas vezes não estão no PNCP.</div>";
         LICSYSTEM.captacao.updateProxPager();
         showAlert(
           "proxAlert",
@@ -4042,6 +4044,7 @@
       opts = opts || {};
       hideAlert("chatEditalAlert");
       var ampliar = !!(el("chatEditalAmpliar") && el("chatEditalAmpliar").checked);
+      var leiloes = !el("chatEditalLeiloes") || !!(el("chatEditalLeiloes") && el("chatEditalLeiloes").checked);
       var janela = (el("chatEditalJanela") && el("chatEditalJanela").value) || "ano";
       var body = {
         mensagem: opts.mensagem || undefined,
@@ -4049,6 +4052,7 @@
         municipio: opts.municipio || undefined,
         categoria: opts.categoria || undefined,
         ampliar: ampliar ? "1" : undefined,
+        leiloes: leiloes ? "1" : undefined,
         janela: janela,
         esferas: "M,E",
       };
@@ -4218,7 +4222,7 @@
           (j.dataFinalPncp
             ? " dataFinal PNCP até " + j.dataFinalPncp + "."
             : "") +
-          " Se o edital existir só no portal da prefeitura, não aparece aqui.</div>";
+          " Se o edital existir só no portal da prefeitura, não aparece aqui. Leilões de veículos/sucata muitas vezes não estão no PNCP (sites especializados).</div>";
         LICSYSTEM.captacao.updateChatPager();
         showAlert(
           "chatEditalAlert",
@@ -4487,6 +4491,28 @@
       }
       return utils.ymd(yearEnd);
     },
+    /** Sinônimos para leilão / veículo / sucata (OR). */
+    _pncpLeilaoSynonyms:function(){
+      return [
+        "leilao","leiloes","sucata","sucatas","veiculo","veiculos",
+        "automovel","automoveis","documentado","documentados","frota",
+        "alienacao","alienacoes","inservivel","inserviveis"
+      ];
+    },
+    _pncpLooksLikeLeilao:function(raw){
+      return /leil|sucat|veicul|automov|frota|alienac|documentad|inserviv/.test(
+        utils.fold(raw || "")
+      );
+    },
+    /** Intenção de veículo/sucata (não só leilão de imóvel/terreno). */
+    _pncpLooksLikeVeiculoSucata:function(raw){
+      return /sucat|veicul|automov|frota|documentad/.test(utils.fold(raw || ""));
+    },
+    _pncpHaystackVeiculoSucata:function(haystack){
+      return /sucat|veicul|automov|frota|documentad|maquin|moveis|bem movel|bens moveis|inserviv/.test(
+        haystack || ""
+      );
+    },
     /** "CESTA BASICA, CAFÉ" → [["cesta","basica"],["cafe"]] (vírgula=OU, espaços=E). */
     _pncpParseKeywords:function(raw){
       return String(raw || "")
@@ -4496,6 +4522,19 @@
         })
         .filter(function(g){ return g.length; });
     },
+    /**
+     * Frases de leilão/veículo/sucata viram grupos OU de sinônimos
+     * (não exige AND estilo "cesta basica").
+     */
+    _pncpExpandKeywordGroups:function(kwGroups, raw){
+      var groups = Array.isArray(kwGroups) ? kwGroups.slice() : [];
+      if(!LICSYSTEM.captacao._pncpLooksLikeLeilao(raw || "")) return groups;
+      var syns = LICSYSTEM.captacao._pncpLeilaoSynonyms();
+      for(var i = 0; i < syns.length; i++){
+        groups.push([syns[i]]);
+      }
+      return groups;
+    },
     _pncpTextHaystack:function(o){
       var parts = [
         o.objetoCompra,
@@ -4503,50 +4542,74 @@
         o.objetoContratacao,
         o.informacaoComplementar,
         o.descricao,
-        o.titulo
+        o.titulo,
+        o.modalidadeNome
       ];
       return utils.fold(parts.filter(Boolean).join(" ")).toLowerCase();
     },
-    /** Grupo casa se TODOS os tokens aparecem; qualquer grupo basta (OU). */
+    /**
+     * Grupo: AND dos tokens; em domínio leilão, também basta qualquer token ≥4.
+     * Qualquer grupo basta (OU).
+     */
     _pncpKeywordMatch:function(haystack, kwGroups){
       if(!kwGroups || !kwGroups.length) return true;
       return kwGroups.some(function(tokens){
-        return tokens.every(function(t){ return haystack.indexOf(t) !== -1; });
+        if(!tokens || !tokens.length) return false;
+        if(tokens.every(function(t){ return haystack.indexOf(t) !== -1; })) return true;
+        var joined = tokens.join(" ");
+        if(LICSYSTEM.captacao._pncpLooksLikeLeilao(joined)){
+          return tokens.some(function(t){
+            return t.length >= 4 && haystack.indexOf(t) !== -1;
+          });
+        }
+        return false;
       });
     },
-    _pncpFetchPropostaPage:function(dataFinal, uf, page, pageSize){
+    _pncpFetchPropostaPage:function(dataFinal, uf, page, pageSize, modalidade){
+      var mod = modalidade != null ? modalidade : 6;
       var url =
         "https://pncp.gov.br/api/consulta/v1/contratacoes/proposta?dataFinal=" +
         encodeURIComponent(dataFinal) +
-        "&codigoModalidadeContratacao=6" +
+        "&codigoModalidadeContratacao=" +
+        encodeURIComponent(mod) +
         (uf ? "&uf=" + encodeURIComponent(uf) : "") +
         "&pagina=" +
         page +
         "&tamanhoPagina=" +
         pageSize;
       return fetch(url).then(function(r){
-        if(!r.ok) throw new Error("HTTP " + r.status);
+        if(!r.ok) throw new Error("HTTP " + r.status + " (mod. " + mod + ")");
         return r.json();
       });
     },
     buscarPncp:function(){
-      var kwGroups = LICSYSTEM.captacao._pncpParseKeywords(
-        (el("pncpKeywords") && el("pncpKeywords").value) || ""
+      var rawKw = (el("pncpKeywords") && el("pncpKeywords").value) || "";
+      var kwGroups = LICSYSTEM.captacao._pncpExpandKeywordGroups(
+        LICSYSTEM.captacao._pncpParseKeywords(rawKw),
+        rawKw
       );
       var uf = (el("pncpUf") && el("pncpUf").value) || "";
       var dataFinal = LICSYSTEM.captacao._pncpDataFinalProposta();
+      var incluirLeiloes =
+        !el("pncpIncluirLeiloes") ||
+        !!(el("pncpIncluirLeiloes") && el("pncpIncluirLeiloes").checked) ||
+        LICSYSTEM.captacao._pncpLooksLikeLeilao(rawKw);
+      var modalidades = incluirLeiloes ? [1, 13, 6] : [6];
       var PAGE_SIZE = 50;
-      /* PR costuma ter milhares de propostas; páginas iniciais raramente trazem o match. */
-      var MAX_PAGES = uf === "PR" || uf === "SP" ? 12 : 8;
+      /* Leilão tem poucos registros; pregão (6) precisa de mais páginas. */
+      var MAX_PAGES_PREGAO = uf === "PR" || uf === "SP" ? 12 : 8;
+      var MAX_PAGES_LEILAO = 4;
       hideAlert("pncpAlert");
       el("pncpResults").innerHTML =
-        '<div class="muted small"><span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Consultando propostas abertas no PNCP (até ' +
+        '<div class="muted small"><span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Consultando propostas abertas no PNCP (mods ' +
+        utils.escapeHtml(modalidades.join(", ")) +
+        ", até " +
         utils.escapeHtml(dataFinal) +
         ")…</div>";
 
       var all = [];
       var seen = Object.create(null);
-      var totalRegistros = null;
+      var totalRegistros = 0;
       var pagesFetched = 0;
 
       function pageKey(o){
@@ -4559,19 +4622,20 @@
         ].join("|");
       }
 
-      function fetchPages(page){
-        if(page > MAX_PAGES) return Promise.resolve();
+      function fetchPagesForMod(modalidade, page, maxPages){
+        if(page > maxPages) return Promise.resolve();
         return LICSYSTEM.captacao
-          ._pncpFetchPropostaPage(dataFinal, uf, page, PAGE_SIZE)
+          ._pncpFetchPropostaPage(dataFinal, uf, page, PAGE_SIZE, modalidade)
           .then(function(json){
             pagesFetched++;
-            if(totalRegistros == null && json && json.totalRegistros != null){
-              totalRegistros = Number(json.totalRegistros) || 0;
+            if(page === 1 && json && json.totalRegistros != null){
+              totalRegistros += Number(json.totalRegistros) || 0;
             }
             var arr = (json && (json.data || json.items || json.resultado)) || [];
             if(!Array.isArray(arr)) arr = [];
             for(var i = 0; i < arr.length; i++){
               var o = arr[i];
+              if(o && o._lsModalidade == null) o._lsModalidade = modalidade;
               var k = pageKey(o);
               if(seen[k]) continue;
               seen[k] = true;
@@ -4585,19 +4649,30 @@
               totalPaginas != null
                 ? page < totalPaginas
                 : arr.length >= PAGE_SIZE;
-            if(moreByMeta && page < MAX_PAGES && arr.length){
-              return fetchPages(page + 1);
+            if(moreByMeta && page < maxPages && arr.length){
+              return fetchPagesForMod(modalidade, page + 1, maxPages);
             }
           });
       }
 
-      fetchPages(1)
+      function runMods(idx){
+        if(idx >= modalidades.length) return Promise.resolve();
+        var mod = modalidades[idx];
+        var maxP = mod === 6 ? MAX_PAGES_PREGAO : MAX_PAGES_LEILAO;
+        return fetchPagesForMod(mod, 1, maxP).then(function(){
+          return runMods(idx + 1);
+        });
+      }
+
+      runMods(0)
         .then(function(){
           LICSYSTEM.captacao._handlePncp(all, kwGroups, uf, {
             dataFinal: dataFinal,
             pagesFetched: pagesFetched,
             totalRegistros: totalRegistros,
-            maxPages: MAX_PAGES
+            modalidades: modalidades,
+            leilaoDomain: LICSYSTEM.captacao._pncpLooksLikeLeilao(rawKw),
+            rawKeywords: rawKw
           });
         })
         .catch(function(err){
@@ -4615,27 +4690,41 @@
     _handlePncp:function(arr, kwGroups, uf, meta){
       meta = meta || {};
       if(!Array.isArray(arr)) arr = [];
+      var wantVeiculo = LICSYSTEM.captacao._pncpLooksLikeVeiculoSucata(meta.rawKeywords || "");
       var matches = arr.filter(function(o){
-        return LICSYSTEM.captacao._pncpKeywordMatch(
-          LICSYSTEM.captacao._pncpTextHaystack(o),
-          kwGroups
-        );
+        var hay = LICSYSTEM.captacao._pncpTextHaystack(o);
+        if(!LICSYSTEM.captacao._pncpKeywordMatch(hay, kwGroups)) return false;
+        if(wantVeiculo && !LICSYSTEM.captacao._pncpHaystackVeiculoSucata(hay)) return false;
+        return true;
       });
       var box = el("pncpResults");
-      var kwLabel = kwGroups
-        .map(function(g){ return g.join(" "); })
-        .join(", ");
+      var kwLabel = (meta.rawKeywords || "")
+        .trim() ||
+        kwGroups
+          .filter(function(g){ return g.length <= 3; })
+          .slice(0, 8)
+          .map(function(g){ return g.join(" "); })
+          .join(", ");
       var horizonte =
         meta.dataFinal
           ? "propostas com encerramento até " + meta.dataFinal
           : "período consultado";
+      var modLabel =
+        meta.modalidades && meta.modalidades.length
+          ? "mods " + meta.modalidades.join(", ")
+          : "mod. 6";
       var scanned =
         arr.length +
         " registro(s) varridos" +
         (meta.pagesFetched ? " em " + meta.pagesFetched + " página(s)" : "") +
+        " (" +
+        modLabel +
+        ")" +
         (meta.totalRegistros != null
-          ? " (PNCP informa " + meta.totalRegistros + " no total)"
+          ? " (PNCP informa ~" + meta.totalRegistros + " no total nas modalidades)"
           : "");
+      var leilaoHint =
+        " <b>Importante:</b> leilões de veículos e sucata muitas vezes não estão no PNCP — circulam em sites especializados ou só no portal local do órgão.";
 
       if(!matches.length){
         if(!arr.length){
@@ -4643,7 +4732,13 @@
             '<div class="muted small">PNCP não retornou propostas abertas para os filtros (' +
             utils.escapeHtml(horizonte) +
             (uf ? ", UF " + utils.escapeHtml(uf) : "") +
-            ").</div>";
+            ", " +
+            utils.escapeHtml(modLabel) +
+            ")." +
+            (meta.leilaoDomain || (meta.modalidades && meta.modalidades.indexOf(1) !== -1)
+              ? leilaoHint
+              : "") +
+            "</div>";
           showAlert(
             "pncpAlert",
             "info",
@@ -4658,7 +4753,11 @@
           utils.escapeHtml(scanned) +
           "; " +
           utils.escapeHtml(horizonte) +
-          ". A busca ignora acentos e exige todos os termos de cada grupo (vírgula = qualquer grupo).</div>";
+          ". A busca ignora acentos; vírgula = OU entre grupos. Em leilão/veículo/sucata, sinônimos entram como OU (não exige todos os termos juntos)." +
+          (meta.leilaoDomain || (meta.modalidades && meta.modalidades.indexOf(1) !== -1)
+            ? leilaoHint
+            : "") +
+          "</div>";
         showAlert(
           "pncpAlert",
           "info",
@@ -4692,8 +4791,11 @@
         var objeto=o.objetoCompra || o.objeto || o.objetoContratacao || "";
         var link=o.linkSistemaOrigem || o.link || "";
         var val=o.valorTotalEstimado || o.valorGlobal || null;
+        var modNome = o.modalidadeNome || (o._lsModalidade != null ? ("Mod. " + o._lsModalidade) : "");
         html+='<div class="result-item r-green">'+
-          '<div class="ri-title">'+utils.escapeHtml(orgao)+' <span class="badge-status b-yellow">'+utils.escapeHtml((o.unidadeOrgao&&o.unidadeOrgao.ufSigla)||o.uf||uf||"")+'</span></div>'+
+          '<div class="ri-title">'+utils.escapeHtml(orgao)+' <span class="badge-status b-yellow">'+utils.escapeHtml((o.unidadeOrgao&&o.unidadeOrgao.ufSigla)||o.uf||uf||"")+'</span>'+
+          (modNome ? ' <span class="badge-status b-blue">'+utils.escapeHtml(modNome)+'</span>' : '')+
+          '</div>'+
           '<div class="ri-sub">'+utils.escapeHtml(objeto)+'</div>'+
           (val?'<div class="small" style="margin-top:6px"><b>Estimado:</b> '+utils.formatBrl(val)+'</div>':'')+
           (link?'<div style="margin-top:8px"><a class="link" target="_blank" href="'+utils.escapeHtml(link)+'">Ver no sistema de origem ↗</a></div>':'')+
