@@ -134,6 +134,7 @@ module.exports = async function handler(req, res) {
     return json(res, status, {
       ok: false,
       error: err.message || String(err),
+      errosParciais: err.errosParciais || undefined,
     });
   }
 };
