@@ -1,13 +1,10 @@
 /**
  * GET /api/search-ml?q=PRODUTO&limit=10
  *
- * Fluxo OAuth2 Client Credentials:
- * 1) POST /oauth/token
- * 2) access_token
- * 3) GET /sites/MLB/search com Authorization: Bearer
- *
- * Em erro ML: devolve ml_debug { endpoint, status, body, rawBody }.
- * Se search oficial falhar por política, tenta listagem pública.
+ * 1) POST /oauth/token → access_token
+ * 2) GET /sites/MLB/search com Authorization: Bearer <token>
+ * 3) Se 401/403 → retry imediato SEM Authorization (endpoint público)
+ * 4) Se ainda falhar → listagem pública (HTML/JSON-LD)
  */
 var safeJson = require("./_lib/safe-json");
 var mlAuth = require("./_lib/ml-auth");
@@ -61,16 +58,8 @@ function mapOfficialItem(it) {
   };
 }
 
-function isUnauthorized(status, message) {
-  var msg = String(message || "").toLowerCase();
-  return (
-    status === 401 ||
-    status === 403 ||
-    msg.indexOf("unauthorized") !== -1 ||
-    msg.indexOf("forbidden") !== -1 ||
-    msg.indexOf("access_denied") !== -1 ||
-    msg.indexOf("policy") !== -1
-  );
+function isAuthBlocked(status) {
+  return status === 401 || status === 403;
 }
 
 function mlDebugFromErr(err, fallbackEndpoint) {
@@ -90,6 +79,7 @@ function mlDebugFromErr(err, fallbackEndpoint) {
     rawBody: raw.slice(0, 4000),
     message: err ? String(err.message || err) : "",
     code: (err && err.code) || undefined,
+    mode: (err && err.mode) || undefined,
   };
 }
 
@@ -116,52 +106,94 @@ function errorPayload(q, err, extra) {
   );
 }
 
-/**
- * Busca autorizada — Bearer obrigatório.
- */
-async function searchAuthorized(q, limit, token) {
-  var endpoint = "/sites/MLB/search";
-  var url =
-    "https://api.mercadolibre.com/sites/MLB/search?q=" +
-    encodeURIComponent(q) +
-    "&limit=" +
-    encodeURIComponent(limit);
-
-  var r = await fetch(url, {
-    method: "GET",
-    headers: mlAuth.authHeaders(token),
-  });
-
-  var text = await r.text();
+function parseSearchResponse(r, text) {
   var j = null;
   try {
     j = text ? JSON.parse(text) : null;
   } catch (e) {
     j = null;
   }
+  return j;
+}
+
+function throwSearchError(status, j, text, mode) {
+  var msg =
+    (j && (j.message || j.error_description || j.error)) ||
+    String(text || "").slice(0, 200) ||
+    "Mercado Livre HTTP " + status;
+  var err = new Error(String(msg));
+  mlAuth.attachMlError(err, {
+    endpoint: "/sites/MLB/search",
+    status: status,
+    body: j != null ? j : { raw: String(text || "").slice(0, 2000) },
+    rawBody: String(text || "").slice(0, 4000),
+    code: "ml_search_failed",
+  });
+  err.mode = mode;
+  err.unauthorized = isAuthBlocked(status);
+  throw err;
+}
+
+/**
+ * GET /sites/MLB/search
+ * mode "bearer" → Authorization: Bearer ${access_token}
+ * mode "anonymous" → sem Authorization
+ */
+async function fetchMlbSearch(q, limit, mode, access_token) {
+  var url =
+    "https://api.mercadolibre.com/sites/MLB/search?q=" +
+    encodeURIComponent(q) +
+    "&limit=" +
+    encodeURIComponent(limit);
+
+  var headers = { Accept: "application/json" };
+  if (mode === "bearer") {
+    var token = String(access_token || "").trim();
+    headers.Authorization = "Bearer " + token;
+  }
+
+  var r = await fetch(url, { method: "GET", headers: headers });
+  var text = await r.text();
+  var j = parseSearchResponse(r, text);
 
   if (r.ok && j && Array.isArray(j.results)) {
     return {
       ok: true,
       results: j.results.map(mapOfficialItem),
-      source: "api_oficial",
+      source: mode === "bearer" ? "api_oficial" : "api_anonima",
+      mode: mode,
+      status: r.status,
     };
   }
 
-  var msg =
-    (j && (j.message || j.error_description || j.error)) ||
-    text.slice(0, 200) ||
-    "Mercado Livre HTTP " + r.status;
-  var err = new Error(String(msg));
-  mlAuth.attachMlError(err, {
-    endpoint: endpoint,
+  return {
+    ok: false,
     status: r.status,
-    body: j != null ? j : { raw: String(text || "").slice(0, 2000) },
-    rawBody: String(text || "").slice(0, 4000),
-    code: "ml_search_failed",
-  });
-  err.unauthorized = isUnauthorized(r.status, msg);
-  throw err;
+    body: j,
+    rawBody: text,
+    mode: mode,
+  };
+}
+
+/**
+ * Plano A: Bearer. Plano B (401/403): mesma URL sem Authorization.
+ */
+async function searchWithFallback(q, limit, access_token) {
+  var withAuth = await fetchMlbSearch(q, limit, "bearer", access_token);
+  if (withAuth.ok) return withAuth;
+
+  if (isAuthBlocked(withAuth.status)) {
+    var anon = await fetchMlbSearch(q, limit, "anonymous", "");
+    if (anon.ok) {
+      anon.retried_without_auth = true;
+      anon.prior_status = withAuth.status;
+      anon.prior_body = withAuth.body;
+      return anon;
+    }
+    throwSearchError(anon.status, anon.body, anon.rawBody, "anonymous");
+  }
+
+  throwSearchError(withAuth.status, withAuth.body, withAuth.rawBody, "bearer");
 }
 
 async function handler(req, res) {
@@ -188,14 +220,14 @@ async function handler(req, res) {
     });
   }
 
-  var accessToken = "";
+  var access_token = "";
   try {
-    accessToken = await mlAuth.getAccessToken();
+    access_token = await mlAuth.getAccessToken();
   } catch (tokenErr) {
     return json(res, 200, errorPayload(q, tokenErr, { code: "ml_token_failed" }));
   }
 
-  if (!accessToken) {
+  if (!access_token) {
     return json(
       res,
       200,
@@ -215,25 +247,44 @@ async function handler(req, res) {
 
   var variants = mlPublic.buildQueryVariants(q);
   var lastErr = null;
-  var authHeaderSent = true;
 
   for (var vi = 0; vi < Math.min(variants.length, 3); vi++) {
     try {
-      var official = await searchAuthorized(variants[vi], limit, accessToken);
-      if (official.ok && official.results.length) {
+      var hit = await searchWithFallback(variants[vi], limit, access_token);
+      if (hit.ok && hit.results.length) {
         return json(res, 200, {
           ok: true,
           q: q,
           query_used: variants[vi],
-          source: "api_oficial",
-          authenticated: true,
-          authorization_header: "Bearer <access_token>",
-          results: official.results.slice(0, limit),
+          source: hit.source,
+          mode: hit.mode,
+          authenticated: hit.mode === "bearer",
+          authorization_header:
+            hit.mode === "bearer"
+              ? "Bearer <access_token>"
+              : null,
+          retried_without_auth: !!hit.retried_without_auth,
+          results: hit.results.slice(0, limit),
+          warning: hit.retried_without_auth
+            ? "Bearer retornou " +
+              (hit.prior_status || "401/403") +
+              "; busca anônima (sem Authorization) funcionou."
+            : undefined,
+          ml_debug: hit.retried_without_auth
+            ? {
+                endpoint: "/sites/MLB/search",
+                status: hit.prior_status,
+                body: hit.prior_body || null,
+                message:
+                  "Primeira tentativa com Bearer bloqueada; retry sem Authorization ok.",
+                mode: "bearer→anonymous",
+              }
+            : undefined,
         });
       }
-      if (official.ok && !official.results.length) {
+      if (hit.ok && !hit.results.length) {
         lastErr = mlAuth.attachMlError(
-          new Error("API oficial sem resultados para: " + variants[vi]),
+          new Error("API sem resultados para: " + variants[vi]),
           {
             endpoint: "/sites/MLB/search",
             status: 200,
@@ -246,32 +297,20 @@ async function handler(req, res) {
       }
     } catch (e) {
       lastErr = e;
-      if (e && e.status === 401) {
-        try {
-          mlAuth.clearTokenCache();
-          accessToken = await mlAuth.getAccessToken();
-          var retry = await searchAuthorized(variants[vi], limit, accessToken);
-          if (retry.ok && retry.results.length) {
-            return json(res, 200, {
-              ok: true,
-              q: q,
-              query_used: variants[vi],
-              source: "api_oficial",
-              authenticated: true,
-              authorization_header: "Bearer <access_token>",
-              results: retry.results.slice(0, limit),
-            });
-          }
-        } catch (e2) {
-          lastErr = e2;
-        }
-      }
       if (!(e && e.unauthorized)) break;
     }
   }
 
+  /* Plano C: listagem pública HTML se API search (bearer + anônima) falhar */
+  var pubInfo = null;
   try {
     var pub = await mlPublic.searchPublicIndex(q, limit);
+    pubInfo = {
+      ok: !!(pub && pub.ok),
+      count: pub && pub.results ? pub.results.length : 0,
+      error: (pub && pub.error) || null,
+      tried: (pub && pub.tried) || [],
+    };
     if (pub.ok && pub.results && pub.results.length) {
       return json(res, 200, {
         ok: true,
@@ -282,19 +321,21 @@ async function handler(req, res) {
         authorization_header: "Bearer <access_token>",
         results: pub.results,
         warning:
-          "Token OAuth2 ok e Authorization: Bearer foi enviado, mas /sites/MLB/search retornou erro de política. Usei listagem pública.",
+          "Bearer e busca anônima em /sites/MLB/search falharam (401/403). Usei listagem pública.",
         ml_debug: lastErr
           ? mlDebugFromErr(lastErr, "/sites/MLB/search")
           : undefined,
         upstream_status: lastErr ? lastErr.status : undefined,
         upstream_body: lastErr ? lastErr.body : undefined,
-        upstream_endpoint: lastErr
-          ? lastErr.endpoint || "/sites/MLB/search"
-          : undefined,
+        upstream_endpoint: "/sites/MLB/search",
       });
     }
   } catch (pubErr) {
-    /* continua para erro detalhado */
+    pubInfo = {
+      ok: false,
+      count: 0,
+      error: (pubErr && pubErr.message) || String(pubErr),
+    };
   }
 
   var payload = errorPayload(q, lastErr || new Error("Sem resultados"), {
@@ -303,8 +344,9 @@ async function handler(req, res) {
         ? "ml_search_unauthorized"
         : "ml_search_empty",
     authenticated: true,
-    authorization_header: authHeaderSent ? "Bearer <access_token>" : null,
+    tried_modes: ["bearer", "anonymous", "public_index"],
     tried: variants,
+    public_index: pubInfo,
   });
   return json(res, 200, payload);
 }
