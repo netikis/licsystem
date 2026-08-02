@@ -952,7 +952,22 @@
     return "http://127.0.0.1:3847";
   };
 
+  /** HTTPS (Vercel) bloqueia fetch para http://127.0.0.1 — ponte só funciona em localhost HTTP. */
+  utils.mlBridgeUsable = function(){
+    try {
+      var proto = String(location.protocol || "");
+      var host = String(location.hostname || "");
+      if(proto === "https:" && host !== "localhost" && host !== "127.0.0.1"){
+        return false;
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
   utils.mlSearchLocalBridge = function(q, limit){
+    if(!utils.mlBridgeUsable()) return Promise.resolve(null);
     var lim = limit || 10;
     var url =
       utils.mlLocalBridgeBase() +
@@ -974,6 +989,21 @@
     }).catch(function(){ return null; });
   };
 
+  utils.mlSearchFailMessage = function(j){
+    var onHttpsProd = !utils.mlBridgeUsable();
+    if(onHttpsProd){
+      return (
+        "O Mercado Livre bloqueia a busca na Vercel (HTTP 403). " +
+        "Para cruzar preços, abra o sistema em http://localhost:5173 " +
+        "com dois terminais: npm run dev  e  npm run ml-bridge"
+      );
+    }
+    return (
+      "Busca ML falhou no servidor e a ponte local (127.0.0.1:3847) não respondeu. " +
+      "Rode no PC: npm run ml-bridge  (deixe a janela aberta) e tente de novo."
+    );
+  };
+
   utils.mlSearch = function(q, limit){
     var lim = limit || 10;
     var url =
@@ -982,59 +1012,44 @@
       encodeURIComponent(q || "") +
       "&limit=" +
       encodeURIComponent(lim);
-    return fetch(url, {
-      method: "GET",
-      headers: { Accept: "application/json" }
-    }).then(function(r){
-      return r.json().then(function(j){
-        if(j && (j.ml_debug || j.upstream_body || j.warning || j.source)){
-          console.log("[LICSYSTEM ML] /api/search-ml resposta", {
-            q: q,
-            ok: j.ok,
-            source: j.source,
-            mode: j.mode,
-            warning: j.warning,
-            n: (j.results || []).length,
-            ml_debug: j.ml_debug || {
-              endpoint: j.upstream_endpoint,
-              status: j.upstream_status,
-              body: j.upstream_body
-            }
-          });
-        }
-        if(j && j.ok && j.results && j.results.length){
-          return j;
-        }
-        /* Servidor Vercel bloqueado → tenta ponte local (IP da sua casa) */
-        return utils.mlSearchLocalBridge(q, lim).then(function(local){
-          if(local) return local;
-          var dbg = utils.formatMlDebug(j || {});
-          console.error("[LICSYSTEM ML] erro detalhado", dbg, j);
-          var msg =
-            (j && (j.error || j.message)) ||
-            dbg.summary ||
-            ("HTTP " + r.status);
-          if(j && j.hint_local_bridge){
-            msg += " | " + j.hint_local_bridge;
+
+    /* Em localhost: tenta ponte local primeiro (IP da casa — o que funciona). */
+    var start = utils.mlBridgeUsable()
+      ? utils.mlSearchLocalBridge(q, lim)
+      : Promise.resolve(null);
+
+    return start.then(function(localFirst){
+      if(localFirst) return localFirst;
+      return fetch(url, {
+        method: "GET",
+        headers: { Accept: "application/json" }
+      }).then(function(r){
+        return r.json().then(function(j){
+          if(j && j.ok && j.results && j.results.length){
+            return j;
           }
-          var err = new Error(msg);
-          err.status = (j && j.upstream_status) || r.status;
-          err.body = j;
-          err.mlDebug = dbg;
-          throw err;
-        });
-      }, function(){
-        return utils.mlSearchLocalBridge(q, lim).then(function(local){
-          if(local) return local;
-          throw new Error("HTTP " + r.status + " (resposta inválida de /api/search-ml)");
+          return utils.mlSearchLocalBridge(q, lim).then(function(local){
+            if(local) return local;
+            console.error("[LICSYSTEM ML] busca bloqueada", j);
+            var err = new Error(utils.mlSearchFailMessage(j));
+            err.status = (j && j.upstream_status) || r.status;
+            err.body = j;
+            err.mlDebug = utils.formatMlDebug(j || {});
+            throw err;
+          });
+        }, function(){
+          return utils.mlSearchLocalBridge(q, lim).then(function(local){
+            if(local) return local;
+            throw new Error(utils.mlSearchFailMessage(null));
+          });
         });
       });
     }).catch(function(err){
-      /* rede /api falhou → ainda tenta ponte local */
+      if(err && err.message && /bloqueia a busca|ponte local/i.test(err.message)) throw err;
       if(err && err.body) throw err;
       return utils.mlSearchLocalBridge(q, lim).then(function(local){
         if(local) return local;
-        throw err || new Error("Falha na busca ML");
+        throw err || new Error(utils.mlSearchFailMessage(null));
       });
     });
   };
@@ -5946,18 +5961,13 @@
       }).catch(function(err){
         var msg = (err && err.message) ? err.message : String(err);
         if(/failed to fetch|NetworkError|Load failed/i.test(msg)){
-          msg = "API /api/search-ml indisponível. Faça deploy na Vercel com ML_APP_ID e ML_CLIENT_SECRET.";
+          msg = utils.mlSearchFailMessage(err && err.body);
         }
         if(err && (err.mlDebug || err.body)){
-          var dbg = err.mlDebug || utils.formatMlDebug(err.body || {});
-          console.error("[LICSYSTEM ML] processarItem falhou", dbg, err.body || err);
-          msg = dbg.summary || msg;
-          showAlert(
-            "cruzStatus",
-            "error",
-            utils.escapeHtml(dbg.summary || msg)
-          );
+          console.error("[LICSYSTEM ML] processarItem falhou", err.mlDebug || err.body);
         }
+        /* Não sobrescrever com o JSON cru do 403 — msg amigável já vem do mlSearch */
+        showAlert("cruzStatus", "error", utils.escapeHtml(msg));
         throw new Error(msg);
       });
     },
