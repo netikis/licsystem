@@ -128,9 +128,10 @@ async function runRadarWatch(watch, deadline) {
     (janela && janela.dataFinal) ||
     (queryLib.dataFinalProposta && queryLib.dataFinalProposta(45));
 
+  /* Pregão sempre; leilões somam (não substituem). */
   var modalidades = [6];
   if (truthy(watch.leiloes) || (queryLib.looksLikeLeilaoText && queryLib.looksLikeLeilaoText(rawKw))) {
-    modalidades = [13, 1, 6];
+    modalidades = [6, 13];
   }
 
   var raw = [];
@@ -195,9 +196,97 @@ async function runRadarWatch(watch, deadline) {
   return out;
 }
 
+/**
+ * Alerta de Editais próximos: reutiliza /api/editais-proximos (raio + vizinhos).
+ */
+async function runProximosWatch(watch, deadline) {
+  if (Date.now() >= deadline) return [];
+  var ibge = Number(watch.ibge || 0) || 0;
+  if (!ibge) {
+    var err = new Error("Alerta de Editais próximos precisa do município (IBGE)");
+    err.status = 400;
+    throw err;
+  }
+  var raio = Number(watch.raio || 250) || 250;
+  if (raio < 10) raio = 10;
+  if (raio > 700) raio = 700;
+
+  var qs =
+    "ibge=" +
+    encodeURIComponent(ibge) +
+    "&raio=" +
+    encodeURIComponent(raio) +
+    "&janela=" +
+    encodeURIComponent(watch.janela === "ano" ? "ano" : "45") +
+    "&q=" +
+    encodeURIComponent(watch.q || watch.keywords || "") +
+    "&ampliar=" +
+    (truthy(watch.ampliar) ? "1" : "0") +
+    "&leiloes=" +
+    (truthy(watch.leiloes) ? "1" : "0") +
+    "&esferas=" +
+    encodeURIComponent(
+      truthy(watch.federal) ? "M,E,F" : watch.esferas || "M,E"
+    );
+  if (watch.cobertura) {
+    qs += "&cobertura=" + encodeURIComponent(watch.cobertura);
+  }
+
+  var handler = require("./editais-proximos");
+  var result = await new Promise(function (resolve, reject) {
+    var statusCode = 200;
+    var res = {
+      headersSent: false,
+      statusCode: 200,
+      setHeader: function () {},
+      end: function (body) {
+        try {
+          var parsed = body ? JSON.parse(String(body)) : {};
+          resolve({ status: statusCode, body: parsed });
+        } catch (e) {
+          reject(e);
+        }
+      },
+    };
+    Object.defineProperty(res, "statusCode", {
+      get: function () {
+        return statusCode;
+      },
+      set: function (v) {
+        statusCode = v;
+      },
+      configurable: true,
+    });
+    var req = {
+      method: "GET",
+      query: Object.create(null),
+      headers: {},
+    };
+    qs.split("&").forEach(function (pair) {
+      var i = pair.indexOf("=");
+      if (i < 0) return;
+      var k = decodeURIComponent(pair.slice(0, i));
+      var v = decodeURIComponent(pair.slice(i + 1));
+      req.query[k] = v;
+    });
+    Promise.resolve(handler(req, res)).catch(reject);
+  });
+
+  if (!result || !result.body) return [];
+  if (result.body.ok === false) {
+    var e2 = new Error(result.body.error || "Falha em editais-proximos");
+    e2.status = result.status || 500;
+    throw e2;
+  }
+  return result.body.editais || result.body.data || [];
+}
+
 async function runWatch(watch, deadline) {
   var tipo = String(watch.tipo || "").toLowerCase();
   if (tipo === "radar") return runRadarWatch(watch, deadline);
+  if (tipo === "proximos" || tipo === "raio" || tipo === "vizinhos") {
+    return runProximosWatch(watch, deadline);
+  }
   return runMunicipioWatch(watch, deadline);
 }
 
