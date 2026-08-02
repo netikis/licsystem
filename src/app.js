@@ -873,6 +873,38 @@
     return words.join(" ");
   };
 
+  /** Formata ml_debug da /api/search-ml para console + UI. */
+  utils.formatMlDebug = function(j){
+    var d = (j && (j.ml_debug || j)) || {};
+    var endpoint = d.endpoint || j && j.upstream_endpoint || "—";
+    var status = d.status != null ? d.status : (j && j.upstream_status);
+    var body = d.body != null ? d.body : (j && j.upstream_body);
+    var raw = d.rawBody || "";
+    var bodyStr = "";
+    try {
+      bodyStr = typeof body === "string" ? body : JSON.stringify(body, null, 2);
+    } catch (e) {
+      bodyStr = String(body || raw || "");
+    }
+    if(!bodyStr && raw) bodyStr = raw;
+    var where =
+      String(endpoint).indexOf("oauth") !== -1
+        ? "TOKEN (/oauth/token)"
+        : String(endpoint).indexOf("search") !== -1
+          ? "BUSCA (/sites/MLB/search)"
+          : "ML";
+    return {
+      where: where,
+      endpoint: endpoint,
+      status: status,
+      bodyStr: bodyStr,
+      summary:
+        "[" + where + "] HTTP " + (status != null ? status : "?") +
+        " · endpoint " + endpoint +
+        (bodyStr ? " · body: " + bodyStr.slice(0, 500) : "")
+    };
+  };
+
   utils.mlSearch = function(q, limit){
     var lim = limit || 10;
     var url =
@@ -886,11 +918,30 @@
       headers: { Accept: "application/json" }
     }).then(function(r){
       return r.json().then(function(j){
+        if(j && (j.ml_debug || j.upstream_body || j.warning)){
+          console.log("[LICSYSTEM ML] /api/search-ml resposta", {
+            q: q,
+            ok: j.ok,
+            source: j.source,
+            warning: j.warning,
+            ml_debug: j.ml_debug || {
+              endpoint: j.upstream_endpoint,
+              status: j.upstream_status,
+              body: j.upstream_body
+            }
+          });
+        }
         if(!r.ok || (j && j.ok === false && !(j.results && j.results.length))){
-          var msg = (j && (j.error || j.message || j.warning)) || ("HTTP " + r.status);
-          var err = new Error(msg);
-          err.status = r.status;
+          var dbg = utils.formatMlDebug(j || {});
+          console.error("[LICSYSTEM ML] erro detalhado", dbg, j);
+          var msg =
+            (j && (j.error || j.message)) ||
+            dbg.summary ||
+            ("HTTP " + r.status);
+          var err = new Error(msg + (dbg.bodyStr ? " | " + dbg.summary : ""));
+          err.status = (j && j.upstream_status) || r.status;
           err.body = j;
+          err.mlDebug = dbg;
           throw err;
         }
         return j || { ok: true, results: [] };
@@ -5809,6 +5860,16 @@
         if(/failed to fetch|NetworkError|Load failed/i.test(msg)){
           msg = "API /api/search-ml indisponível. Faça deploy na Vercel com ML_APP_ID e ML_CLIENT_SECRET.";
         }
+        if(err && (err.mlDebug || err.body)){
+          var dbg = err.mlDebug || utils.formatMlDebug(err.body || {});
+          console.error("[LICSYSTEM ML] processarItem falhou", dbg, err.body || err);
+          msg = dbg.summary || msg;
+          showAlert(
+            "cruzStatus",
+            "error",
+            utils.escapeHtml(dbg.summary || msg)
+          );
+        }
         throw new Error(msg);
       });
     },
@@ -5825,12 +5886,11 @@
       });
       if(!results.length){
         var motivo = "Nenhum produto encontrado no Mercado Livre para \"" + (queryUsada || termo) + "\".";
-        if(j && j.error){
-          motivo = String(j.error);
-          if(/unauthorized|forbidden|policy/i.test(motivo)){
-            motivo =
-              "Mercado Livre bloqueou a busca na API. Tente um termo mais curto (ex.: só \"abraçadeira borboleta\") ou rode de novo após o redeploy com fallback público.";
-          }
+        if(j && (j.ml_debug || j.upstream_body || j.error)){
+          var dbgEmpty = utils.formatMlDebug(j);
+          console.error("[LICSYSTEM ML] sem resultados — debug", dbgEmpty, j);
+          motivo = dbgEmpty.summary || String(j.error || motivo);
+          showAlert("cruzStatus", "error", utils.escapeHtml(dbgEmpty.summary));
         } else if(j && j.warning){
           motivo += " " + j.warning;
         }
