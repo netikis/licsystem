@@ -10,7 +10,8 @@
     "dev:all": "concurrently -k -n vite,api -c cyan,magenta \"vite\" \"npx --yes vercel dev --listen 3000\"",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "vite"
+    "start": "vite",
+    "ml-bridge": "node scripts/ml-local-bridge.js"
   },
   "devDependencies": {
     "concurrently": "^9.2.4",
