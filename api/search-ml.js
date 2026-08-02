@@ -35,6 +35,17 @@ function mapItem(it) {
   if (thumb.indexOf("http://") === 0) {
     thumb = "https://" + thumb.slice(7);
   }
+  var ship = it.shipping || {};
+  var freeShipping = !!(
+    ship.free_shipping ||
+    ship.free_shipping === true ||
+    String(ship.logistic_type || "").toLowerCase() === "fulfillment" &&
+      ship.free_shipping
+  );
+  /* tags às vezes trazem free_shipping */
+  if (!freeShipping && Array.isArray(it.tags)) {
+    freeShipping = it.tags.indexOf("free_shipping") !== -1;
+  }
   return {
     /* Contrato limpo pedido */
     title: String(it.title || ""),
@@ -42,6 +53,8 @@ function mapItem(it) {
     permalink: String(it.permalink || ""),
     thumbnail: thumb,
     seller: String(seller),
+    free_shipping: freeShipping,
+    freteLabel: freeShipping ? "FRETE GRÁTIS" : "",
     /* Compatível com Cruzamento ML existente */
     id: it.id || null,
     currency_id: it.currency_id || "BRL",
