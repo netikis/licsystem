@@ -1,12 +1,23 @@
 /**
  * GET /api/search-ml?q=PRODUTO&limit=10
  *
- * Busca pública MLB — sem OAuth / sem Authorization.
- * Headers de navegador para reduzir bloqueio WAF na Vercel.
- * Se a API ainda retornar 403, usa listagem pública (HTML).
+ * Produção (clientes / Vercel) — SEM ponte local:
+ * 1) Serper (Google) se SERPER_API_KEY estiver na Vercel
+ * 2) Listagem pública ML
+ * 3) API /sites/MLB/search (quase sempre 403 no datacenter) — última tentativa
+ *
+ * Headers do cliente NUNCA são repassados ao ML.
  */
 var safeJson = require("./_lib/safe-json");
 var mlPublic = require("./_lib/ml-public-search");
+var mlWeb = require("./_lib/ml-web-search");
+
+var ML_FETCH_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  Accept: "application/json",
+  "Accept-Language": "pt-BR,pt;q=0.9",
+};
 
 function cors(res) {
   safeJson.applyCors(res, "GET,OPTIONS");
@@ -25,13 +36,11 @@ function cleanQuery(raw) {
     .slice(0, 120);
 }
 
-/** Headers exatamente como solicitado (sem Authorization). */
-function browserHeaders() {
+function isolatedMlHeaders() {
   return {
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    Accept: "application/json",
-    "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+    "User-Agent": ML_FETCH_HEADERS["User-Agent"],
+    Accept: ML_FETCH_HEADERS.Accept,
+    "Accept-Language": ML_FETCH_HEADERS["Accept-Language"],
   };
 }
 
@@ -75,9 +84,10 @@ async function searchPublicApi(q, limit) {
 
   var r = await fetch(url, {
     method: "GET",
-    headers: browserHeaders(),
+    headers: isolatedMlHeaders(),
+    redirect: "follow",
+    cache: "no-store",
   });
-
   var text = await r.text();
   var j = null;
   try {
@@ -86,22 +96,20 @@ async function searchPublicApi(q, limit) {
     j = null;
   }
 
-  if (r.ok && j && Array.isArray(j.results)) {
+  if (r.ok && j && Array.isArray(j.results) && j.results.length) {
     return {
       ok: true,
       results: j.results.map(mapOfficialItem),
       status: r.status,
     };
   }
-
   return {
     ok: false,
     status: r.status,
     body: j,
-    rawBody: text,
     message:
       (j && (j.message || j.error)) ||
-      text.slice(0, 200) ||
+      text.slice(0, 160) ||
       "HTTP " + r.status,
   };
 }
@@ -130,11 +138,29 @@ async function handler(req, res) {
     });
   }
 
+  /* 1–2) Produção: Serper + listagem pública (não depende do IP do cliente) */
+  try {
+    var prod = await mlWeb.searchProduction(q, limit);
+    if (prod.ok && prod.results && prod.results.length) {
+      return json(res, 200, {
+        ok: true,
+        q: q,
+        query_used: prod.query_used || q,
+        source: prod.source,
+        mode: prod.mode || prod.source,
+        authenticated: false,
+        client_headers_forwarded: false,
+        results: prod.results.slice(0, limit),
+      });
+    }
+  } catch (e) {
+    /* segue */
+  }
+
+  /* 3) Última tentativa: API oficial (geralmente 403 na Vercel) */
   var variants = mlPublic.buildQueryVariants(q);
   var lastApi = null;
-
-  /* 1) GET público sem Authorization + headers de browser */
-  for (var i = 0; i < Math.min(variants.length, 3); i++) {
+  for (var i = 0; i < Math.min(variants.length, 2); i++) {
     try {
       var api = await searchPublicApi(variants[i], limit);
       if (api.ok && api.results.length) {
@@ -144,77 +170,38 @@ async function handler(req, res) {
           query_used: variants[i],
           source: "api_publica",
           authenticated: false,
+          client_headers_forwarded: false,
           results: api.results.slice(0, limit),
         });
       }
       lastApi = api;
-      if (api.ok && !api.results.length) continue;
-      /* 401/403 → tenta próxima variante / fallback */
-      if (api.status !== 401 && api.status !== 403) break;
-    } catch (e) {
-      lastApi = {
-        ok: false,
-        status: 0,
-        message: (e && e.message) || String(e),
-        body: null,
-        rawBody: "",
-      };
+      if (api.status === 403 || api.status === 401) break;
+    } catch (e2) {
+      lastApi = { status: 0, message: (e2 && e2.message) || String(e2) };
       break;
     }
   }
 
-  /* 2) Fallback listagem pública HTML (quando WAF/API ainda bloqueia) */
-  try {
-    var pub = await mlPublic.searchPublicIndex(q, limit);
-    if (pub.ok && pub.results && pub.results.length) {
-      return json(res, 200, {
-        ok: true,
-        q: q,
-        query_used: pub.query_used || q,
-        source: "public_index",
-        authenticated: false,
-        results: pub.results,
-        warning:
-          "API /sites/MLB/search retornou " +
-          ((lastApi && lastApi.status) || "erro") +
-          "; usei listagem pública.",
-        ml_debug: lastApi
-          ? {
-              endpoint: "/sites/MLB/search",
-              status: lastApi.status,
-              body: lastApi.body,
-              rawBody: String(lastApi.rawBody || "").slice(0, 2000),
-              message: lastApi.message,
-            }
-          : undefined,
-      });
-    }
-  } catch (pubErr) {
-    /* segue */
-  }
-
+  var hasKeys = mlWeb.hasPaidOrFreeSearchKeys();
   return json(res, 200, {
     ok: false,
     q: q,
     results: [],
     authenticated: false,
-    error:
-      "Falha em /sites/MLB/search (sem Authorization). " +
-      ((lastApi && lastApi.message) || "sem resultados"),
+    client_headers_forwarded: false,
+    error: hasKeys
+      ? 'Nenhum produto encontrado para "' + q + '" nas fontes disponíveis.'
+      : "Busca ML bloqueada no servidor (API 403). No projeto Vercel deste cliente, configure as chaves DELE: SERPER_API_KEY (grátis em serper.dev) ou GOOGLE_CSE_API_KEY + GOOGLE_CSE_CX, depois Redeploy. Cada cliente usa as próprias chaves — custo zero para o vendedor.",
     ml_debug: lastApi
       ? {
           endpoint: "/sites/MLB/search",
           status: lastApi.status,
           body: lastApi.body,
-          rawBody: String(lastApi.rawBody || "").slice(0, 2000),
           message: lastApi.message,
         }
       : undefined,
-    upstream_status: lastApi && lastApi.status,
-    upstream_body: lastApi && lastApi.body,
-    upstream_endpoint: "/sites/MLB/search",
-    hint_local_bridge:
-      "Se persistir 403 na Vercel, rode npm run ml-bridge no PC (IP residencial).",
+    need_serper: !hasKeys,
+    need_search_keys: !hasKeys,
     tried: variants,
   });
 }
