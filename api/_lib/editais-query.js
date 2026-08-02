@@ -667,6 +667,24 @@ function idAliasLeilao(rawCat) {
     });
 }
 
+/** Remove preposições/artigos comuns do nome de município para match flexível. */
+function nameTokens(s) {
+  return fold(s)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(function (t) {
+      return (
+        t &&
+        t.length >= 2 &&
+        !/^(do|da|de|dos|das|du|e|em|no|na|nos|nas|ao|aos|as|o|a|os)$/.test(t)
+      );
+    });
+}
+
+/**
+ * Resolve município por nome (exato, prefixo, parcial ou tokens).
+ * Aceita "santa cruz rio pardo" → Santa Cruz do Rio Pardo/SP.
+ */
 function findMunicipioByName(nome, ufPrefer) {
   loadMunicipios();
   var term = fold(nome).trim();
@@ -674,28 +692,79 @@ function findMunicipioByName(nome, ufPrefer) {
   var uf = String(ufPrefer || "")
     .trim()
     .toUpperCase();
+  var qTokens = nameTokens(term);
   var exact = [];
   var starts = [];
   var partial = [];
+  var tokenHits = [];
+
   for (var i = 0; i < _municipios.length; i++) {
     var m = _municipios[i];
     if (uf && m.u !== uf) continue;
     var fn = fold(m.n);
-    if (fn === term) exact.push(m);
-    else if (fn.indexOf(term) === 0) starts.push(m);
-    else if (fn.indexOf(term) !== -1) partial.push(m);
+    if (fn === term) {
+      exact.push(m);
+      continue;
+    }
+    if (fn.indexOf(term) === 0) starts.push(m);
+    else if (term.length >= 4 && fn.indexOf(term) !== -1) partial.push(m);
+
+    if (qTokens.length >= 2) {
+      var mTokens = nameTokens(m.n);
+      var ok = true;
+      for (var t = 0; t < qTokens.length; t++) {
+        if (mTokens.indexOf(qTokens[t]) === -1) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) {
+        tokenHits.push({
+          m: m,
+          score: qTokens.length * 10 - Math.abs(mTokens.length - qTokens.length),
+        });
+      }
+    }
   }
-  function preferPr(arr) {
+
+  function preferUnique(arr) {
+    if (!arr || !arr.length) return null;
     if (arr.length === 1) return arr[0];
     var pr = arr.filter(function (x) {
       return x.u === "PR";
     });
     if (pr.length === 1) return pr[0];
-    return arr[0] || null;
+    return null;
   }
-  if (exact.length) return preferPr(exact);
-  if (starts.length) return preferPr(starts);
+
+  var hit = preferUnique(exact);
+  if (hit) return hit;
+  hit = preferUnique(starts);
+  if (hit) return hit;
   if (partial.length === 1) return partial[0];
+
+  if (tokenHits.length) {
+    tokenHits.sort(function (a, b) {
+      return b.score - a.score;
+    });
+    var bestScore = tokenHits[0].score;
+    var best = tokenHits
+      .filter(function (x) {
+        return x.score === bestScore;
+      })
+      .map(function (x) {
+        return x.m;
+      });
+    hit = preferUnique(best);
+    if (hit) return hit;
+    if (best.length === 1) return best[0];
+    /* Ambíguo: devolve null; caller pode pedir UF / nome completo. */
+    findMunicipioByName._lastAmbiguous = best.slice(0, 8);
+    return null;
+  }
+
+  findMunicipioByName._lastAmbiguous = (exact.length ? exact : starts.length ? starts : partial)
+    .slice(0, 8);
   return null;
 }
 
@@ -776,6 +845,20 @@ function parseMensagem(mensagem) {
         out.municipio = cand;
         break;
       }
+    }
+  }
+
+  /* Nome de cidade digitado sozinho (ex.: "Santa Cruz do Rio Pardo"). */
+  if (!out.regiao && !out.municipio && text.length >= 2 && text.length <= 80) {
+    var bare = text
+      .replace(/[?.!,;]+$/g, "")
+      .replace(
+        /\b(quais|licitacoes|licitações|editais?|propostas?|abertos?|abertas?|terao|terão|buscar|busca)\b/gi,
+        ""
+      )
+      .trim();
+    if (bare.length >= 2 && !/norte\s*pioneiro/i.test(bare)) {
+      out.municipio = bare;
     }
   }
 
@@ -869,13 +952,27 @@ async function queryEditais(opts) {
       uf: municipioResolvido.u,
     };
   } else if (municipioNome) {
-    var found = findMunicipioByName(municipioNome, opts.uf || "PR");
-    if (!found) found = findMunicipioByName(municipioNome, null);
+    findMunicipioByName._lastAmbiguous = null;
+    /* Sem UF explícita: busca nacional (não força PR). */
+    var ufHint = opts.uf ? String(opts.uf).trim().toUpperCase() : "";
+    var found = ufHint
+      ? findMunicipioByName(municipioNome, ufHint)
+      : findMunicipioByName(municipioNome, null);
+    if (!found && ufHint) found = findMunicipioByName(municipioNome, null);
     if (!found) {
+      var amb = findMunicipioByName._lastAmbiguous || [];
+      var hint =
+        amb.length > 1
+          ? " Há várias opções: " +
+            amb
+              .map(function (x) {
+                return x.n + "/" + x.u;
+              })
+              .join(", ") +
+            ". Inclua a UF (ex.: municipio + uf=SP)."
+          : ' Use o nome completo (ex.: "Santa Cruz do Rio Pardo") ou ibge.';
       var err = new Error(
-        'Município não encontrado: "' +
-          municipioNome +
-          '". Informe o nome completo (ex.: Ibaiti) ou use regiao=norte-pioneiro.'
+        'Município não encontrado: "' + municipioNome + '".' + hint
       );
       err.status = 400;
       throw err;
@@ -1241,6 +1338,7 @@ function formatRespostaPt(escopo, editais, kw, amostra, janelaInfo) {
 module.exports = {
   queryEditais: queryEditais,
   parseMensagem: parseMensagem,
+  findMunicipioByName: findMunicipioByName,
   loadNortePioneiro: loadNortePioneiro,
   dataFinalProposta: dataFinalProposta,
   resolveJanela: resolveJanela,
