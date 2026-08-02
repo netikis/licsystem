@@ -26,9 +26,12 @@ async function fetchText(url, opts) {
   var headers = Object.assign(
     {
       "User-Agent": opts.ua || ML_UA,
-      Accept: opts.accept || "text/html,application/xhtml+xml,application/json",
+      Accept: opts.accept || "text/html,application/xhtml+xml,application/json,*/*;q=0.8",
       "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
       "Cache-Control": "no-cache",
+      "Upgrade-Insecure-Requests": "1",
+      Referer: "https://www.mercadolivre.com.br/",
+      Origin: "https://www.mercadolivre.com.br",
     },
     opts.headers || {}
   );

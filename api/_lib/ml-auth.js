@@ -113,7 +113,8 @@ function clearTokenCache() {
 }
 
 function authHeaders(token) {
-  if (!token) {
+  var access_token = String(token || "").trim();
+  if (!access_token) {
     throw attachMlError(
       new Error("access_token obrigatório para Authorization: Bearer"),
       {
@@ -125,9 +126,10 @@ function authHeaders(token) {
       }
     );
   }
+  /* Formato exato exigido: "Bearer " + token (espaço após Bearer) */
   return {
     Accept: "application/json",
-    Authorization: "Bearer " + token,
+    Authorization: "Bearer " + access_token,
   };
 }
 
