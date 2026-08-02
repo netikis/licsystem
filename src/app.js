@@ -990,17 +990,16 @@
   };
 
   utils.mlSearchFailMessage = function(j){
-    var onHttpsProd = !utils.mlBridgeUsable();
-    if(onHttpsProd){
-      return (
-        "O Mercado Livre bloqueia a busca na Vercel (HTTP 403). " +
-        "Para cruzar preços, abra o sistema em http://localhost:5173 " +
-        "com dois terminais: npm run dev  e  npm run ml-bridge"
-      );
+    if(j && (j.need_search_keys || j.need_serper)){
+      return String(j.error || "") ||
+        "Configure as chaves de busca deste projeto na Vercel (SERPER_API_KEY ou Google CSE) e faça Redeploy.";
+    }
+    if(j && j.error && !/forbidden|UNAUTHORIZED|sites\/MLB\/search/i.test(String(j.error))){
+      return String(j.error);
     }
     return (
-      "Busca ML falhou no servidor e a ponte local (127.0.0.1:3847) não respondeu. " +
-      "Rode no PC: npm run ml-bridge  (deixe a janela aberta) e tente de novo."
+      "Busca no Mercado Livre indisponível no momento. " +
+      "Quem administra este sistema deve colocar as chaves DELE na Vercel (serper.dev grátis ou Google CSE) e fazer Redeploy."
     );
   };
 
@@ -5984,11 +5983,13 @@
       });
       if(!results.length){
         var motivo = "Nenhum produto encontrado no Mercado Livre para \"" + (queryUsada || termo) + "\".";
-        if(j && (j.ml_debug || j.upstream_body || j.error)){
-          var dbgEmpty = utils.formatMlDebug(j);
-          console.error("[LICSYSTEM ML] sem resultados — debug", dbgEmpty, j);
-          motivo = dbgEmpty.summary || String(j.error || motivo);
-          showAlert("cruzStatus", "error", utils.escapeHtml(dbgEmpty.summary));
+        if(j && (j.ml_debug || j.upstream_status === 403 || /forbidden|unauthorized/i.test(String(j.error || "")))){
+          console.error("[LICSYSTEM ML] sem resultados — bloqueio ML", j.ml_debug || j);
+          motivo = utils.mlSearchFailMessage(j);
+          showAlert("cruzStatus", "error", utils.escapeHtml(motivo));
+        } else if(j && j.error){
+          motivo = String(j.error);
+          showAlert("cruzStatus", "error", utils.escapeHtml(motivo));
         } else if(j && j.warning){
           motivo += " " + j.warning;
         }
