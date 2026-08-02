@@ -817,9 +817,15 @@
 
   /* ------- Mercado Livre via proxy backend (nunca direto no browser) ------- */
   utils.mlProxyBase = function(){
-    // Permite override: LICSYSTEM.config.mlProxyUrl = "https://xxx/api/ml-proxy"
+    // Frete e utilidades legadas
     if(LICSYSTEM.config && LICSYSTEM.config.mlProxyUrl) return String(LICSYSTEM.config.mlProxyUrl).replace(/\/$/,"");
     return "/api/ml-proxy";
+  };
+
+  /** Busca oficial limpa — /api/search-ml (OAuth no servidor). */
+  utils.mlSearchBase = function(){
+    if(LICSYSTEM.config && LICSYSTEM.config.mlSearchUrl) return String(LICSYSTEM.config.mlSearchUrl).replace(/\/$/,"");
+    return "/api/search-ml";
   };
 
   utils.mlProxy = function(params){
@@ -868,7 +874,30 @@
   };
 
   utils.mlSearch = function(q, limit){
-    return utils.mlProxy({ action: "search", q: q, limit: limit || 5 });
+    var lim = limit || 10;
+    var url =
+      utils.mlSearchBase() +
+      "?q=" +
+      encodeURIComponent(q || "") +
+      "&limit=" +
+      encodeURIComponent(lim);
+    return fetch(url, {
+      method: "GET",
+      headers: { Accept: "application/json" }
+    }).then(function(r){
+      return r.json().then(function(j){
+        if(!r.ok || (j && j.ok === false && !(j.results && j.results.length))){
+          var msg = (j && (j.error || j.message || j.warning)) || ("HTTP " + r.status);
+          var err = new Error(msg);
+          err.status = r.status;
+          err.body = j;
+          throw err;
+        }
+        return j || { ok: true, results: [] };
+      }, function(){
+        throw new Error("HTTP " + r.status + " (resposta inválida de /api/search-ml)");
+      });
+    });
   };
 
   utils.mlShipping = function(itemId, cep, permalink){
@@ -894,7 +923,8 @@
 
   /* ============================ STATE ============================ */
   LICSYSTEM.config = LICSYSTEM.config || {
-    mlProxyUrl: "/api/ml-proxy" // Vercel serverless — não chamar api.mercadolibre.com no browser
+    mlProxyUrl: "/api/ml-proxy", // frete
+    mlSearchUrl: "/api/search-ml" // busca oficial OAuth — nunca api.mercadolibre.com no browser
   };
 
   LICSYSTEM.state = {
@@ -5669,23 +5699,77 @@
       });
     },
 
-    fetchFrete: function(itemId, cep, permalink){
-      if(!cep) return Promise.resolve({ cost:0, note:"CEP do perfil não informado" });
-      // Sempre via proxy backend (evita 403/CORS no browser). permalink resolve ID real do anúncio.
+    fetchFrete: function(itemId, cep, permalink, opts){
+      opts = opts || {};
+      /* Anúncio já veio com frete grátis na busca ML */
+      if(opts.freeShipping){
+        return Promise.resolve({
+          cost: 0,
+          note: "FRETE GRÁTIS",
+          free_shipping: true,
+          itemId: itemId,
+          calculated: false
+        });
+      }
+      if(!cep){
+        return Promise.resolve({
+          cost: 0,
+          note: "Informe o CEP da sua cidade para calcular o frete",
+          free_shipping: false,
+          itemId: itemId,
+          calculated: false
+        });
+      }
+      // Proxy backend — calcula frete para o CEP (cidade do perfil / campo)
       return utils.mlShipping(itemId, cep, permalink).then(function(sj){
-        if(sj && typeof sj.cost === "number" && (sj.cost > 0 || (sj.options && sj.options.length) || /grátis|gratis|R\$\s*0/i.test(sj.note||""))){
-          return { cost: sj.cost, note: sj.note || "", itemId: sj.itemId || itemId };
-        }
-        var opts = (sj && sj.options) || [];
-        var cost = 0, found = false;
-        opts.forEach(function(o){
+        var optsShip = (sj && sj.options) || [];
+        var cost = null;
+        optsShip.forEach(function(o){
           if(typeof o.cost === "number"){
-            if(!found || o.cost < cost){ cost = o.cost; found = true; }
+            if(cost === null || o.cost < cost) cost = o.cost;
           }
         });
-        return { cost: found ? cost : (Number(sj && sj.cost) || 0), note: found ? (sj.note || "") : (sj.note || "Frete não retornado"), itemId: (sj && sj.itemId) || itemId };
+        if(cost === null && typeof (sj && sj.cost) === "number") cost = Number(sj.cost);
+        var free =
+          !!(sj && sj.free_shipping) ||
+          cost === 0 ||
+          /frete\s*gr[aá]tis|gratis/i.test(String((sj && sj.note) || ""));
+        if(free){
+          return {
+            cost: 0,
+            note: "FRETE GRÁTIS",
+            free_shipping: true,
+            itemId: (sj && sj.itemId) || itemId,
+            calculated: true,
+            options: optsShip
+          };
+        }
+        if(cost === null){
+          return {
+            cost: 0,
+            note: (sj && sj.note) || "Frete não disponível para este CEP",
+            free_shipping: false,
+            itemId: (sj && sj.itemId) || itemId,
+            calculated: false,
+            options: optsShip
+          };
+        }
+        return {
+          cost: cost,
+          note: "Frete para CEP " + String(cep).replace(/^(\d{5})(\d{3})$/, "$1-$2"),
+          free_shipping: false,
+          itemId: (sj && sj.itemId) || itemId,
+          calculated: true,
+          options: optsShip
+        };
       }).catch(function(err){
-        return { cost:0, note:"Falha ao consultar frete via proxy" + (err && err.message ? " ("+err.message+")" : "") };
+        return {
+          cost: 0,
+          note: "Falha ao calcular frete" + (err && err.message ? " ("+err.message+")" : ""),
+          free_shipping: false,
+          itemId: itemId,
+          calculated: false
+        };
       });
     },
 
@@ -5705,8 +5789,8 @@
       var query = utils.mlQueryFromTermo(termo, embalagem);
       if(!query) return Promise.resolve(null);
 
-      // Busca SOMENTE pelo proxy (/api/ml-proxy) — nunca direto no Mercado Livre
-      return utils.mlSearch(query, 5).then(function(j){
+      // Busca SOMENTE via /api/search-ml (OAuth no servidor) — nunca direto no ML
+      return utils.mlSearch(query, 10).then(function(j){
         var results = ((j && j.results) || []).filter(function(it){
           return it.available_quantity !== 0;
         });
@@ -5714,7 +5798,7 @@
         if(!results.length){
           var shortQ = query.split(/\s+/).slice(0, 3).join(" ");
           if(shortQ && shortQ !== query){
-            return utils.mlSearch(shortQ, 5).then(function(j2){
+            return utils.mlSearch(shortQ, 10).then(function(j2){
               return LICSYSTEM.cruzamento._finishMlItem(termo, opts, j2 || j, shortQ);
             });
           }
@@ -5723,7 +5807,7 @@
       }).catch(function(err){
         var msg = (err && err.message) ? err.message : String(err);
         if(/failed to fetch|NetworkError|Load failed/i.test(msg)){
-          msg = "Proxy /api/ml-proxy indisponivel. Faca deploy na Vercel com a pasta api/.";
+          msg = "API /api/search-ml indisponível. Faça deploy na Vercel com ML_APP_ID e ML_CLIENT_SECRET.";
         }
         throw new Error(msg);
       });
@@ -5740,9 +5824,9 @@
         return it.available_quantity !== 0;
       });
       if(!results.length){
-        var motivo = "Sem produto no ML para \"" + (queryUsada || termo) + "\".";
-        if(j && j.upstream_status === 403){
-          motivo += " API oficial bloqueada — e necessario redeploy do proxy (pasta api/) na Vercel.";
+        var motivo = "Nenhum produto encontrado no Mercado Livre para \"" + (queryUsada || termo) + "\".";
+        if(j && j.error){
+          motivo = String(j.error);
         } else if(j && j.warning){
           motivo += " " + j.warning;
         }
@@ -5752,10 +5836,19 @@
       results.forEach(function(it){ it.__sim = utils.similaridade(termo, it.title); });
       results.sort(function(a,b){ return b.__sim - a.__sim; });
       var best = results[0];
+      var freeFromSearch = !!(best.free_shipping || /frete\s*gr[aá]tis/i.test(best.freteLabel || ""));
 
-      return LICSYSTEM.cruzamento.fetchFrete(best.id, cep, best.permalink || "").then(function(fr){
+      return LICSYSTEM.cruzamento.fetchFrete(best.id, cep, best.permalink || "", {
+        freeShipping: freeFromSearch
+      }).then(function(fr){
         var precoMl = Number(best.price)||0;
-        var frete = Number(fr.cost)||0;
+        var freteGratis = !!(fr && fr.free_shipping) || freeFromSearch || Number(fr && fr.cost) === 0 && /frete\s*gr[aá]tis/i.test(String((fr && fr.note) || ""));
+        var frete = freteGratis ? 0 : (Number(fr.cost)||0);
+        var freteOk = freteGratis || !!(fr && fr.calculated && frete >= 0 && Number(fr.cost) === frete && !/não disponível|Falha|Informe o CEP/i.test(fr.note || ""));
+        if(fr && fr.calculated && typeof fr.cost === "number" && !freteGratis){
+          freteOk = true;
+          frete = Number(fr.cost) || 0;
+        }
         var custoReal = Math.max(0, precoMl + frete - desconto);
         var precoVenda = LICSYSTEM.cruzamento.calcValorFinal(precoMl, frete, desconto, margem, imposto, custoOp);
         var sim = best.__sim;
@@ -5766,11 +5859,17 @@
 
         var idMl = (fr && fr.itemId) || best.id;
         var notes = [];
-        if(fr && fr.note) notes.push(fr.note);
-        if(!(precoMl > 0)) notes.push("Preco nao retornado — informe manualmente.");
-        if(j && j.source === "public_index" && precoMl > 0){
-          /* silencioso: fallback ok com preco */
+        if(freteGratis){
+          notes.push("FRETE GRÁTIS");
+        } else if(fr && fr.calculated && frete >= 0){
+          notes.push(fr.note || ("Frete para sua cidade (CEP " + cep + ")"));
+        } else if(!cep){
+          notes.push("Informe o CEP da sua cidade para calcular o frete");
+        } else if(fr && fr.note){
+          notes.push(fr.note);
         }
+        if(!(precoMl > 0)) notes.push("Preço não retornado — informe manualmente.");
+        if(best.seller) notes.push("Vendedor: " + best.seller);
 
         var record = {
           itemGoverno: termo,
@@ -5778,6 +5877,8 @@
           idML: idMl,
           custoProduto: precoMl,
           frete: frete,
+          freteGratis: freteGratis,
+          freteOk: freteOk,
           descontoFornecedor: desconto,
           custoReal: custoReal,
           precoVenda: precoVenda,
@@ -5789,6 +5890,7 @@
           status: status,
           link: best.permalink || "",
           cepUsado: cep,
+          seller: best.seller || "",
           mlSource: (j && j.source) || "proxy",
           queryUsada: queryUsada || "",
           processadoEm: new Date().toISOString()
@@ -5895,21 +5997,33 @@
       var box = el("cruzResults");
       var id = "res_"+Date.now()+"_"+Math.floor(Math.random()*1000);
       var showForce = (rec.similaridade>=60 && rec.similaridade<80);
+      var freteHtml;
+      if(rec.freteGratis || Number(rec.frete) === 0 && /frete\s*gr[aá]tis/i.test(freteNote || "")){
+        freteHtml = '<span style="color:#1e9e5a;font-weight:800">FRETE GRÁTIS</span>';
+      } else if(rec.freteOk || Number(rec.frete) > 0){
+        freteHtml = utils.formatBrl(rec.frete) +
+          (rec.cepUsado ? ' <span class="small muted">(CEP '+utils.escapeHtml(String(rec.cepUsado).replace(/^(\d{5})(\d{3})$/, "$1-$2"))+')</span>' : "");
+      } else {
+        freteHtml = '<span class="small muted">'+utils.escapeHtml(freteNote || "Frete não calculado")+'</span>';
+      }
       var html='<div class="result-item '+cls+'" id="'+id+'">'+
         '<div class="ri-head">'+
           '<div><div class="ri-title">'+utils.escapeHtml(rec.produtoML)+'</div>'+
-          '<div class="ri-sub">Item edital: '+utils.escapeHtml(rec.itemGoverno)+'</div></div>'+
+          '<div class="ri-sub">Item edital: '+utils.escapeHtml(rec.itemGoverno)+'</div>'+
+          (rec.freteGratis ? '<div style="margin-top:6px"><span class="badge-status b-green">FRETE GRÁTIS</span></div>' : '')+
+          '</div>'+
           '<div style="text-align:right"><div class="sim-ring" style="color:'+(rec.similaridade>=80?'#1e9e5a':rec.similaridade>=60?'#c9911f':'#d23b3b')+'">'+rec.similaridade+'%</div>'+
           '<span class="badge-status '+statusLabel+'">'+utils.escapeHtml(rec.status)+'</span></div>'+
         '</div>'+
         '<div class="ri-grid">'+
           metric("Preço ML", utils.formatBrl(rec.custoProduto))+
-          metric("Frete", utils.formatBrl(rec.frete)+(freteNote?' <span class="small muted">('+utils.escapeHtml(freteNote)+')</span>':''))+
+          metric("Frete", freteHtml)+
           metric("Desconto Forn.", utils.formatBrl(rec.descontoFornecedor||0))+
           metric("Custo Real", utils.formatBrl(rec.custoReal))+
           metric("Valor Final", utils.formatBrl(rec.precoVenda))+
           metric("Embalagem", rec.embalagem)+
         '</div>'+
+        (freteNote && !rec.freteGratis ? '<div class="small muted" style="margin-top:8px">'+utils.escapeHtml(freteNote)+'</div>' : '')+
         '<div class="btn-row" style="margin-top:12px">'+
           (rec.link?'<a class="btn btn-ghost btn-sm" target="_blank" href="'+utils.escapeHtml(rec.link)+'">🔗 Ver Anúncio</a>':'')+
           (showForce?'<button type="button" class="btn btn-green btn-sm cruzForce">✔ Forçar Aprovação</button>':'')+
