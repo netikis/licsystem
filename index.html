@@ -134,8 +134,25 @@
         </div>
       </div>
       <div class="top-actions">
-        <div class="bell" id="bell" title="Alertas PNCP">
-          🔔<span class="badge zero" id="bellBadge">0</span>
+        <div class="bell-wrap" id="bellWrap">
+          <button type="button" class="bell" id="bell" title="Alertas de editais" aria-haspopup="true" aria-expanded="false" aria-controls="bellPanel">
+            🔔<span class="badge zero" id="bellBadge">0</span>
+          </button>
+          <div class="bell-panel" id="bellPanel" hidden>
+            <div class="bell-panel-head">
+              <div>
+                <b>Alertas de editais</b>
+                <div class="small muted" id="bellPanelSub">Monitoramento automático PNCP</div>
+              </div>
+              <div class="bell-panel-actions">
+                <button type="button" class="btn btn-ghost btn-sm" id="btnBellCheck" title="Verificar agora">Atualizar</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btnBellMarkAll">Marcar lidos</button>
+              </div>
+            </div>
+            <div id="bellPanelList" class="bell-panel-list">
+              <div class="small muted">Nenhum alerta ainda. Ative um monitoramento em Pesquisas de Editais.</div>
+            </div>
+          </div>
         </div>
         <div class="top-user-row">
           <span id="syncStatus" class="sync-status" hidden title="Sincronização na nuvem"></span>
@@ -177,6 +194,23 @@
 
       <!-- ===================== PESQUISAS DE EDITAIS ===================== -->
       <section id="view-pesquisas" class="view">
+        <!-- Monitoramentos salvos (alertas automáticos) -->
+        <div class="card" id="cardAlertasPncp">
+          <div class="card-head">
+            <div class="card-head-main">
+              <h2>🔔 Meus alertas</h2>
+              <span class="tag">automático</span>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" id="btnAlertasCheckNow">Verificar agora</button>
+          </div>
+          <div class="desc">
+            Salve um monitoramento (cidade ou palavras-chave + UF). Enquanto o sistema estiver aberto, ele consulta o PNCP periodicamente e avisa no sino só o que for <b>novo</b>.
+          </div>
+          <div id="alertasWatchList" class="alertas-watch-list">
+            <div class="small muted">Nenhum alerta ativo. Use “Ativar alerta” no Radar ou em Perguntar editais.</div>
+          </div>
+        </div>
+
         <!-- Perguntar editais (chat helper — PNCP) -->
         <div class="card is-collapsed" id="cardChatEditais" data-collapse-key="chat-editais">
           <div class="card-head">
@@ -213,8 +247,11 @@
                   <option value="45">45 dias</option>
                 </select>
               </div>
-              <div style="max-width:190px;display:flex;align-items:flex-end">
+              <div style="max-width:190px;display:flex;align-items:flex-end;gap:8px">
                 <button class="btn btn-gold" id="btnChatEdital" style="width:100%">🔍 Buscar editais</button>
+              </div>
+              <div style="max-width:170px;display:flex;align-items:flex-end">
+                <button type="button" class="btn btn-ghost" id="btnChatAlerta" style="width:100%" title="Salvar cidade/pergunta como alerta automático">🔔 Ativar alerta</button>
               </div>
             </div>
             <div class="btn-row chat-edital-prompts" style="margin-top:0;flex-wrap:wrap;gap:8px;align-items:center">
@@ -349,6 +386,9 @@
               </div>
               <div style="max-width:170px;display:flex;align-items:flex-end">
                 <button class="btn btn-gold" id="btnPncp" style="width:100%">🔍 Buscar no PNCP</button>
+              </div>
+              <div style="max-width:160px;display:flex;align-items:flex-end">
+                <button type="button" class="btn btn-ghost" id="btnPncpAlerta" style="width:100%" title="Salvar palavras-chave + UF como alerta automático">🔔 Ativar alerta</button>
               </div>
             </div>
             <div class="btn-row" style="margin-top:0;flex-wrap:wrap;gap:8px;align-items:center">
