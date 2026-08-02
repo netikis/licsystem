@@ -5943,8 +5943,19 @@
       }
 
       results.forEach(function(it){ it.__sim = utils.similaridade(termo, it.title); });
-      results.sort(function(a,b){ return b.__sim - a.__sim; });
-      var best = results[0];
+      /* Entre matches bons (≥60%), prioriza menor preço (frete grátis conta como 0 no custo). */
+      var bons = results.filter(function(it){ return (it.__sim || 0) >= 60; });
+      var pool = bons.length ? bons : results.slice();
+      pool.sort(function(a, b){
+        var priceA = Number(a.price) || 0;
+        var priceB = Number(b.price) || 0;
+        if(priceA !== priceB) return priceA - priceB;
+        var freeA = !!(a.free_shipping || /frete\s*gr[aá]tis/i.test(a.freteLabel || ""));
+        var freeB = !!(b.free_shipping || /frete\s*gr[aá]tis/i.test(b.freteLabel || ""));
+        if(freeA !== freeB) return freeA ? -1 : 1; /* empate de preço: frete grátis primeiro */
+        return (b.__sim || 0) - (a.__sim || 0);
+      });
+      var best = pool[0];
       var freeFromSearch = !!(best.free_shipping || /frete\s*gr[aá]tis/i.test(best.freteLabel || ""));
 
       return LICSYSTEM.cruzamento.fetchFrete(best.id, cep, best.permalink || "", {
