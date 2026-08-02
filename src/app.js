@@ -936,12 +936,14 @@
   var DOCS_CHECKLIST_KEY = "licsystem_docs_checklist_v1";
   var DOCS_ACCORDION_KEY = "licsystem_docs_accordion_v1";
   var LEILOES_PARTICIPO_KEY = "licsystem_leiloes_participo_v1";
+  var PNCP_WATCHES_KEY = "licsystem_pncp_watches_v1";
+  var PNCP_ALERTS_KEY = "licsystem_pncp_alerts_v1";
   var CLOUD_META_KEY = "licsystem_cloud_meta_v1";
   var LAST_VIEW_KEY = "licsystem_last_view_v1";
   var CLOUD_LAST_UID_KEY = "licsystem_cloud_last_uid";
 
   /* ============================ CLOUD SYNC (Firebase RTDB per uid) ============================
-   * Paths: users/{uid}/orcamento|catalogo|cofre|docsChecklist|leiloesParticipo|arp|entregas|histEntregas
+   * Paths: users/{uid}/orcamento|catalogo|cofre|docsChecklist|leiloesParticipo|arp|entregas|histEntregas|pncpWatches|pncpAlerts
    * Envelope: { updatedAt:ms, cleared?:bool, writeId?:string, data:... }
    * Merge: newest updatedAt wins; empty local never overwrites cloud unless Limpar (cleared).
    * Live: after login, onValue listeners apply newer remote envelopes without re-login.
@@ -951,12 +953,12 @@
    *     "$uid": { ".read": "auth != null && auth.uid === $uid",
    *               ".write": "auth != null && auth.uid === $uid" }
    *   }}}
-   * Captação (PDF/radar) permanece só no navegador — não entra nestes nós.
+   * Captação PDF permanece no navegador; watches/alertas PNCP sincronizam na nuvem.
    */
   LICSYSTEM.cloudSync = {
     DEBOUNCE_MS: 900,
     REMOTE_DEFER_MS: 700,
-    KEYS: ["orcamento", "catalogo", "cofre", "docsChecklist", "leiloesParticipo", "arp", "entregas", "histEntregas"],
+    KEYS: ["orcamento", "catalogo", "cofre", "docsChecklist", "leiloesParticipo", "arp", "entregas", "histEntregas", "pncpWatches", "pncpAlerts"],
     _uid: null,
     _onlineWired: false,
     _pulling: false,
@@ -1130,6 +1132,16 @@
           if(lp == null) return null;
           return { updatedAt: this.metaTs("leiloesParticipo"), data: Array.isArray(lp) ? lp : [] };
         }
+        if(key === "pncpWatches"){
+          var pw = JSON.parse(localStorage.getItem(PNCP_WATCHES_KEY) || "null");
+          if(pw == null) return null;
+          return { updatedAt: this.metaTs("pncpWatches"), data: Array.isArray(pw) ? pw : [] };
+        }
+        if(key === "pncpAlerts"){
+          var pa = JSON.parse(localStorage.getItem(PNCP_ALERTS_KEY) || "null");
+          if(pa == null) return null;
+          return { updatedAt: this.metaTs("pncpAlerts"), data: Array.isArray(pa) ? pa : [] };
+        }
         if(key === "arp"){
           var arp = JSON.parse(localStorage.getItem("licsystem_arp_v1") || "null");
           if(arp == null) return null;
@@ -1233,6 +1245,24 @@
           try{ localStorage.setItem(LEILOES_PARTICIPO_KEY, JSON.stringify(Array.isArray(data) ? data : [])); }catch(e){}
         }
         this.touchMeta("leiloesParticipo", ts);
+        return;
+      }
+      if(key === "pncpWatches"){
+        if(LICSYSTEM.alertas){
+          LICSYSTEM.alertas.applyWatches(Array.isArray(data) ? data : [], { skipPersist: false, skipCloud: true });
+        } else {
+          try{ localStorage.setItem(PNCP_WATCHES_KEY, JSON.stringify(Array.isArray(data) ? data : [])); }catch(e){}
+        }
+        this.touchMeta("pncpWatches", ts);
+        return;
+      }
+      if(key === "pncpAlerts"){
+        if(LICSYSTEM.alertas){
+          LICSYSTEM.alertas.applyAlerts(Array.isArray(data) ? data : [], { skipPersist: false, skipCloud: true });
+        } else {
+          try{ localStorage.setItem(PNCP_ALERTS_KEY, JSON.stringify(Array.isArray(data) ? data : [])); }catch(e){}
+        }
+        this.touchMeta("pncpAlerts", ts);
         return;
       }
       if(key === "arp"){
@@ -1574,6 +1604,8 @@
       try{ if(LICSYSTEM.orcamento && LICSYSTEM.orcamento.flushSave) LICSYSTEM.orcamento.flushSave({ skipCloud: true }); }catch(e){}
       return self.pullAll({ replaceFromCloud: switched }).then(function(){
         return self.startRealtime();
+      }).then(function(){
+        try{ if(LICSYSTEM.alertas && LICSYSTEM.alertas.onLogin) LICSYSTEM.alertas.onLogin(); }catch(e){}
       });
     },
 
@@ -1588,6 +1620,7 @@
       self._echoWriteId = {};
       self._uid = null;
       self.setStatus("", "");
+      try{ if(LICSYSTEM.alertas && LICSYSTEM.alertas.onLogout) LICSYSTEM.alertas.onLogout(); }catch(e){}
     },
 
     wireOnline: function(){
@@ -1629,9 +1662,13 @@
 
   /* ============================ BELL / PNCP badge ============================ */
   LICSYSTEM.updateBell = function(){
+    if(LICSYSTEM.alertas && LICSYSTEM.alertas.updateBell){
+      LICSYSTEM.alertas.updateBell();
+      return;
+    }
     var badge = el("bellBadge");
     if(!badge) return;
-    var n = LICSYSTEM.state.pncpAlerts.length;
+    var n = (LICSYSTEM.state.pncpAlerts || []).length;
     badge.textContent = String(n);
     badge.classList.toggle("zero", n === 0);
   };
@@ -1694,12 +1731,21 @@
     renderPncp:function(){
       var box = el("dashPncpList");
       if(!box) return;
-      var arr = LICSYSTEM.state.pncpAlerts;
-      if(!arr.length){ box.innerHTML='<span class="muted">Nenhuma oportunidade capturada ainda. Use o Radar PNCP em <b>Pesquisas de Editais</b>.</span>'; return; }
+      var arr = (LICSYSTEM.alertas && LICSYSTEM.alertas.alerts && LICSYSTEM.alertas.alerts.length)
+        ? LICSYSTEM.alertas.alerts
+        : (LICSYSTEM.state.pncpAlerts || []);
+      if(!arr.length){
+        box.innerHTML='<span class="muted">Nenhum alerta ainda. Ative um monitoramento em <b>Pesquisas de Editais</b> (botão “Ativar alerta”).</span>';
+        return;
+      }
       var html='<div style="display:flex;flex-direction:column;gap:8px">';
       arr.slice(0,10).forEach(function(o){
-        html+='<div style="padding:10px 12px;border:1px solid var(--ls-line);border-radius:10px">'+
-          '<b>'+utils.escapeHtml(o.orgao||"Órgão")+'</b> <span class="badge-status b-yellow">'+utils.escapeHtml(o.uf||"")+'</span><br/>'+
+        var title = o.link
+          ? '<a href="'+utils.escapeHtml(o.link)+'" target="_blank" rel="noopener" style="color:inherit;text-decoration:none"><b>'+utils.escapeHtml(o.orgao||"Órgão")+'</b></a>'
+          : '<b>'+utils.escapeHtml(o.orgao||"Órgão")+'</b>';
+        html+='<div style="padding:10px 12px;border:1px solid var(--ls-line);border-radius:10px'+(o.readAt?'':';background:#fffbeb')+'">'+
+          title+' <span class="badge-status b-yellow">'+utils.escapeHtml(o.uf||"")+'</span>'+
+          (o.watchLabel ? ' <span class="small muted">· '+utils.escapeHtml(o.watchLabel)+'</span>' : '')+'<br/>'+
           '<span class="small muted">'+utils.escapeHtml((o.objeto||"").slice(0,180))+'</span></div>';
       });
       html+='</div>';
@@ -7760,6 +7806,590 @@
   LICSYSTEM.importarBackup = function(file){ return LICSYSTEM.ferramentas.importarBackup(file); };
   LICSYSTEM.licsystemPdfHeader = licsystemPdfHeader;
 
+  /* ============================ ALERTAS PNCP (estilo ConLicitação) ============================ */
+  LICSYSTEM.alertas = {
+    CHECK_MS: 15 * 60 * 1000,
+    MAX_WATCHES: 12,
+    MAX_ALERTS: 200,
+    MAX_SEEN: 400,
+    watches: [],
+    alerts: [],
+    _timer: null,
+    _busy: false,
+    _wired: false,
+    _panelOpen: false,
+
+    load: function(){
+      try{
+        var w = JSON.parse(localStorage.getItem(PNCP_WATCHES_KEY) || "[]");
+        this.watches = Array.isArray(w) ? w.map(function(x){ return LICSYSTEM.alertas.normalizeWatch(x); }) : [];
+      }catch(e){ this.watches = []; }
+      try{
+        var a = JSON.parse(localStorage.getItem(PNCP_ALERTS_KEY) || "[]");
+        this.alerts = Array.isArray(a) ? a.map(function(x){ return LICSYSTEM.alertas.normalizeAlert(x); }) : [];
+      }catch(e){ this.alerts = []; }
+      LICSYSTEM.state.pncpAlerts = this.alerts.filter(function(x){ return !x.readAt; });
+      this.updateBell();
+      this.renderWatches();
+      this.renderPanelList();
+      try{ LICSYSTEM.dashboard.renderPncp(); }catch(e){}
+    },
+
+    normalizeWatch: function(raw){
+      raw = raw || {};
+      var seen = raw.seenIds && typeof raw.seenIds === "object" ? raw.seenIds : {};
+      return {
+        id: String(raw.id || ("w_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7))),
+        tipo: String(raw.tipo || "municipio"),
+        label: String(raw.label || "").slice(0, 160),
+        q: String(raw.q || raw.keywords || "").slice(0, 200),
+        uf: String(raw.uf || "").trim().toUpperCase().slice(0, 2),
+        municipio: String(raw.municipio || "").slice(0, 120),
+        ibge: Number(raw.ibge || 0) || 0,
+        regiao: String(raw.regiao || "").slice(0, 60),
+        mensagem: String(raw.mensagem || "").slice(0, 200),
+        categoria: String(raw.categoria || "").slice(0, 80),
+        leiloes: raw.leiloes !== false,
+        ampliar: !!raw.ampliar,
+        janela: raw.janela === "ano" ? "ano" : "45",
+        enabled: raw.enabled !== false,
+        createdAt: Number(raw.createdAt || Date.now()),
+        lastCheckedAt: Number(raw.lastCheckedAt || 0) || 0,
+        seenIds: seen
+      };
+    },
+
+    normalizeAlert: function(raw){
+      raw = raw || {};
+      var key = String(raw.key || raw.numeroControlePNCP || raw.id || "");
+      return {
+        id: String(raw.id || key || ("a_" + Date.now())),
+        key: key,
+        numeroControlePNCP: raw.numeroControlePNCP || null,
+        orgao: String(raw.orgao || "").slice(0, 200),
+        municipio: String(raw.municipio || "").slice(0, 120),
+        uf: String(raw.uf || "").slice(0, 2),
+        objeto: String(raw.objeto || "").slice(0, 500),
+        modalidade: String(raw.modalidade || "").slice(0, 80),
+        valorEstimado: raw.valorEstimado != null ? Number(raw.valorEstimado) : null,
+        dataAbertura: raw.dataAbertura || null,
+        link: raw.link || null,
+        watchId: String(raw.watchId || ""),
+        watchLabel: String(raw.watchLabel || "").slice(0, 160),
+        foundAt: Number(raw.foundAt || Date.now()),
+        readAt: raw.readAt != null ? Number(raw.readAt) || null : null
+      };
+    },
+
+    applyWatches: function(arr, opts){
+      opts = opts || {};
+      this.watches = (Array.isArray(arr) ? arr : []).map(function(x){
+        return LICSYSTEM.alertas.normalizeWatch(x);
+      });
+      if(!opts.skipPersist){
+        try{ localStorage.setItem(PNCP_WATCHES_KEY, JSON.stringify(this.watches)); }catch(e){}
+      }
+      if(!opts.skipCloud && LICSYSTEM.cloudSync){
+        LICSYSTEM.cloudSync.notifyLocalChange("pncpWatches", { immediate: !!opts.immediate });
+      }
+      this.renderWatches();
+    },
+
+    applyAlerts: function(arr, opts){
+      opts = opts || {};
+      this.alerts = (Array.isArray(arr) ? arr : []).map(function(x){
+        return LICSYSTEM.alertas.normalizeAlert(x);
+      });
+      if(!opts.skipPersist){
+        try{ localStorage.setItem(PNCP_ALERTS_KEY, JSON.stringify(this.alerts)); }catch(e){}
+      }
+      if(!opts.skipCloud && LICSYSTEM.cloudSync){
+        LICSYSTEM.cloudSync.notifyLocalChange("pncpAlerts", { immediate: !!opts.immediate });
+      }
+      LICSYSTEM.state.pncpAlerts = this.alerts.filter(function(x){ return !x.readAt; });
+      this.updateBell();
+      this.renderPanelList();
+      try{ LICSYSTEM.dashboard.renderPncp(); }catch(e){}
+    },
+
+    persistWatches: function(opts){
+      opts = opts || {};
+      try{ localStorage.setItem(PNCP_WATCHES_KEY, JSON.stringify(this.watches)); }catch(e){}
+      if(!opts.skipCloud && LICSYSTEM.cloudSync){
+        LICSYSTEM.cloudSync.notifyLocalChange("pncpWatches", { immediate: !!opts.immediate });
+      }
+      this.renderWatches();
+    },
+
+    persistAlerts: function(opts){
+      opts = opts || {};
+      try{ localStorage.setItem(PNCP_ALERTS_KEY, JSON.stringify(this.alerts)); }catch(e){}
+      if(!opts.skipCloud && LICSYSTEM.cloudSync){
+        LICSYSTEM.cloudSync.notifyLocalChange("pncpAlerts", { immediate: !!opts.immediate });
+      }
+      LICSYSTEM.state.pncpAlerts = this.alerts.filter(function(x){ return !x.readAt; });
+      this.updateBell();
+      this.renderPanelList();
+      try{ LICSYSTEM.dashboard.renderPncp(); }catch(e){}
+    },
+
+    editalKey: function(o){
+      if(!o) return "";
+      if(o.key) return String(o.key);
+      if(o.numeroControlePNCP) return String(o.numeroControlePNCP);
+      return [o.orgao || "", o.objeto || "", o.dataAbertura || "", o.uf || ""].join("|");
+    },
+
+    unreadCount: function(){
+      var n = 0;
+      for(var i = 0; i < this.alerts.length; i++){
+        if(!this.alerts[i].readAt) n++;
+      }
+      return n;
+    },
+
+    updateBell: function(){
+      var badge = el("bellBadge");
+      if(!badge) return;
+      var n = this.unreadCount();
+      badge.textContent = String(n);
+      badge.classList.toggle("zero", n === 0);
+      var sub = el("bellPanelSub");
+      if(sub){
+        var ativo = this.watches.filter(function(w){ return w.enabled !== false; }).length;
+        sub.textContent = ativo
+          ? (n + " novo(s) · " + ativo + " monitoramento(s) ativo(s)")
+          : "Nenhum monitoramento ativo";
+      }
+    },
+
+    setPanelOpen: function(open){
+      this._panelOpen = !!open;
+      var panel = el("bellPanel");
+      var bell = el("bell");
+      if(panel) panel.hidden = !this._panelOpen;
+      if(bell) bell.setAttribute("aria-expanded", this._panelOpen ? "true" : "false");
+      if(this._panelOpen) this.renderPanelList();
+    },
+
+    togglePanel: function(){
+      this.setPanelOpen(!this._panelOpen);
+    },
+
+    renderPanelList: function(){
+      var box = el("bellPanelList");
+      if(!box) return;
+      if(!this.alerts.length){
+        box.innerHTML = '<div class="small muted">Nenhum alerta ainda. Ative um monitoramento em <b>Pesquisas de Editais</b>.</div>';
+        return;
+      }
+      var sorted = this.alerts.slice().sort(function(a, b){
+        return Number(b.foundAt || 0) - Number(a.foundAt || 0);
+      });
+      var html = "";
+      sorted.slice(0, 40).forEach(function(a){
+        var unread = !a.readAt;
+        var title = a.link
+          ? '<a href="'+utils.escapeHtml(a.link)+'" target="_blank" rel="noopener">'+utils.escapeHtml(a.orgao || "Órgão")+'</a>'
+          : '<b>'+utils.escapeHtml(a.orgao || "Órgão")+'</b>';
+        html += '<div class="bell-item'+(unread?' is-unread':'')+'" data-alert-id="'+utils.escapeHtml(a.id)+'">'+
+          title+
+          ' <span class="badge-status b-yellow">'+utils.escapeHtml(a.uf || "")+'</span>'+
+          (a.watchLabel ? ' <span class="small muted">· '+utils.escapeHtml(a.watchLabel)+'</span>' : '')+
+          '<div class="small muted" style="margin-top:4px">'+utils.escapeHtml((a.objeto || "").slice(0, 160))+'</div>'+
+          (a.municipio ? '<div class="small muted">'+utils.escapeHtml(a.municipio)+'</div>' : '')+
+          '</div>';
+      });
+      box.innerHTML = html;
+    },
+
+    renderWatches: function(){
+      var box = el("alertasWatchList");
+      if(!box) return;
+      if(!this.watches.length){
+        box.innerHTML = '<div class="small muted">Nenhum alerta ativo. Use “Ativar alerta” no Radar ou em Perguntar editais.</div>';
+        return;
+      }
+      var html = "";
+      this.watches.forEach(function(w){
+        var off = w.enabled === false;
+        html += '<div class="alerta-watch-row'+(off?' off':'')+'" data-watch-id="'+utils.escapeHtml(w.id)+'">'+
+          '<div>'+
+            '<div style="font-weight:700;color:var(--ls-navy)">'+utils.escapeHtml(w.label || w.id)+'</div>'+
+            '<div class="alerta-watch-meta small muted">'+
+              '<span>'+utils.escapeHtml(w.tipo === "radar" ? "Radar" : "Município")+'</span>'+
+              (w.lastCheckedAt ? '<span>· última verificação '+utils.escapeHtml(new Date(w.lastCheckedAt).toLocaleString("pt-BR"))+'</span>' : '<span>· ainda não verificado</span>')+
+              (off ? '<span>· pausado</span>' : '')+
+            '</div>'+
+          '</div>'+
+          '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+            '<button type="button" class="btn btn-ghost btn-sm" data-watch-toggle="'+utils.escapeHtml(w.id)+'">'+(off?'Ativar':'Pausar')+'</button>'+
+            '<button type="button" class="btn btn-ghost btn-sm" data-watch-del="'+utils.escapeHtml(w.id)+'">Excluir</button>'+
+          '</div>'+
+        '</div>';
+      });
+      box.innerHTML = html;
+    },
+
+    findWatch: function(id){
+      id = String(id || "");
+      for(var i = 0; i < this.watches.length; i++){
+        if(this.watches[i].id === id) return this.watches[i];
+      }
+      return null;
+    },
+
+    upsertWatch: function(partial, opts){
+      opts = opts || {};
+      var w = this.normalizeWatch(partial);
+      if(!w.label){
+        if(w.tipo === "radar") w.label = (w.q || "radar") + (w.uf ? " · " + w.uf : "");
+        else w.label = w.municipio || w.mensagem || w.regiao || "Município";
+      }
+      var dup = null;
+      for(var i = 0; i < this.watches.length; i++){
+        var x = this.watches[i];
+        if(w.tipo === "radar" && x.tipo === "radar" && x.q === w.q && x.uf === w.uf){ dup = x; break; }
+        if(w.tipo !== "radar" && x.tipo !== "radar" && ((w.ibge && x.ibge === w.ibge) || (w.municipio && x.municipio === w.municipio && x.uf === w.uf))){ dup = x; break; }
+      }
+      if(dup){
+        Object.assign(dup, w, { id: dup.id, seenIds: dup.seenIds || {}, createdAt: dup.createdAt });
+        w = dup;
+      } else {
+        if(this.watches.length >= this.MAX_WATCHES){
+          throw new Error("Limite de " + this.MAX_WATCHES + " alertas. Exclua um para criar outro.");
+        }
+        this.watches.unshift(w);
+      }
+      this.persistWatches({ immediate: true });
+      if(opts.baseline !== false){
+        return this.checkWatch(w, { baseline: true }).then(function(){ return w; });
+      }
+      return Promise.resolve(w);
+    },
+
+    removeWatch: function(id){
+      this.watches = this.watches.filter(function(w){ return w.id !== id; });
+      this.persistWatches({ immediate: true });
+    },
+
+    toggleWatch: function(id){
+      var w = this.findWatch(id);
+      if(!w) return;
+      w.enabled = !w.enabled;
+      this.persistWatches({ immediate: true });
+    },
+
+    markRead: function(id){
+      var a = null;
+      for(var i = 0; i < this.alerts.length; i++){
+        if(this.alerts[i].id === id){ a = this.alerts[i]; break; }
+      }
+      if(!a || a.readAt) return;
+      a.readAt = Date.now();
+      this.persistAlerts({ immediate: true });
+    },
+
+    markAllRead: function(){
+      var now = Date.now();
+      var changed = false;
+      for(var i = 0; i < this.alerts.length; i++){
+        if(!this.alerts[i].readAt){
+          this.alerts[i].readAt = now;
+          changed = true;
+        }
+      }
+      if(changed) this.persistAlerts({ immediate: true });
+    },
+
+    trimSeen: function(watch){
+      var keys = Object.keys(watch.seenIds || {});
+      if(keys.length <= this.MAX_SEEN) return;
+      keys.sort();
+      var drop = keys.length - this.MAX_SEEN;
+      for(var i = 0; i < drop; i++) delete watch.seenIds[keys[i]];
+    },
+
+    addNovos: function(rows, watch, opts){
+      opts = opts || {};
+      var baseline = !!opts.baseline;
+      var added = 0;
+      if(!watch.seenIds) watch.seenIds = {};
+      for(var i = 0; i < rows.length; i++){
+        var row = rows[i] || {};
+        var key = this.editalKey(row);
+        if(!key) continue;
+        var alreadySeen = !!watch.seenIds[key];
+        watch.seenIds[key] = 1;
+        if(alreadySeen) continue;
+        if(baseline) continue;
+        var exists = false;
+        for(var j = 0; j < this.alerts.length; j++){
+          if(this.alerts[j].key === key){ exists = true; break; }
+        }
+        if(exists) continue;
+        this.alerts.unshift(this.normalizeAlert({
+          id: key,
+          key: key,
+          numeroControlePNCP: row.numeroControlePNCP || null,
+          orgao: row.orgao,
+          municipio: row.municipio,
+          uf: row.uf,
+          objeto: row.objeto,
+          modalidade: row.modalidade,
+          valorEstimado: row.valorEstimado,
+          dataAbertura: row.dataAbertura,
+          link: row.link,
+          watchId: watch.id,
+          watchLabel: watch.label,
+          foundAt: Date.now(),
+          readAt: null
+        }));
+        added++;
+      }
+      this.trimSeen(watch);
+      if(this.alerts.length > this.MAX_ALERTS){
+        this.alerts = this.alerts.slice(0, this.MAX_ALERTS);
+      }
+      return added;
+    },
+
+    checkWatch: function(watch, opts){
+      opts = opts || {};
+      var self = this;
+      var knownIds = Object.keys(watch.seenIds || {});
+      return fetch("/api/monitor-pncp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ watches: [watch], knownIds: knownIds })
+      }).then(function(r){
+        return utils.parseApiResponse(r);
+      }).then(function(j){
+        if(!j || j.ok === false) throw new Error((j && j.error) || "Falha no monitor PNCP");
+        var pack = (j.results && j.results[0] && j.results[0].editais) || [];
+        var novos = j.novos || [];
+        /* baseline: marca tudo visto sem criar alerta */
+        var added = self.addNovos(opts.baseline ? pack : novos, watch, opts);
+        watch.lastCheckedAt = Date.now();
+        self.persistWatches({ immediate: true });
+        if(!opts.baseline) self.persistAlerts({ immediate: true });
+        else self.persistWatches({ immediate: true });
+        return { added: added, total: pack.length, watch: watch };
+      });
+    },
+
+    checkAll: function(opts){
+      opts = opts || {};
+      var self = this;
+      if(self._busy) return Promise.resolve({ skipped: true });
+      var list = self.watches.filter(function(w){ return w.enabled !== false; });
+      if(!list.length) return Promise.resolve({ checked: 0, added: 0 });
+      self._busy = true;
+      var btnIds = ["btnAlertasCheckNow", "btnBellCheck"];
+      btnIds.forEach(function(id){ var b = el(id); if(b) b.disabled = true; });
+
+      var addedTotal = 0;
+      var chain = Promise.resolve();
+      /* API aceita até 4 watches por chamada */
+      var chunks = [];
+      for(var i = 0; i < list.length; i += 4){
+        chunks.push(list.slice(i, i + 4));
+      }
+      chunks.forEach(function(chunk){
+        chain = chain.then(function(){
+          var known = [];
+          chunk.forEach(function(w){
+            Object.keys(w.seenIds || {}).forEach(function(k){ known.push(k); });
+          });
+          return fetch("/api/monitor-pncp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ watches: chunk, knownIds: known })
+          }).then(function(r){ return utils.parseApiResponse(r); }).then(function(j){
+            if(!j || j.ok === false) throw new Error((j && j.error) || "Falha no monitor PNCP");
+            var byWatch = Object.create(null);
+            (j.results || []).forEach(function(res){
+              byWatch[res.watchId] = res;
+            });
+            chunk.forEach(function(w){
+              var res = byWatch[w.id];
+              var pack = (res && res.editais) || [];
+              var novos = (j.novos || []).filter(function(n){ return n.watchId === w.id; });
+              addedTotal += self.addNovos(opts.baseline ? pack : novos, w, opts);
+              w.lastCheckedAt = Date.now();
+            });
+          });
+        });
+      });
+
+      return chain.then(function(){
+        self.persistWatches({ immediate: true });
+        self.persistAlerts({ immediate: true });
+        return { checked: list.length, added: addedTotal };
+      }).catch(function(err){
+        console.warn("alertas.checkAll", err);
+        throw err;
+      }).then(function(r){
+        self._busy = false;
+        btnIds.forEach(function(id){ var b = el(id); if(b) b.disabled = false; });
+        return r;
+      }, function(err){
+        self._busy = false;
+        btnIds.forEach(function(id){ var b = el(id); if(b) b.disabled = false; });
+        throw err;
+      });
+    },
+
+    createFromRadar: function(){
+      var q = String((el("pncpKeywords") && el("pncpKeywords").value) || "").trim();
+      var uf = String((el("pncpUf") && el("pncpUf").value) || "").trim().toUpperCase();
+      if(!q) throw new Error("Informe palavras-chave no Radar PNCP.");
+      if(!uf) throw new Error("Escolha uma UF para o alerta do Radar (ex.: SP).");
+      var leiloes = !el("pncpIncluirLeiloes") || !!(el("pncpIncluirLeiloes") && el("pncpIncluirLeiloes").checked);
+      return this.upsertWatch({
+        tipo: "radar",
+        q: q,
+        uf: uf,
+        leiloes: leiloes,
+        janela: "45",
+        label: q + " · " + uf
+      }, { baseline: true });
+    },
+
+    createFromChat: function(){
+      var texto = String((el("chatEditalMsg") && el("chatEditalMsg").value) || "").trim();
+      var cat = String((el("chatEditalCat") && el("chatEditalCat").value) || "").trim();
+      var janela = (el("chatEditalJanela") && el("chatEditalJanela").value) || "45";
+      var leiloes = !el("chatEditalLeiloes") || !!(el("chatEditalLeiloes") && el("chatEditalLeiloes").checked);
+      var ampliar = !!(el("chatEditalAmpliar") && el("chatEditalAmpliar").checked);
+      if(!texto && !cat) throw new Error("Digite o nome da cidade ou uma pergunta antes de ativar o alerta.");
+      var folded = utils.fold(texto).toLowerCase();
+      var regiao = "";
+      if(/norte\s*pioneiro/.test(folded)) regiao = "norte-pioneiro";
+      return this.upsertWatch({
+        tipo: "municipio",
+        municipio: regiao ? "" : texto,
+        mensagem: regiao ? "" : texto,
+        regiao: regiao,
+        categoria: cat,
+        leiloes: leiloes,
+        ampliar: ampliar,
+        janela: janela === "ano" ? "ano" : "45",
+        label: regiao ? ("Norte Pioneiro" + (cat ? " · " + cat : "")) : texto
+      }, { baseline: true });
+    },
+
+    startPolling: function(){
+      var self = this;
+      this.stopPolling();
+      this._timer = setInterval(function(){
+        if(document.hidden) return;
+        self.checkAll().catch(function(){});
+      }, this.CHECK_MS);
+    },
+
+    stopPolling: function(){
+      if(this._timer){
+        clearInterval(this._timer);
+        this._timer = null;
+      }
+    },
+
+    onLogin: function(){
+      this.load();
+      this.startPolling();
+      var self = this;
+      setTimeout(function(){
+        self.checkAll().catch(function(){});
+      }, 8000);
+    },
+
+    onLogout: function(){
+      this.stopPolling();
+      this.setPanelOpen(false);
+    },
+
+    wire: function(){
+      if(this._wired) return;
+      this._wired = true;
+      var self = this;
+      var bell = el("bell");
+      if(bell){
+        bell.addEventListener("click", function(e){
+          e.stopPropagation();
+          self.togglePanel();
+        });
+      }
+      document.addEventListener("click", function(e){
+        var wrap = el("bellWrap");
+        if(!wrap || !self._panelOpen) return;
+        if(!wrap.contains(e.target)) self.setPanelOpen(false);
+      });
+      var list = el("bellPanelList");
+      if(list){
+        list.addEventListener("click", function(e){
+          var item = e.target.closest("[data-alert-id]");
+          if(item) self.markRead(item.getAttribute("data-alert-id"));
+        });
+      }
+      var watchesBox = el("alertasWatchList");
+      if(watchesBox){
+        watchesBox.addEventListener("click", function(e){
+          var t = e.target.closest("[data-watch-toggle]");
+          if(t){ self.toggleWatch(t.getAttribute("data-watch-toggle")); return; }
+          var d = e.target.closest("[data-watch-del]");
+          if(d){
+            if(confirm("Excluir este alerta?")) self.removeWatch(d.getAttribute("data-watch-del"));
+          }
+        });
+      }
+      function runCheck(){
+        self.checkAll().then(function(r){
+          var msg = r && r.added
+            ? (r.added + " edital(is) novo(s) encontrado(s). Veja o sino.")
+            : "Verificação concluída. Nenhum edital novo.";
+          showAlert("pncpAlert", r && r.added ? "ok" : "info", msg);
+        }).catch(function(err){
+          showAlert("pncpAlert", "error", (err && err.message) || "Falha ao verificar alertas");
+        });
+      }
+      var btnCheck = el("btnAlertasCheckNow");
+      if(btnCheck) btnCheck.addEventListener("click", runCheck);
+      var btnBellCheck = el("btnBellCheck");
+      if(btnBellCheck) btnBellCheck.addEventListener("click", function(e){ e.stopPropagation(); runCheck(); });
+      var btnMark = el("btnBellMarkAll");
+      if(btnMark) btnMark.addEventListener("click", function(e){ e.stopPropagation(); self.markAllRead(); });
+      var btnRadar = el("btnPncpAlerta");
+      if(btnRadar){
+        btnRadar.addEventListener("click", function(){
+          try{
+            self.createFromRadar().then(function(){
+              showAlert("pncpAlert", "ok", "Alerta ativado! Os editais atuais foram registrados como base; o sino avisará só os novos.");
+            }).catch(function(err){
+              showAlert("pncpAlert", "error", (err && err.message) || "Não foi possível ativar o alerta");
+            });
+          }catch(err){
+            showAlert("pncpAlert", "error", (err && err.message) || "Não foi possível ativar o alerta");
+          }
+        });
+      }
+      var btnChat = el("btnChatAlerta");
+      if(btnChat){
+        btnChat.addEventListener("click", function(){
+          try{
+            self.createFromChat().then(function(){
+              showAlert("chatEditalAlert", "ok", "Alerta ativado! O sino avisará quando surgir edital novo para essa busca.");
+            }).catch(function(err){
+              showAlert("chatEditalAlert", "error", (err && err.message) || "Não foi possível ativar o alerta");
+            });
+          }catch(err){
+            showAlert("chatEditalAlert", "error", (err && err.message) || "Não foi possível ativar o alerta");
+          }
+        });
+      }
+    }
+  };
+
   /* ============================ EVENT WIRING ============================ */
   function wireOrcFileInput(){
     var drop = el("orcDrop");
@@ -7790,6 +8420,7 @@
     on("btnPncp","click", LICSYSTEM.captacao.buscarPncp);
     on("btnProxBuscar","click", LICSYSTEM.captacao.buscarProximos);
     on("btnChatEdital","click", LICSYSTEM.captacao.buscarChatEditais);
+    if(LICSYSTEM.alertas && LICSYSTEM.alertas.wire) LICSYSTEM.alertas.wire();
     on("proxRaio","keydown", function(e){
       if(e.key === "Enter"){ e.preventDefault(); LICSYSTEM.captacao.buscarProximos(); }
     });
@@ -9938,6 +10569,7 @@
     LICSYSTEM.captacao.initChatEditais();
     LICSYSTEM.captacao.initCardCollapse();
     LICSYSTEM.orcamento.load();
+    try{ if(LICSYSTEM.alertas) LICSYSTEM.alertas.load(); }catch(e){}
     LICSYSTEM.state._orcDirty = true;
     LICSYSTEM.state._orcRendered = false;
     LICSYSTEM.state._dashReady = false;
