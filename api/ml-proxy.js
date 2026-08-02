@@ -213,8 +213,12 @@ async function searchOfficial(q, limit) {
     "&limit=" +
     encodeURIComponent(limit);
   var headers = {};
-  if (process.env.ML_ACCESS_TOKEN) {
-    headers.Authorization = "Bearer " + process.env.ML_ACCESS_TOKEN;
+  try {
+    var mlAuth = require("./_lib/ml-auth");
+    var token = await mlAuth.getAccessToken();
+    if (token) headers.Authorization = "Bearer " + token;
+  } catch (e) {
+    /* segue sem token se OAuth falhar */
   }
   var r = await fetchText(url, { accept: "application/json", headers: headers });
   if (!r.ok) {
@@ -240,6 +244,9 @@ async function searchOfficial(q, limit) {
       thumbnail: it.thumbnail || "",
       available_quantity:
         typeof it.available_quantity === "number" ? it.available_quantity : 1,
+      seller:
+        (it.seller && it.seller.nickname) ||
+        (it.seller && it.seller.id ? "Vendedor #" + it.seller.id : ""),
     };
   });
   return { ok: true, results: results, source: "api" };
@@ -367,8 +374,12 @@ async function shippingOfficial(itemId, cep) {
     "/shipping_options?zip_code=" +
     encodeURIComponent(cep);
   var headers = {};
-  if (process.env.ML_ACCESS_TOKEN) {
-    headers.Authorization = "Bearer " + process.env.ML_ACCESS_TOKEN;
+  try {
+    var mlAuth = require("./_lib/ml-auth");
+    var token = await mlAuth.getAccessToken();
+    if (token) headers.Authorization = "Bearer " + token;
+  } catch (e) {
+    /* segue sem token se OAuth falhar */
   }
   var r = await fetchText(url, { accept: "application/json", headers: headers });
   if (!r.ok) {
