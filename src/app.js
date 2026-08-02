@@ -4774,9 +4774,6 @@
         (meta.totalRegistros != null
           ? " (PNCP informa ~" + meta.totalRegistros + " no total nas modalidades)"
           : "");
-      var leilaoHint =
-        " <b>Importante:</b> leilões de veículos e sucata muitas vezes não estão no PNCP — circulam em sites especializados ou só no portal local do órgão.";
-
       if(!matches.length){
         if(!bruto){
           box.innerHTML =
@@ -4785,11 +4782,7 @@
             (uf ? ", UF " + utils.escapeHtml(uf) : "") +
             ", " +
             utils.escapeHtml(modLabel) +
-            ")." +
-            (meta.leilaoDomain || (meta.modalidades && meta.modalidades.indexOf(1) !== -1)
-              ? leilaoHint
-              : "") +
-            "</div>";
+            ").</div>";
           showAlert(
             "pncpAlert",
             "info",
@@ -4798,17 +4791,13 @@
           return;
         }
         box.innerHTML =
-          '<div class="muted small">O PNCP retornou dados, mas nenhum objeto correspondeu às palavras-chave' +
+          '<div class="muted small">Nenhum edital com as palavras-chave' +
           (kwLabel ? " (<b>" + utils.escapeHtml(kwLabel) + "</b>)" : "") +
-          ". " +
+          " entre " +
           utils.escapeHtml(scanned) +
-          "; " +
+          " (" +
           utils.escapeHtml(horizonte) +
-          ". A busca ignora acentos; vírgula = OU entre grupos. Em leilão/veículo/sucata, sinônimos entram como OU (não exige todos os termos juntos)." +
-          (meta.leilaoDomain || (meta.modalidades && meta.modalidades.indexOf(1) !== -1)
-            ? leilaoHint
-            : "") +
-          "</div>";
+          ").</div>";
         showAlert(
           "pncpAlert",
           "info",
@@ -7838,6 +7827,9 @@
     normalizeWatch: function(raw){
       raw = raw || {};
       var seen = raw.seenIds && typeof raw.seenIds === "object" ? raw.seenIds : {};
+      var raio = Number(raw.raio || 0) || 0;
+      if(raio && raio < 10) raio = 10;
+      if(raio > 700) raio = 700;
       return {
         id: String(raw.id || ("w_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7))),
         tipo: String(raw.tipo || "municipio"),
@@ -7846,6 +7838,9 @@
         uf: String(raw.uf || "").trim().toUpperCase().slice(0, 2),
         municipio: String(raw.municipio || "").slice(0, 120),
         ibge: Number(raw.ibge || 0) || 0,
+        raio: raio || 0,
+        cobertura: String(raw.cobertura || "").slice(0, 20),
+        federal: !!raw.federal,
         regiao: String(raw.regiao || "").slice(0, 60),
         mensagem: String(raw.mensagem || "").slice(0, 200),
         categoria: String(raw.categoria || "").slice(0, 80),
@@ -8007,17 +8002,21 @@
       var box = el("alertasWatchList");
       if(!box) return;
       if(!this.watches.length){
-        box.innerHTML = '<div class="small muted">Nenhum alerta ativo. Use “Ativar alerta” no Radar ou em Perguntar editais.</div>';
+        box.innerHTML = '<div class="small muted">Nenhum alerta ativo. Use “Ativar alerta” em Editais próximos (recomendado), Radar ou Perguntar editais.</div>';
         return;
       }
       var html = "";
       this.watches.forEach(function(w){
         var off = w.enabled === false;
+        var tipoLabel =
+          w.tipo === "radar" ? "Radar" :
+          (w.tipo === "proximos" || w.tipo === "raio" || w.tipo === "vizinhos") ? ("Próximos · " + (w.raio || 250) + " km") :
+          "Município";
         html += '<div class="alerta-watch-row'+(off?' off':'')+'" data-watch-id="'+utils.escapeHtml(w.id)+'">'+
           '<div>'+
             '<div style="font-weight:700;color:var(--ls-navy)">'+utils.escapeHtml(w.label || w.id)+'</div>'+
             '<div class="alerta-watch-meta small muted">'+
-              '<span>'+utils.escapeHtml(w.tipo === "radar" ? "Radar" : "Município")+'</span>'+
+              '<span>'+utils.escapeHtml(tipoLabel)+'</span>'+
               (w.lastCheckedAt ? '<span>· última verificação '+utils.escapeHtml(new Date(w.lastCheckedAt).toLocaleString("pt-BR"))+'</span>' : '<span>· ainda não verificado</span>')+
               (off ? '<span>· pausado</span>' : '')+
             '</div>'+
@@ -8044,13 +8043,25 @@
       var w = this.normalizeWatch(partial);
       if(!w.label){
         if(w.tipo === "radar") w.label = (w.q || "radar") + (w.uf ? " · " + w.uf : "");
+        else if(w.tipo === "proximos" || w.tipo === "raio" || w.tipo === "vizinhos"){
+          w.label = (w.municipio || "Origem") + " · " + (w.raio || 250) + " km";
+        }
         else w.label = w.municipio || w.mensagem || w.regiao || "Município";
       }
       var dup = null;
       for(var i = 0; i < this.watches.length; i++){
         var x = this.watches[i];
         if(w.tipo === "radar" && x.tipo === "radar" && x.q === w.q && x.uf === w.uf){ dup = x; break; }
-        if(w.tipo !== "radar" && x.tipo !== "radar" && ((w.ibge && x.ibge === w.ibge) || (w.municipio && x.municipio === w.municipio && x.uf === w.uf))){ dup = x; break; }
+        if((w.tipo === "proximos" || w.tipo === "raio") && (x.tipo === "proximos" || x.tipo === "raio") &&
+          x.ibge === w.ibge && Number(x.raio || 0) === Number(w.raio || 0) &&
+          String(x.q || "") === String(w.q || "") && String(x.cobertura || "") === String(w.cobertura || "")){
+          dup = x; break;
+        }
+        if(w.tipo !== "radar" && w.tipo !== "proximos" && w.tipo !== "raio" &&
+          x.tipo !== "radar" && x.tipo !== "proximos" && x.tipo !== "raio" &&
+          ((w.ibge && x.ibge === w.ibge) || (w.municipio && x.municipio === w.municipio && x.uf === w.uf))){
+          dup = x; break;
+        }
       }
       if(dup){
         Object.assign(dup, w, { id: dup.id, seenIds: dup.seenIds || {}, createdAt: dup.createdAt });
@@ -8279,6 +8290,70 @@
       }, { baseline: true });
     },
 
+    createFromProximos: function(){
+      var self = this;
+      var ibge = Number((el("proxIbge") && el("proxIbge").value) || 0) || 0;
+      var nome = String((el("proxMunicipio") && el("proxMunicipio").value) || "").trim();
+      var raio = Number((el("proxRaio") && el("proxRaio").value) || 250) || 250;
+      var cobertura = String((el("proxCobertura") && el("proxCobertura").value) || "");
+      var q = String((el("proxKeywords") && el("proxKeywords").value) || "").trim();
+      var janela = (el("proxJanela") && el("proxJanela").value) || "ano";
+      var ampliar = !!(el("proxAmpliar") && el("proxAmpliar").checked);
+      var leiloes = !el("proxLeiloes") || !!(el("proxLeiloes") && el("proxLeiloes").checked);
+      var federal = !!(el("proxFederal") && el("proxFederal").checked);
+      if(raio < 10) raio = 10;
+      if(raio > 700) raio = 700;
+
+      function saveWatch(m){
+        var munNome = (m && (m.nome || m.n)) || nome.split("/")[0].trim() || "Município";
+        var uf = (m && (m.uf || m.u)) || "";
+        var code = Number((m && (m.ibge || m.i)) || ibge) || 0;
+        if(!code) throw new Error("Escolha o município de origem na lista (IBGE).");
+        var label =
+          munNome +
+          (uf ? "/" + uf : "") +
+          " · " +
+          raio +
+          " km" +
+          (cobertura === "pr-sp" ? " · PR+SP" : "") +
+          (q ? " · " + q : "");
+        return self.upsertWatch({
+          tipo: "proximos",
+          ibge: code,
+          municipio: munNome,
+          uf: uf,
+          raio: raio,
+          cobertura: cobertura,
+          q: q,
+          janela: janela === "45" ? "45" : "ano",
+          ampliar: ampliar,
+          leiloes: leiloes,
+          federal: federal,
+          label: label
+        }, { baseline: true });
+      }
+
+      if(ibge){
+        var saved = null;
+        try{ saved = LICSYSTEM.captacao.loadOrigem && LICSYSTEM.captacao.loadOrigem(); }catch(e){}
+        return Promise.resolve(saveWatch({
+          ibge: ibge,
+          nome: (saved && saved.nome) || nome.split("/")[0].trim(),
+          uf: (saved && saved.uf) || (nome.indexOf("/") >= 0 ? nome.split("/")[1] : "")
+        }));
+      }
+      if(nome.length < 2){
+        return Promise.reject(new Error("Informe o município de origem e escolha na lista antes de ativar o alerta."));
+      }
+      return LICSYSTEM.captacao.resolveMunicipioFromInput().then(function(m){
+        if(!m || !m.ibge){
+          throw new Error("Não deu para confirmar o município. Clique na sugestão da lista e tente de novo.");
+        }
+        try{ LICSYSTEM.captacao.selectMunicipio(m); }catch(e){}
+        return saveWatch(m);
+      });
+    },
+
     startPolling: function(){
       var self = this;
       this.stopPolling();
@@ -8385,6 +8460,25 @@
           }catch(err){
             showAlert("chatEditalAlert", "error", (err && err.message) || "Não foi possível ativar o alerta");
           }
+        });
+      }
+      var btnProx = el("btnProxAlerta");
+      if(btnProx){
+        btnProx.addEventListener("click", function(){
+          btnProx.disabled = true;
+          self.createFromProximos().then(function(w){
+            showAlert(
+              "proxAlert",
+              "ok",
+              "Alerta de vizinhos ativado" +
+                (w && w.label ? " (“" + utils.escapeHtml(w.label) + "”)" : "") +
+                ". Os editais atuais viraram base; o sino avisará só os novos no raio."
+            );
+          }).catch(function(err){
+            showAlert("proxAlert", "error", (err && err.message) || "Não foi possível ativar o alerta");
+          }).then(function(){
+            btnProx.disabled = false;
+          });
         });
       }
     }
