@@ -5726,6 +5726,26 @@
       LICSYSTEM.orcamento._restoreDrop();
     },
 
+    /** Linhas da proposta comercial (sem Meu V.Unit e sem %). */
+    propostaRows:function(){
+      var rows=[], geralMeus=0, geralEdital=0;
+      LICSYSTEM.state.orcItems.forEach(function(it){
+        if(!it.produto && !it.lote) return;
+        var meus=LICSYSTEM.orcamento.calcTotal(it);
+        var edital=LICSYSTEM.orcamento.calcEditalTotal(it);
+        geralMeus+=meus; geralEdital+=edital;
+        rows.push([
+          it.lote || "",
+          it.produto || "",
+          it.qtd,
+          utils.formatBrl(it.editalVunit),
+          utils.formatBrl(edital),
+          utils.formatBrl(meus)
+        ]);
+      });
+      return { rows: rows, geralMeus: geralMeus, geralEdital: geralEdital };
+    },
+
     gerarProposta:function(){
       if(!LICSYSTEM.state.orcItems.length){ alert("Planilha vazia."); return; }
       utils.ensureJsPdf().then(function(){
@@ -5733,36 +5753,58 @@
         var doc = new jsPDF({orientation:"landscape"});
         return licsystemPdfHeader(doc,"Proposta Comercial — Espelho Edital", true).then(function(startY){
           var y = startY;
-          var rows=[], geralMeus=0, geralEdital=0;
-          LICSYSTEM.state.orcItems.forEach(function(it){
-            if(!it.produto && !it.lote) return;
-            var meus=LICSYSTEM.orcamento.calcTotal(it);
-            var edital=LICSYSTEM.orcamento.calcEditalTotal(it);
-            geralMeus+=meus; geralEdital+=edital;
-            rows.push([
-              it.lote || "",
-              it.produto || "",
-              it.qtd,
-              utils.formatBrl(it.editalVunit),
-              utils.formatBrl(edital),
-              utils.formatBrl(it.vunit),
-              (it.pct||0)+"%",
-              utils.formatBrl(meus)
-            ]);
-          });
+          var data = LICSYSTEM.orcamento.propostaRows();
+          if(!data.rows.length){ alert("Nenhum item para exportar."); return; }
           doc.autoTable({
             startY:y+2,
-            head:[["Lote","Descrição","Qtd","Edital V.Unit","Edital Final","Meu V.Unit","%","Meu Final"]],
-            body:rows,
-            foot:[["","","","","TOTAL EDITAL", utils.formatBrl(geralEdital),"TOTAL MEUS", utils.formatBrl(geralMeus)]],
+            head:[["Lote","Descrição","Qtd","Edital V.Unit","Edital Final","Meu Final"]],
+            body:data.rows,
+            foot:[["","","","","TOTAL EDITAL", utils.formatBrl(data.geralEdital)]],
             styles:{fontSize:8,cellPadding:2.5},
             headStyles:{fillColor:[21,38,66],textColor:255},
             footStyles:{fillColor:[201,162,39],textColor:[21,38,66],fontStyle:"bold"},
-            alternateRowStyles:{fillColor:[248,250,253]}
+            alternateRowStyles:{fillColor:[248,250,253]},
+            columnStyles:{
+              0:{cellWidth:18},
+              2:{cellWidth:18,halign:"right"},
+              3:{cellWidth:28,halign:"right"},
+              4:{cellWidth:28,halign:"right"},
+              5:{cellWidth:32,halign:"right"}
+            }
           });
+          var finalY = (doc.lastAutoTable && doc.lastAutoTable.finalY) || (y + 20);
+          doc.setFillColor(201,162,39);
+          doc.rect(14, finalY + 3, doc.internal.pageSize.getWidth() - 28, 10, "F");
+          doc.setTextColor(21,38,66);
+          doc.setFontSize(9);
+          doc.setFont(undefined, "bold");
+          doc.text("TOTAL MEUS: "+utils.formatBrl(data.geralMeus), doc.internal.pageSize.getWidth() - 18, finalY + 9.5, {align:"right"});
           doc.save("proposta-comercial-licsystem.pdf");
         });
       }).catch(function(err){ alert("Falha ao gerar PDF: "+err.message); });
+    },
+
+    gerarPropostaExcel:function(){
+      if(!LICSYSTEM.state.orcItems.length){ alert("Planilha vazia."); return; }
+      utils.ensureXlsx().then(function(){
+        var data = LICSYSTEM.orcamento.propostaRows();
+        if(!data.rows.length){ alert("Nenhum item para exportar."); return; }
+        var sheet = [[
+          "Lote","Descrição","Qtd","Edital V.Unit","Edital Final","Meu Final"
+        ]];
+        data.rows.forEach(function(r){ sheet.push(r); });
+        sheet.push(["","","","","TOTAL EDITAL", utils.formatBrl(data.geralEdital)]);
+        sheet.push(["","","","","TOTAL MEUS", utils.formatBrl(data.geralMeus)]);
+        var ws = XLSX.utils.aoa_to_sheet(sheet);
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Proposta");
+        var nome = (LICSYSTEM.state.orcMetaNumero || LICSYSTEM.state.orcMetaNome || "proposta")
+          .toString().replace(/[^\w\-]+/g,"_").slice(0,40);
+        XLSX.writeFile(wb, nome + "-proposta-licsystem.xlsx");
+        showAlert("orcAlert","ok","Proposta Excel exportada ("+data.rows.length+" item(ns)).");
+      }).catch(function(err){
+        alert("Falha ao gerar Excel: "+(err.message||err));
+      });
     },
 
     onEdit:function(i,f,val){
@@ -8903,6 +8945,7 @@
     on("btnAddLinha","click", LICSYSTEM.orcamento.addLinha);
     on("btnLimparOrc","click", LICSYSTEM.orcamento.limpar);
     on("btnPropostaOrc","click", LICSYSTEM.orcamento.gerarProposta);
+    on("btnPropostaOrcExcel","click", LICSYSTEM.orcamento.gerarPropostaExcel);
     on("btnExportOrcExcel","click", LICSYSTEM.orcamento.exportarExcel);
     on("btnExportOrcPdf","click", LICSYSTEM.orcamento.exportarPdf);
     on("btnSalvarOrcCatalogo","click", LICSYSTEM.orcamento.abrirModalSalvarCatalogo);
