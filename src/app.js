@@ -873,6 +873,49 @@
     return words.join(" ");
   };
 
+  /**
+   * Tokens de marca no termo (ex.: "bosch chave de impacto" → ["bosch"]).
+   * Ignora palavras genéricas de produto/medida.
+   */
+  utils.mlBrandTokens = function(termo){
+    var stop = {
+      chave:1, impacto:1, alicate:1, abracadeira:1, borboleta:1, mangueira:1,
+      parafuso:1, porca:1, arruela:1, broca:1, serra:1, fita:1, cabo:1, fio:1,
+      tomada:1, interruptor:1, lampada:1, led:1, tinta:1, oleo:1, graxa:1,
+      jogo:1, kit:1, jogo:1, conjunto:1, peca:1, pecas:1, und:1, un:1, unidade:1,
+      mm:1, cm:1, pol:1, polegadas:1, poleg:1, volt:1, volts:1, ampere:1, amperes:1,
+      w:1, watts:1, v:1, ah:1, lithium:1, litio:1, bateria:1, sem:1, com:1, para:1,
+      de:1, da:1, do:1, das:1, dos:1, em:1, e:1, a:1, o:1, as:1, os:1,
+      eletrico:1, eletrica:1, pneumatico:1, industrial:1, profissional:1,
+      fazendeiro:1, universal:1, original:1, generico:1, novo:1, usada:1, usado:1
+    };
+    var words = utils.sanitizar(termo || "").split(/\s+/).filter(Boolean);
+    var brands = [];
+    words.forEach(function(w, idx){
+      if(w.length < 3) return;
+      if(/^\d/.test(w)) return; // medidas / modelos numéricos
+      if(stop[w]) return;
+      /* marca costuma ser a 1ª palavra significativa; aceita também tokens “próprios” curtos */
+      if(idx === 0 || w.length >= 4) brands.push(w);
+    });
+    /* dedupe */
+    var seen = {};
+    return brands.filter(function(b){
+      if(seen[b]) return false;
+      seen[b] = 1;
+      return true;
+    }).slice(0, 3);
+  };
+
+  utils.mlTitleHasBrand = function(title, brandTokens){
+    if(!brandTokens || !brandTokens.length) return true;
+    var t = utils.sanitizar(title || "");
+    if(!t) return false;
+    return brandTokens.every(function(b){
+      return t.indexOf(b) !== -1;
+    });
+  };
+
   /** Formata ml_debug da /api/search-ml para console + UI. */
   utils.formatMlDebug = function(j){
     var d = (j && (j.ml_debug || j)) || {};
@@ -5943,9 +5986,27 @@
       }
 
       results.forEach(function(it){ it.__sim = utils.similaridade(termo, it.title); });
-      /* Entre matches bons (≥60%), prioriza menor preço (frete grátis conta como 0 no custo). */
-      var bons = results.filter(function(it){ return (it.__sim || 0) >= 60; });
-      var pool = bons.length ? bons : results.slice();
+      /* Se o termo traz marca (ex.: BOSCH chave de impacto), prioriza anúncios da mesma marca. */
+      var brandTokens = utils.mlBrandTokens(termo);
+      var comMarca = brandTokens.length
+        ? results.filter(function(it){ return utils.mlTitleHasBrand(it.title, brandTokens); })
+        : [];
+      if(brandTokens.length && !comMarca.length){
+        return {
+          skipped: true,
+          itemGoverno: termo,
+          motivo:
+            "Nenhum anúncio da marca \"" +
+            brandTokens.join(" ").toUpperCase() +
+            "\" encontrado para \"" +
+            termo +
+            "\". Ajuste o termo ou confira se a marca aparece no título do ML."
+        };
+      }
+      var basePool = comMarca.length ? comMarca : results;
+      /* Entre matches bons (≥60%), prioriza menor preço. */
+      var bons = basePool.filter(function(it){ return (it.__sim || 0) >= 60; });
+      var pool = bons.length ? bons : basePool.slice();
       pool.sort(function(a, b){
         var priceA = Number(a.price) || 0;
         var priceB = Number(b.price) || 0;
