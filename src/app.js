@@ -5827,6 +5827,10 @@
         var motivo = "Nenhum produto encontrado no Mercado Livre para \"" + (queryUsada || termo) + "\".";
         if(j && j.error){
           motivo = String(j.error);
+          if(/unauthorized|forbidden|policy/i.test(motivo)){
+            motivo =
+              "Mercado Livre bloqueou a busca na API. Tente um termo mais curto (ex.: só \"abraçadeira borboleta\") ou rode de novo após o redeploy com fallback público.";
+          }
         } else if(j && j.warning){
           motivo += " " + j.warning;
         }
