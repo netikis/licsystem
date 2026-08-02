@@ -254,18 +254,22 @@
                 <button type="button" class="btn btn-ghost" id="btnChatAlerta" style="width:100%" title="Salvar cidade/pergunta como alerta automático">🔔 Ativar alerta</button>
               </div>
             </div>
-            <div class="btn-row chat-edital-prompts" style="margin-top:0;flex-wrap:wrap;gap:8px;align-items:center">
-              <span class="small muted">Atalhos:</span>
-              <button type="button" class="btn btn-sm" data-chat-prompt="norte-pioneiro">Norte Pioneiro (todos)</button>
-              <button type="button" class="btn btn-sm" data-chat-prompt="norte-comida">Norte Pioneiro · comida/cestas</button>
-              <button type="button" class="btn btn-sm" data-chat-prompt="norte-reforma">Norte Pioneiro · reformas</button>
-              <button type="button" class="btn btn-sm" data-chat-prompt="norte-natal">Norte Pioneiro · Natal</button>
-              <button type="button" class="btn btn-sm" data-chat-prompt="norte-eletro">Norte Pioneiro · eletro</button>
-              <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-left:4px">
+            <div class="chat-prompt-row">
+              <span class="small muted chat-prompt-label">Atalhos:</span>
+              <div class="chat-prompt-chips" role="group" aria-label="Atalhos Norte Pioneiro">
+                <button type="button" class="chat-prompt-chip" data-chat-prompt="norte-pioneiro" title="Norte Pioneiro (todos)">Norte Pioneiro (todos)</button>
+                <button type="button" class="chat-prompt-chip" data-chat-prompt="norte-comida" title="Norte Pioneiro · comida/cestas">Norte Pioneiro · comida/cestas</button>
+                <button type="button" class="chat-prompt-chip" data-chat-prompt="norte-reforma" title="Norte Pioneiro · reformas">Norte Pioneiro · reformas</button>
+                <button type="button" class="chat-prompt-chip" data-chat-prompt="norte-natal" title="Norte Pioneiro · Natal">Norte Pioneiro · Natal</button>
+                <button type="button" class="chat-prompt-chip" data-chat-prompt="norte-eletro" title="Norte Pioneiro · eletro">Norte Pioneiro · eletro</button>
+              </div>
+            </div>
+            <div class="chat-opts-row">
+              <label class="chat-opt">
                 <input type="checkbox" id="chatEditalAmpliar" />
                 Ampliar modalidades
               </label>
-              <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <label class="chat-opt">
                 <input type="checkbox" id="chatEditalLeiloes" checked />
                 Incluir leilões
               </label>
@@ -334,21 +338,25 @@
                 <button type="button" class="btn btn-ghost" id="btnProxAlerta" style="width:100%" title="Monitorar municípios vizinhos no raio e avisar no sino">🔔 Ativar alerta</button>
               </div>
             </div>
-            <div class="btn-row" style="margin-top:0;flex-wrap:wrap;gap:8px;align-items:center">
-              <span class="small muted">Atalhos de raio:</span>
-              <button type="button" class="btn btn-sm" data-prox-raio="150">150 km</button>
-              <button type="button" class="btn btn-sm" data-prox-raio="250">250 km</button>
-              <button type="button" class="btn btn-sm" data-prox-raio="500">500 km</button>
-              <button type="button" class="btn btn-sm" data-prox-raio="700">700 km</button>
-              <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-left:8px">
+            <div class="prox-raio-row">
+              <span class="small muted prox-raio-label">Atalhos de raio:</span>
+              <div class="prox-raio-chips" role="group" aria-label="Atalhos de raio">
+                <button type="button" class="prox-raio-chip" data-prox-raio="150" aria-pressed="false">150 km</button>
+                <button type="button" class="prox-raio-chip is-active" data-prox-raio="250" aria-pressed="true">250 km</button>
+                <button type="button" class="prox-raio-chip" data-prox-raio="500" aria-pressed="false">500 km</button>
+                <button type="button" class="prox-raio-chip" data-prox-raio="700" aria-pressed="false">700 km</button>
+              </div>
+            </div>
+            <div class="prox-opts-row">
+              <label class="prox-opt">
                 <input type="checkbox" id="proxAmpliar" />
                 Ampliar modalidades (concorrência / pregão presencial)
               </label>
-              <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <label class="prox-opt">
                 <input type="checkbox" id="proxLeiloes" checked />
                 Incluir leilões
               </label>
-              <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <label class="prox-opt">
                 <input type="checkbox" id="proxFederal" />
                 Incluir órgãos federais no raio
               </label>
@@ -412,33 +420,31 @@
             <h2>🤖 Análise Inteligente de Editais</h2>
             <span class="tag">Gemini</span>
           </div>
-          <div class="desc">
-            O PDF é lido no navegador (<b>pdf.js</b>). Só o texto vai para <code>/api/analyze-pdf</code>.
-            A IA devolve um <b>relatório completo em Markdown</b> (Lei 14.133/2021). A chave Gemini fica só no servidor.
-          </div>
           <div id="iaAlert" class="alert"></div>
 
           <div class="ia-layout">
-            <div>
-              <div class="ia-drop" id="iaDrop" role="button" tabindex="0" aria-label="Enviar PDF do edital">
-                <div class="ia-ico">📄</div>
-                <b>Arraste o PDF do edital aqui</b>
-                <span>ou clique para selecionar · apenas texto é enviado à IA</span>
-                <input type="file" id="iaPdfFile" accept="application/pdf" style="display:none" />
+            <div class="ia-panel">
+              <div class="ia-panel-toolbar">
+                <h3>Análise do Edital</h3>
               </div>
-              <div class="ia-file-meta" id="iaFileMeta"></div>
-              <div class="ia-progress" id="iaProgress" aria-hidden="true"><i></i></div>
-              <div class="btn-row" style="margin-top:14px">
-                <button type="button" class="btn btn-gold" id="btnIaAnalisar">✨ Analisar com IA</button>
-                <button type="button" class="btn btn-ghost" id="btnIaLimpar">Limpar</button>
-              </div>
-              <div class="small muted" style="margin-top:8px">
-                Extração local · análise via Vercel Serverless · relatório estruturado
+              <div class="ia-panel-body">
+                <div class="ia-drop" id="iaDrop" role="button" tabindex="0" aria-label="Enviar PDF do edital">
+                  <div class="ia-ico">📄</div>
+                  <b>Arraste o PDF do edital aqui</b>
+                  <span>ou clique para selecionar · apenas texto é enviado à IA</span>
+                  <input type="file" id="iaPdfFile" accept="application/pdf" style="display:none" />
+                </div>
+                <div class="ia-file-meta" id="iaFileMeta"></div>
+                <div class="ia-progress" id="iaProgress" aria-hidden="true"><i></i></div>
+                <div class="btn-row ia-panel-actions">
+                  <button type="button" class="btn btn-gold" id="btnIaAnalisar">✨ Analisar com IA</button>
+                  <button type="button" class="btn btn-ghost" id="btnIaLimpar">Limpar</button>
+                </div>
               </div>
             </div>
 
-            <div>
-              <div class="ia-report-toolbar">
+            <div class="ia-panel">
+              <div class="ia-report-toolbar ia-panel-toolbar">
                 <h3>Folha de Relatório</h3>
                 <div class="btn-row" style="margin:0">
                   <button type="button" class="btn btn-ghost btn-sm" id="btnIaDocs" disabled>📑 Documentos necessários</button>
