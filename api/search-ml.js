@@ -1,12 +1,13 @@
 /**
  * GET /api/search-ml?q=PRODUTO&limit=10
  *
- * Fluxo OAuth2 Client Credentials (por requisição / cache curto):
- * 1) POST /oauth/token (grant_type=client_credentials)
- * 2) Extrai access_token
- * 3) GET /sites/MLB/search?q=... com Authorization: Bearer <token>
+ * Fluxo OAuth2 Client Credentials:
+ * 1) POST /oauth/token
+ * 2) access_token
+ * 3) GET /sites/MLB/search com Authorization: Bearer
  *
- * Se a API oficial ainda retornar policy UNAUTHORIZED, usa listagem pública.
+ * Em erro ML: devolve ml_debug { endpoint, status, body, rawBody }.
+ * Se search oficial falhar por política, tenta listagem pública.
  */
 var safeJson = require("./_lib/safe-json");
 var mlAuth = require("./_lib/ml-auth");
@@ -72,10 +73,54 @@ function isUnauthorized(status, message) {
   );
 }
 
+function mlDebugFromErr(err, fallbackEndpoint) {
+  var body = err && err.body;
+  var raw =
+    err && err.rawBody != null
+      ? String(err.rawBody)
+      : body != null
+        ? typeof body === "string"
+          ? body
+          : JSON.stringify(body)
+        : "";
+  return {
+    endpoint: (err && err.endpoint) || fallbackEndpoint || "",
+    status: err && err.status != null ? err.status : null,
+    body: body != null ? body : raw ? { raw: raw.slice(0, 2000) } : null,
+    rawBody: raw.slice(0, 4000),
+    message: err ? String(err.message || err) : "",
+    code: (err && err.code) || undefined,
+  };
+}
+
+function errorPayload(q, err, extra) {
+  var dbg = mlDebugFromErr(err, (extra && extra.endpoint) || "");
+  var where =
+    dbg.endpoint.indexOf("oauth") !== -1
+      ? "Falha em /oauth/token (credenciais ou geração do token)."
+      : dbg.endpoint.indexOf("search") !== -1
+        ? "Falha em /sites/MLB/search (política ou token no header)."
+        : "Falha na API do Mercado Livre.";
+  return Object.assign(
+    {
+      ok: false,
+      q: q || "",
+      results: [],
+      error: where + " " + (dbg.message || "erro desconhecido"),
+      ml_debug: dbg,
+      upstream_status: dbg.status,
+      upstream_body: dbg.body,
+      upstream_endpoint: dbg.endpoint,
+    },
+    extra || {}
+  );
+}
+
 /**
  * Busca autorizada — Bearer obrigatório.
  */
 async function searchAuthorized(q, limit, token) {
+  var endpoint = "/sites/MLB/search";
   var url =
     "https://api.mercadolibre.com/sites/MLB/search?q=" +
     encodeURIComponent(q) +
@@ -108,8 +153,13 @@ async function searchAuthorized(q, limit, token) {
     text.slice(0, 200) ||
     "Mercado Livre HTTP " + r.status;
   var err = new Error(String(msg));
-  err.status = r.status;
-  err.body = j;
+  mlAuth.attachMlError(err, {
+    endpoint: endpoint,
+    status: r.status,
+    body: j != null ? j : { raw: String(text || "").slice(0, 2000) },
+    rawBody: String(text || "").slice(0, 4000),
+    code: "ml_search_failed",
+  });
   err.unauthorized = isUnauthorized(r.status, msg);
   throw err;
 }
@@ -138,34 +188,35 @@ async function handler(req, res) {
     });
   }
 
-  /* 1–2) Client Credentials → access_token */
   var accessToken = "";
   try {
     accessToken = await mlAuth.getAccessToken();
   } catch (tokenErr) {
-    return json(res, 200, {
-      ok: false,
-      error:
-        "Falha ao gerar access_token OAuth2 (client_credentials): " +
-        ((tokenErr && tokenErr.message) || String(tokenErr)),
-      code: (tokenErr && tokenErr.code) || "ml_token_failed",
-      results: [],
-    });
+    return json(res, 200, errorPayload(q, tokenErr, { code: "ml_token_failed" }));
   }
 
   if (!accessToken) {
-    return json(res, 200, {
-      ok: false,
-      error: "access_token vazio após OAuth2 client_credentials.",
-      code: "ml_token_empty",
-      results: [],
-    });
+    return json(
+      res,
+      200,
+      errorPayload(
+        q,
+        mlAuth.attachMlError(new Error("access_token vazio após OAuth2."), {
+          endpoint: "/oauth/token",
+          status: 500,
+          body: { error: "ml_token_empty" },
+          rawBody: "",
+          code: "ml_token_empty",
+        }),
+        { code: "ml_token_empty" }
+      )
+    );
   }
 
   var variants = mlPublic.buildQueryVariants(q);
   var lastErr = null;
+  var authHeaderSent = true;
 
-  /* 3) Busca com Authorization: Bearer */
   for (var vi = 0; vi < Math.min(variants.length, 3); vi++) {
     try {
       var official = await searchAuthorized(variants[vi], limit, accessToken);
@@ -176,16 +227,25 @@ async function handler(req, res) {
           query_used: variants[vi],
           source: "api_oficial",
           authenticated: true,
+          authorization_header: "Bearer <access_token>",
           results: official.results.slice(0, limit),
         });
       }
       if (official.ok && !official.results.length) {
-        lastErr = new Error("API oficial sem resultados para: " + variants[vi]);
+        lastErr = mlAuth.attachMlError(
+          new Error("API oficial sem resultados para: " + variants[vi]),
+          {
+            endpoint: "/sites/MLB/search",
+            status: 200,
+            body: { results: [], query: variants[vi] },
+            rawBody: '{"results":[]}',
+            code: "ml_search_empty",
+          }
+        );
         continue;
       }
     } catch (e) {
       lastErr = e;
-      /* Token expirado/inválido → regenera uma vez e tenta de novo */
       if (e && e.status === 401) {
         try {
           mlAuth.clearTokenCache();
@@ -198,6 +258,7 @@ async function handler(req, res) {
               query_used: variants[vi],
               source: "api_oficial",
               authenticated: true,
+              authorization_header: "Bearer <access_token>",
               results: retry.results.slice(0, limit),
             });
           }
@@ -209,7 +270,6 @@ async function handler(req, res) {
     }
   }
 
-  /* Fallback público se a política da API bloquear /sites/MLB/search */
   try {
     var pub = await mlPublic.searchPublicIndex(q, limit);
     if (pub.ok && pub.results && pub.results.length) {
@@ -219,33 +279,34 @@ async function handler(req, res) {
         query_used: pub.query_used || q,
         source: "public_index",
         authenticated: true,
+        authorization_header: "Bearer <access_token>",
         results: pub.results,
         warning:
-          "Token OAuth2 ok, mas /sites/MLB/search retornou UNAUTHORIZED (política ML). Usei listagem pública.",
-        upstream_error: lastErr ? String(lastErr.message || lastErr) : undefined,
+          "Token OAuth2 ok e Authorization: Bearer foi enviado, mas /sites/MLB/search retornou erro de política. Usei listagem pública.",
+        ml_debug: lastErr
+          ? mlDebugFromErr(lastErr, "/sites/MLB/search")
+          : undefined,
+        upstream_status: lastErr ? lastErr.status : undefined,
+        upstream_body: lastErr ? lastErr.body : undefined,
+        upstream_endpoint: lastErr
+          ? lastErr.endpoint || "/sites/MLB/search"
+          : undefined,
       });
     }
   } catch (pubErr) {
-    /* ignora — devolve erro da API oficial abaixo */
+    /* continua para erro detalhado */
   }
 
-  return json(res, 200, {
-    ok: false,
-    q: q,
-    authenticated: true,
-    results: [],
-    error:
-      "Nenhum produto encontrado para \"" +
-      q +
-      "\". " +
-      (lastErr
-        ? String(lastErr.message || lastErr)
-        : "Sem resultados na API oficial nem na listagem pública."),
+  var payload = errorPayload(q, lastErr || new Error("Sem resultados"), {
     code:
       lastErr && lastErr.unauthorized
         ? "ml_search_unauthorized"
         : "ml_search_empty",
+    authenticated: true,
+    authorization_header: authHeaderSent ? "Bearer <access_token>" : null,
+    tried: variants,
   });
+  return json(res, 200, payload);
 }
 
 module.exports = safeJson.wrapHandler(handler, "GET,OPTIONS");
