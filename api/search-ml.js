@@ -36,13 +36,7 @@ function mapItem(it) {
     thumb = "https://" + thumb.slice(7);
   }
   var ship = it.shipping || {};
-  var freeShipping = !!(
-    ship.free_shipping ||
-    ship.free_shipping === true ||
-    String(ship.logistic_type || "").toLowerCase() === "fulfillment" &&
-      ship.free_shipping
-  );
-  /* tags às vezes trazem free_shipping */
+  var freeShipping = !!ship.free_shipping;
   if (!freeShipping && Array.isArray(it.tags)) {
     freeShipping = it.tags.indexOf("free_shipping") !== -1;
   }
