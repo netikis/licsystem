@@ -212,13 +212,18 @@ async function searchOfficial(q, limit) {
     encodeURIComponent(q) +
     "&limit=" +
     encodeURIComponent(limit);
-  var headers = {};
+  var headers = { Accept: "application/json" };
   try {
     var mlAuth = require("./_lib/ml-auth");
     var token = await mlAuth.getAccessToken();
-    if (token) headers.Authorization = "Bearer " + token;
+    headers = mlAuth.authHeaders(token);
   } catch (e) {
-    /* segue sem token se OAuth falhar */
+    return {
+      ok: false,
+      status: (e && e.status) || 500,
+      error:
+        "oauth_token_failed: " + ((e && e.message) || String(e)),
+    };
   }
   var r = await fetchText(url, { accept: "application/json", headers: headers });
   if (!r.ok) {
