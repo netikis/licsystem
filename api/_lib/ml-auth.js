@@ -17,6 +17,21 @@ function getCredentials() {
   };
 }
 
+function attachMlError(err, fields) {
+  fields = fields || {};
+  err.endpoint = fields.endpoint || err.endpoint || "";
+  err.status = fields.status != null ? fields.status : err.status;
+  err.body = fields.body !== undefined ? fields.body : err.body;
+  err.rawBody =
+    fields.rawBody !== undefined
+      ? fields.rawBody
+      : err.rawBody != null
+        ? err.rawBody
+        : "";
+  err.code = fields.code || err.code;
+  return err;
+}
+
 /**
  * Gera (ou reutiliza em cache) access_token via client_credentials.
  * @returns {Promise<string>}
@@ -24,12 +39,22 @@ function getCredentials() {
 async function getAccessToken() {
   var cred = getCredentials();
   if (!cred.appId || !cred.secret) {
-    var missing = new Error(
-      "ML_APP_ID e/ou ML_CLIENT_SECRET ausentes nas Environment Variables da Vercel."
+    throw attachMlError(
+      new Error(
+        "ML_APP_ID e/ou ML_CLIENT_SECRET ausentes nas Environment Variables da Vercel."
+      ),
+      {
+        endpoint: "/oauth/token",
+        status: 500,
+        body: {
+          error: "ml_credentials_missing",
+          message:
+            "Cadastre ML_APP_ID e ML_CLIENT_SECRET na Vercel (Environment Variables).",
+        },
+        rawBody: "",
+        code: "ml_credentials_missing",
+      }
     );
-    missing.status = 500;
-    missing.code = "ml_credentials_missing";
-    throw missing;
   }
 
   var now = Date.now();
@@ -66,10 +91,13 @@ async function getAccessToken() {
       (j && (j.message || j.error_description || j.error)) ||
         "Falha ao obter access_token ML (HTTP " + r.status + ")"
     );
-    err.status = r.status || 502;
-    err.code = "ml_token_failed";
-    err.body = j;
-    throw err;
+    throw attachMlError(err, {
+      endpoint: "/oauth/token",
+      status: r.status || 502,
+      body: j != null ? j : { raw: String(text || "").slice(0, 2000) },
+      rawBody: String(text || "").slice(0, 4000),
+      code: "ml_token_failed",
+    });
   }
 
   var expiresIn = Number(j.expires_in) || 21600;
@@ -86,7 +114,16 @@ function clearTokenCache() {
 
 function authHeaders(token) {
   if (!token) {
-    throw new Error("access_token obrigatório para Authorization: Bearer");
+    throw attachMlError(
+      new Error("access_token obrigatório para Authorization: Bearer"),
+      {
+        endpoint: "/sites/MLB/search",
+        status: 500,
+        body: { error: "missing_access_token" },
+        rawBody: "",
+        code: "ml_token_empty",
+      }
+    );
   }
   return {
     Accept: "application/json",
@@ -99,4 +136,5 @@ module.exports = {
   getAccessToken: getAccessToken,
   clearTokenCache: clearTokenCache,
   authHeaders: authHeaders,
+  attachMlError: attachMlError,
 };
