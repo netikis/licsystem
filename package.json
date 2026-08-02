@@ -4,9 +4,10 @@
   "private": true,
   "description": "LICSYSTEM - licitacoes (Vite + Vercel + Firebase + Gemini)",
   "scripts": {
-    "dev": "concurrently -k -n vite,api -c cyan,magenta \"vite\" \"npx --yes vercel dev --listen 3000\"",
+    "dev": "vite",
     "dev:vite": "vite",
     "dev:api": "npx --yes vercel dev --listen 3000",
+    "dev:all": "concurrently -k -n vite,api -c cyan,magenta \"vite\" \"npx --yes vercel dev --listen 3000\"",
     "build": "vite build",
     "preview": "vite preview",
     "start": "vite"
