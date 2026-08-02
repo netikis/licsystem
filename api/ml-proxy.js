@@ -235,6 +235,10 @@ async function searchOfficial(q, limit) {
     return { ok: false, status: 502, error: "invalid json" };
   }
   var results = (j.results || []).map(function (it) {
+    var free = !!(it.shipping && it.shipping.free_shipping);
+    if (!free && Array.isArray(it.tags)) {
+      free = it.tags.indexOf("free_shipping") !== -1;
+    }
     return {
       id: it.id,
       title: it.title,
@@ -247,6 +251,8 @@ async function searchOfficial(q, limit) {
       seller:
         (it.seller && it.seller.nickname) ||
         (it.seller && it.seller.id ? "Vendedor #" + it.seller.id : ""),
+      free_shipping: free,
+      freteLabel: free ? "FRETE GRÁTIS" : "",
     };
   });
   return { ok: true, results: results, source: "api" };
@@ -402,11 +408,24 @@ async function shippingOfficial(itemId, cep) {
       if (cost === null || o.cost < cost) cost = o.cost;
     }
   });
+  var free =
+    cost === 0 ||
+    !!(j.free_shipping || (j.coverage && j.coverage.free_shipping));
+  var note = "";
+  if (cost === null) {
+    note = "Frete não disponível para este CEP";
+  } else if (free || cost === 0) {
+    note = "FRETE GRÁTIS";
+    cost = 0;
+  } else {
+    note = "Frete calculado para o CEP";
+  }
   return {
-    ok: true,
+    ok: cost !== null,
     options: opts,
     cost: cost === null ? 0 : cost,
-    note: cost === 0 ? "Frete gratis / R$ 0,00" : "",
+    free_shipping: !!(free || cost === 0),
+    note: note,
     source: "api",
   };
 }
@@ -427,15 +446,36 @@ module.exports = async function handler(req, res) {
   try {
     if (action === "search") {
       var term = String(q.q || "").trim();
-      var limit = Math.min(Math.max(parseInt(q.limit, 10) || 5, 1), 20);
+      var limit = Math.min(Math.max(parseInt(q.limit, 10) || 10, 1), 20);
       if (!term) return json(res, 400, { error: "missing_q", results: [] });
 
+      /* Preferir rota oficial /api/search-ml (OAuth). Mantém este action por compat. */
       var variants = buildQueryVariants(term);
       var official = null;
+      var authHint = "";
+      try {
+        var mlAuth = require("./_lib/ml-auth");
+        var cred = mlAuth.getCredentials();
+        if (!cred.appId || !cred.secret) {
+          if (!cred.accessToken) {
+            authHint =
+              " Configure ML_APP_ID e ML_CLIENT_SECRET nas Environment Variables da Vercel e faça Redeploy.";
+          }
+        } else {
+          await mlAuth.getAccessToken();
+        }
+      } catch (authErr) {
+        authHint =
+          " Falha OAuth ML: " +
+          ((authErr && authErr.message) || String(authErr)) +
+          ". Verifique ML_APP_ID/ML_CLIENT_SECRET na Vercel.";
+      }
+
       for (var oi = 0; oi < Math.min(variants.length, 3); oi++) {
         official = await searchOfficial(variants[oi], limit);
         if (official.ok && official.results.length) {
           return json(res, 200, {
+            ok: true,
             source: "api",
             results: official.results,
             query_used: variants[oi],
@@ -446,14 +486,17 @@ module.exports = async function handler(req, res) {
       var pub = await searchPublicIndex(term, limit);
       if (!pub.ok || !pub.results.length) {
         return json(res, 200, {
-          source: "public_index",
+          ok: false,
+          source: "api",
           results: [],
-          warning:
-            "API ML bloqueada (403). Fallback da listagem nao encontrou produtos para: " +
+          error:
+            'Nenhum produto no Mercado Livre para "' +
             (variants[0] || term) +
-            ". Tente termo mais curto ou configure ML_ACCESS_TOKEN na Vercel.",
-          upstream_status: (official && official.status) || 403,
-          upstream_error: (official && official.error) || "forbidden",
+            '".' +
+            (authHint ||
+              " Se persistir, confira as variáveis ML na Vercel e o redeploy."),
+          warning: undefined,
+          upstream_status: (official && official.status) || undefined,
           tried: pub.tried || variants,
         });
       }
@@ -464,12 +507,13 @@ module.exports = async function handler(req, res) {
       );
 
       return json(res, 200, {
+        ok: true,
         source: "public_index",
         results: results,
         query_used: pub.query_used || variants[0],
         warning:
-          "API oficial ML bloqueada (403). Usando listagem publica com preco.",
-        upstream_status: (official && official.status) || 403,
+          "API oficial indisponível; usei listagem pública." + (authHint || ""),
+        upstream_status: (official && official.status) || undefined,
       });
     }
 
