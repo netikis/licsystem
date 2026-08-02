@@ -4056,7 +4056,7 @@
         showAlert(
           "chatEditalAlert",
           "info",
-          "Digite uma pergunta (ex.: Quais licitações terão em Ibaiti) ou use um atalho do Norte Pioneiro."
+          "Digite o nome da cidade (ex.: Santa Cruz do Rio Pardo), uma pergunta (ex.: Quais licitações terão em Ibaiti) ou use um atalho do Norte Pioneiro."
         );
         return;
       }
