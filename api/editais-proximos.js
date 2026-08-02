@@ -41,11 +41,11 @@ var PNCP_FETCH_TIMEOUT_MS = 14000;
 var HANDLER_BUDGET_MS = 50000;
 var ESFERA_LABEL = { M: "Municipal", E: "Estadual", F: "Federal", D: "Distrital" };
 
-var safeJson = require("./lib/safe-json");
+var safeJson = require("./_lib/safe-json");
 
 var queryLib = null;
 try {
-  queryLib = require("./lib/editais-query");
+  queryLib = require("./_lib/editais-query");
 } catch (e) {
   queryLib = null;
 }
@@ -73,7 +73,7 @@ function budgetLeft(deadline) {
 function loadMunicipios() {
   if (_municipios) return _municipios;
   /* Módulo com require estático — NFT inclui o JSON; sem fs. */
-  _municipios = require("./lib/municipios-data");
+  _municipios = require("./_lib/municipios-data");
   _byIbge = Object.create(null);
   for (var i = 0; i < _municipios.length; i++) {
     _byIbge[_municipios[i].i] = _municipios[i];

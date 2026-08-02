@@ -10,8 +10,8 @@
  *
  * Sempre JSON: { ok, editais, total, ... } ou { ok:false, error }.
  */
-var safeJson = require("./lib/safe-json");
-var queryLib = require("./lib/editais-query");
+var safeJson = require("./_lib/safe-json");
+var queryLib = require("./_lib/editais-query");
 
 var PNCP_BASE = "https://pncp.gov.br/api/consulta/v1";
 var PAGE_SIZE = 50;

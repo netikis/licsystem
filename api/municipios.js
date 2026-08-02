@@ -26,7 +26,7 @@ function json(res, status, body) {
 function load() {
   if (_municipios) return _municipios;
   /* Módulo com require estático — NFT inclui o JSON; sem fs. */
-  _municipios = require("./lib/municipios-data");
+  _municipios = require("./_lib/municipios-data");
   return _municipios;
 }
 

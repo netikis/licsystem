@@ -6,8 +6,8 @@
  * Body JSON: { mensagem: "Quais licitações terão em Ibaiti" }
  * Opcional: { categoria, ampliar, esferas, limite }
  */
-var queryLib = require("./lib/editais-query");
-var safeJson = require("./lib/safe-json");
+var queryLib = require("./_lib/editais-query");
+var safeJson = require("./_lib/safe-json");
 
 var DEFAULT_MODEL = "gemini-2.5-flash-lite";
 

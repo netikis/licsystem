@@ -19,8 +19,8 @@
  *
  * Voiceflow: Custom Action / API step → GET ou POST neste endpoint (CORS liberado).
  */
-var queryLib = require("./lib/editais-query");
-var safeJson = require("./lib/safe-json");
+var queryLib = require("./_lib/editais-query");
+var safeJson = require("./_lib/safe-json");
 
 function cors(res) {
   safeJson.applyCors(res, "GET,POST,OPTIONS");
