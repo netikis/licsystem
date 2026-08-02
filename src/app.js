@@ -905,6 +905,32 @@
     };
   };
 
+  utils.mlLocalBridgeBase = function(){
+    return "http://127.0.0.1:3847";
+  };
+
+  utils.mlSearchLocalBridge = function(q, limit){
+    var lim = limit || 10;
+    var url =
+      utils.mlLocalBridgeBase() +
+      "/search?q=" +
+      encodeURIComponent(q || "") +
+      "&limit=" +
+      encodeURIComponent(lim);
+    return fetch(url, {
+      method: "GET",
+      headers: { Accept: "application/json" }
+    }).then(function(r){
+      return r.json().then(function(j){
+        if(j && j.ok && j.results && j.results.length){
+          console.log("[LICSYSTEM ML] ponte local OK", { q: q, n: j.results.length });
+          return j;
+        }
+        return null;
+      }, function(){ return null; });
+    }).catch(function(){ return null; });
+  };
+
   utils.mlSearch = function(q, limit){
     var lim = limit || 10;
     var url =
@@ -918,12 +944,14 @@
       headers: { Accept: "application/json" }
     }).then(function(r){
       return r.json().then(function(j){
-        if(j && (j.ml_debug || j.upstream_body || j.warning)){
+        if(j && (j.ml_debug || j.upstream_body || j.warning || j.source)){
           console.log("[LICSYSTEM ML] /api/search-ml resposta", {
             q: q,
             ok: j.ok,
             source: j.source,
+            mode: j.mode,
             warning: j.warning,
+            n: (j.results || []).length,
             ml_debug: j.ml_debug || {
               endpoint: j.upstream_endpoint,
               status: j.upstream_status,
@@ -931,22 +959,39 @@
             }
           });
         }
-        if(!r.ok || (j && j.ok === false && !(j.results && j.results.length))){
+        if(j && j.ok && j.results && j.results.length){
+          return j;
+        }
+        /* Servidor Vercel bloqueado → tenta ponte local (IP da sua casa) */
+        return utils.mlSearchLocalBridge(q, lim).then(function(local){
+          if(local) return local;
           var dbg = utils.formatMlDebug(j || {});
           console.error("[LICSYSTEM ML] erro detalhado", dbg, j);
           var msg =
             (j && (j.error || j.message)) ||
             dbg.summary ||
             ("HTTP " + r.status);
-          var err = new Error(msg + (dbg.bodyStr ? " | " + dbg.summary : ""));
+          if(j && j.hint_local_bridge){
+            msg += " | " + j.hint_local_bridge;
+          }
+          var err = new Error(msg);
           err.status = (j && j.upstream_status) || r.status;
           err.body = j;
           err.mlDebug = dbg;
           throw err;
-        }
-        return j || { ok: true, results: [] };
+        });
       }, function(){
-        throw new Error("HTTP " + r.status + " (resposta inválida de /api/search-ml)");
+        return utils.mlSearchLocalBridge(q, lim).then(function(local){
+          if(local) return local;
+          throw new Error("HTTP " + r.status + " (resposta inválida de /api/search-ml)");
+        });
+      });
+    }).catch(function(err){
+      /* rede /api falhou → ainda tenta ponte local */
+      if(err && err.body) throw err;
+      return utils.mlSearchLocalBridge(q, lim).then(function(local){
+        if(local) return local;
+        throw err || new Error("Falha na busca ML");
       });
     });
   };
