@@ -16,11 +16,13 @@
       importarEdital: "leilao",
       orcamento: "leilao",
       cruzamento: "leilao",
+      leilaoWorkspace: "leilao",
       histEntregas: "entrega"
     };
     var PARENT_VIEWS = {
       pesquisas: "pesquisas",
       leiloesParticipo: "leilao",
+      leilaoWorkspace: "leilao",
       entregas: "entrega"
     };
 
@@ -124,6 +126,13 @@
       opts = opts || {};
       if(document.body.classList.contains("auth-locked")) return;
       view = view || "dashboard";
+      try{
+        if(window.LICSYSTEM && typeof LICSYSTEM.beforeActivateView === "function"){
+          var gated = LICSYSTEM.beforeActivateView(view, opts);
+          if(gated === false) return;
+          if(typeof gated === "string" && gated) view = gated;
+        }
+      }catch(e){}
       var resolved = VIEW_RESOLVE[view];
       var targetView = resolved ? resolved.view : view;
       var navKey = view;
@@ -157,6 +166,7 @@
         captacao:"Pesquisas de Editais",
         analiseIa:"Análise Inteligente de Editais",
         leiloesParticipo:"Leilão que Participo",
+        leilaoWorkspace:"Painel do Edital",
         importarEdital:"Importar Edital (PDF)",
         orcamento:"Orçamento",
         cruzamento:"Cruzamento Inteligente (ML)",
