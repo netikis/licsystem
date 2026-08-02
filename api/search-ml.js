@@ -1,10 +1,11 @@
 /**
  * GET /api/search-ml?q=TERMO&limit=10
- * Busca oficial Mercado Livre (MLB) com OAuth de aplicativo.
- * Resposta limpa: title, price, permalink, thumbnail, seller (+ campos compat. cruzamento).
+ * 1) Tenta API oficial MLB (OAuth)
+ * 2) Se UNAUTHORIZED/403 → fallback listagem pública
  */
 var safeJson = require("./_lib/safe-json");
 var mlAuth = require("./_lib/ml-auth");
+var mlPublic = require("./_lib/ml-public-search");
 
 function cors(res) {
   safeJson.applyCors(res, "GET,OPTIONS");
@@ -23,7 +24,7 @@ function cleanQuery(raw) {
     .slice(0, 120);
 }
 
-function mapItem(it) {
+function mapOfficialItem(it) {
   var sellerNick =
     (it.seller && it.seller.nickname) ||
     (it.seller && it.seller.eshop && it.seller.eshop.nick_name) ||
@@ -35,13 +36,11 @@ function mapItem(it) {
   if (thumb.indexOf("http://") === 0) {
     thumb = "https://" + thumb.slice(7);
   }
-  var ship = it.shipping || {};
-  var freeShipping = !!ship.free_shipping;
+  var freeShipping = !!(it.shipping && it.shipping.free_shipping);
   if (!freeShipping && Array.isArray(it.tags)) {
     freeShipping = it.tags.indexOf("free_shipping") !== -1;
   }
   return {
-    /* Contrato limpo pedido */
     title: String(it.title || ""),
     price: Number(it.price) || 0,
     permalink: String(it.permalink || ""),
@@ -49,7 +48,6 @@ function mapItem(it) {
     seller: String(seller),
     free_shipping: freeShipping,
     freteLabel: freeShipping ? "FRETE GRÁTIS" : "",
-    /* Compatível com Cruzamento ML existente */
     id: it.id || null,
     currency_id: it.currency_id || "BRL",
     available_quantity:
@@ -57,34 +55,65 @@ function mapItem(it) {
   };
 }
 
-async function searchMlb(q, limit, token) {
+function isUnauthorized(err, bodyText) {
+  var msg = String(
+    (err && err.message) || bodyText || ""
+  ).toLowerCase();
+  return (
+    (err && (err.status === 403 || err.status === 401)) ||
+    msg.indexOf("unauthorized") !== -1 ||
+    msg.indexOf("forbidden") !== -1 ||
+    msg.indexOf("access_denied") !== -1 ||
+    msg.indexOf("policy") !== -1
+  );
+}
+
+async function searchOfficial(q, limit, token) {
   var url =
     "https://api.mercadolibre.com/sites/MLB/search?q=" +
     encodeURIComponent(q) +
     "&limit=" +
     encodeURIComponent(limit);
-  var r = await fetch(url, {
-    method: "GET",
-    headers: mlAuth.authHeaders(token),
-  });
-  var text = await r.text();
-  var j = null;
-  try {
-    j = text ? JSON.parse(text) : null;
-  } catch (e) {
-    j = null;
+  var attempts = [];
+  /* Com token e sem token — alguns apps quebram com Bearer na search pública */
+  var headersList = [mlAuth.authHeaders(token)];
+  if (token) headersList.push({ Accept: "application/json" });
+
+  for (var i = 0; i < headersList.length; i++) {
+    var r = await fetch(url, { method: "GET", headers: headersList[i] });
+    var text = await r.text();
+    var j = null;
+    try {
+      j = text ? JSON.parse(text) : null;
+    } catch (e) {
+      j = null;
+    }
+    if (r.ok && j && Array.isArray(j.results)) {
+      return {
+        ok: true,
+        results: j.results.map(mapOfficialItem),
+        source: "api_oficial",
+      };
+    }
+    attempts.push({
+      status: r.status,
+      message: (j && (j.message || j.error)) || text.slice(0, 160),
+    });
+    if (!isUnauthorized({ status: r.status, message: text }, text)) {
+      var err = new Error(
+        (j && (j.message || j.error)) || "Mercado Livre HTTP " + r.status
+      );
+      err.status = r.status;
+      err.body = j;
+      throw err;
+    }
   }
-  if (!r.ok) {
-    var err = new Error(
-      (j && (j.message || j.error)) ||
-        "Mercado Livre retornou HTTP " + r.status
-    );
-    err.status = r.status;
-    err.body = j;
-    throw err;
-  }
-  var results = Array.isArray(j && j.results) ? j.results : [];
-  return results.map(mapItem);
+  var last = attempts[attempts.length - 1] || {};
+  var denied = new Error(
+    last.message || "At least one policy returned UNAUTHORIZED."
+  );
+  denied.status = last.status || 403;
+  throw denied;
 }
 
 async function handler(req, res) {
@@ -94,11 +123,7 @@ async function handler(req, res) {
     return res.end();
   }
   if (req.method !== "GET") {
-    return json(res, 405, {
-      ok: false,
-      error: "Use GET",
-      results: [],
-    });
+    return json(res, 405, { ok: false, error: "Use GET", results: [] });
   }
 
   try {
@@ -116,56 +141,76 @@ async function handler(req, res) {
       });
     }
 
-    var cred = mlAuth.getCredentials();
-    if (!cred.appId || !cred.secret) {
-      if (!cred.accessToken) {
-        return json(res, 500, {
-          ok: false,
-          error:
-            "Credenciais ML ausentes. Configure ML_APP_ID e ML_CLIENT_SECRET na Vercel / .env (sem prefixo VITE_).",
-          results: [],
-        });
-      }
-    }
-
     var token = "";
     try {
       token = await mlAuth.getAccessToken();
     } catch (authErr) {
-      return json(res, 502, {
-        ok: false,
-        error:
-          "Não foi possível autenticar no Mercado Livre: " +
-          ((authErr && authErr.message) || String(authErr)),
-        results: [],
-      });
+      /* segue para fallback público */
+      token = "";
     }
 
-    var results = await searchMlb(q, limit, token);
-    if (!results.length) {
+    var variants = mlPublic.buildQueryVariants(q);
+    var officialErr = null;
+
+    for (var vi = 0; vi < Math.min(variants.length, 3); vi++) {
+      try {
+        var official = await searchOfficial(variants[vi], limit, token);
+        if (official.ok && official.results.length) {
+          return json(res, 200, {
+            ok: true,
+            q: q,
+            query_used: variants[vi],
+            source: "api_oficial",
+            authenticated: !!token,
+            results: official.results.slice(0, limit),
+          });
+        }
+      } catch (e) {
+        officialErr = e;
+        if (!isUnauthorized(e)) break;
+      }
+    }
+
+    /* Fallback: listagem pública (API search bloqueada pelo ML) */
+    var pub = await mlPublic.searchPublicIndex(q, limit);
+    if (pub.ok && pub.results && pub.results.length) {
       return json(res, 200, {
         ok: true,
         q: q,
-        results: [],
-        warning: 'Nenhum produto encontrado para "' + q + '".',
+        query_used: pub.query_used || q,
+        source: "public_index",
+        authenticated: !!token,
+        results: pub.results,
+        warning:
+          "A busca geral da API ML está restrita (UNAUTHORIZED). Usei a listagem pública do Mercado Livre.",
       });
     }
 
+    var detail =
+      (officialErr && officialErr.message) ||
+      (pub && pub.error) ||
+      "sem resultados";
+    if (isUnauthorized(officialErr)) {
+      detail =
+        "O Mercado Livre bloqueou a busca geral da API (UNAUTHORIZED). Tente um termo mais curto ou tente novamente em instantes.";
+    }
+
     return json(res, 200, {
-      ok: true,
+      ok: false,
       q: q,
-      source: "api_oficial",
-      authenticated: !!token,
-      results: results.slice(0, limit),
+      results: [],
+      error: 'Nenhum produto encontrado para "' + q + '". ' + detail,
+      tried: (pub && pub.tried) || variants,
     });
   } catch (err) {
-    var status = err.status && err.status >= 400 ? err.status : 500;
-    if (status === 403) status = 502;
-    return json(res, status, {
+    var msg = (err && err.message) || "Falha ao consultar o Mercado Livre.";
+    if (isUnauthorized(err)) {
+      msg =
+        "Mercado Livre recusou a busca (UNAUTHORIZED). O sistema tentará listagem pública no próximo request — se persistir, use termo mais curto.";
+    }
+    return json(res, 200, {
       ok: false,
-      error:
-        (err && err.message) ||
-        "Falha ao consultar a API oficial do Mercado Livre.",
+      error: msg,
       results: [],
     });
   }
