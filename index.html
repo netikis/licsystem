@@ -166,6 +166,21 @@
     </div>
 
     <div class="content">
+      <div id="lwContextBar" class="lw-context-bar" hidden>
+        <button type="button" class="btn btn-ghost btn-sm" id="lwBackList" title="Voltar à lista">← Lista</button>
+        <div class="lw-context-meta">
+          <span class="lw-context-label">Edital ativo</span>
+          <strong id="lwContextTitle">—</strong>
+        </div>
+        <div class="lw-context-tabs" role="tablist" aria-label="Ferramentas do edital">
+          <button type="button" class="lw-tab" data-lw-tab="hub">Painel</button>
+          <button type="button" class="lw-tab" data-lw-tab="docsChecklist">Docs</button>
+          <button type="button" class="lw-tab" data-lw-tab="analiseIa">Análise IA</button>
+          <button type="button" class="lw-tab" data-lw-tab="importarEdital">Importar</button>
+          <button type="button" class="lw-tab" data-lw-tab="orcamento">Orçamento</button>
+          <button type="button" class="lw-tab" data-lw-tab="cruzamento">Cruzamento ML</button>
+        </div>
+      </div>
 
       <!-- ===================== DASHBOARD ===================== -->
       <section id="view-dashboard" class="view active">
@@ -469,8 +484,7 @@
             <span class="tag">Pós Análise IA</span>
           </div>
           <div class="desc">
-            Editais em que você confirmou participação após a <b>Análise IA</b>.
-            Use <b>Vamos participar?</b> no relatório ou responda <b>SIM</b> após a lista de documentos.
+            Clique em um edital para abrir o painel dele (Docs, Análise IA, Importar, Orçamento e Cruzamento ML) — cada um fica independente.
           </div>
           <div id="leiloesAlert" class="alert"></div>
           <div id="leiloesSummary" class="docs-summary"></div>
@@ -478,6 +492,48 @@
             <div class="muted small" style="padding:18px;text-align:center">
               Nenhum leilão marcado ainda. Analise um edital e confirme em <b>Vamos participar?</b>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== PAINEL DO EDITAL (workspace) ===================== -->
+      <section id="view-leilaoWorkspace" class="view">
+        <div class="card">
+          <div class="card-head">
+            <h2 id="lwHubTitle">📋 Painel do Edital</h2>
+            <span class="tag" id="lwHubTag">Workspace</span>
+          </div>
+          <div class="desc" id="lwHubDesc">Ferramentas deste edital. Tudo que você fizer aqui fica só nele.</div>
+          <div id="lwHubAlert" class="alert"></div>
+          <div class="lw-hub-grid" id="lwHubGrid">
+            <button type="button" class="lw-hub-card" data-lw-open="docsChecklist">
+              <span class="lw-hub-ico">✅</span>
+              <b>Docs do Edital</b>
+              <span>Checklist de documentos exigidos deste edital</span>
+            </button>
+            <button type="button" class="lw-hub-card" data-lw-open="analiseIa">
+              <span class="lw-hub-ico">🤖</span>
+              <b>Análise IA</b>
+              <span>Relatório da análise que gerou esta participação</span>
+            </button>
+            <button type="button" class="lw-hub-card" data-lw-open="importarEdital">
+              <span class="lw-hub-ico">📥</span>
+              <b>Importar Edital</b>
+              <span>Extrair itens do PDF só deste edital</span>
+            </button>
+            <button type="button" class="lw-hub-card" data-lw-open="orcamento">
+              <span class="lw-hub-ico">🧮</span>
+              <b>Orçamento</b>
+              <span>Planilha de preços exclusiva deste edital</span>
+            </button>
+            <button type="button" class="lw-hub-card" data-lw-open="cruzamento">
+              <span class="lw-hub-ico">🔀</span>
+              <b>Cruzamento ML</b>
+              <span>Buscar preços no Mercado Livre para este orçamento</span>
+            </button>
+          </div>
+          <div class="btn-row" style="margin-top:16px">
+            <button type="button" class="btn btn-ghost" id="lwHubBack">← Voltar à lista</button>
           </div>
         </div>
       </section>
