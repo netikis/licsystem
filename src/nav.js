@@ -177,8 +177,8 @@
         concorrencia:"Análise de Concorrência",
         catalogo:"Catálogo Interno",
         arp:"Atas de Registro (ARP)",
-        disputa:"Sala de Disputa",
-        ferramentas:"Ferramentas",
+        disputa:"Robô de Disputa",
+        ferramentas:"Configurações",
         chat:"Pergunte ao Chat"
       };
       if(titleEl) titleEl.textContent = map[navKey]||map[targetView]||"LICSYSTEM";
