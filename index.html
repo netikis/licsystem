@@ -102,7 +102,7 @@
       <button data-view="concorrencia"><span class="ico">🔎</span> Concorrência</button>
       <button data-view="catalogo"><span class="ico">📚</span> Catálogo</button>
       <button data-view="arp"><span class="ico">📄</span> Atas de Registro</button>
-      <button data-view="disputa"><span class="ico">⚔️</span> Sala de Disputa</button>
+      <button data-view="disputa"><span class="ico">🤖</span> Robô de Disputa</button>
       <button data-view="ferramentas"><span class="ico">⚙️</span> Configurações</button>
 
       <div class="nav-group" data-nav-group="chat">
@@ -1025,76 +1025,109 @@
         </div>
       </section>
 
-      <!-- ===================== SALA DE DISPUTA ===================== -->
+      <!-- ===================== ROBÔ DE DISPUTA ===================== -->
       <section id="view-disputa" class="view">
         <div class="card">
           <div class="card-head">
-            <h2>⚔️ Sala de Disputa</h2>
-            <span class="tag">Ao vivo</span>
+            <h2>🤖 Robô de Disputa</h2>
+            <span class="tag" id="disputaRoboTag">Desligado</span>
           </div>
-          <div class="desc">Painel de apoio durante o pregão: calcule desconto e margem em tempo real e registre seus lances com horário.</div>
+          <div class="desc">Informe o lance do concorrente: o robô cobre automaticamente até a margem que você definir.</div>
           <div id="disputaAlert" class="alert"></div>
 
+          <div class="robo-status-bar" id="disputaRoboStatusBar">
+            <div class="robo-status-dot" id="disputaRoboDot" aria-hidden="true"></div>
+            <div class="robo-status-text">
+              <b id="disputaRoboEstado">Robô desligado</b>
+              <span id="disputaRoboMsg" class="muted small">Configure custo, margem e degrau, depois ligue o robô.</span>
+            </div>
+            <div class="robo-status-actions">
+              <button type="button" class="btn btn-green" id="btnRoboLigar">▶ Ligar robô</button>
+              <button type="button" class="btn btn-red" id="btnRoboParar" disabled>■ Parar</button>
+            </div>
+          </div>
+
           <div class="disputa-grid">
-            <!-- Coluna esquerda: calculadora -->
             <div class="entrega-subcard">
-              <h3 style="margin:0 0 12px;font-size:13px;font-weight:700;color:var(--ls-navy)">Calculadora em tempo real</h3>
-              <div class="form-row">
-                <div style="flex:1;width:100%">
-                  <label class="fld" for="disputaPrecoRef">Preço de Referência (meu custo + margem desejada)</label>
-                  <input type="number" id="disputaPrecoRef" min="0" step="0.01" placeholder="0,00" />
+              <h3 class="disputa-sec-title">Estratégia do robô</h3>
+              <div class="cfg-form-grid">
+                <div class="cfg-field">
+                  <label class="fld" for="disputaMeuCusto">Meu custo (R$)</label>
+                  <input type="number" id="disputaMeuCusto" min="0" step="0.01" placeholder="0,00" />
+                </div>
+                <div class="cfg-field">
+                  <label class="fld" for="disputaMargemMin">Margem mínima</label>
+                  <div class="robo-margem-row">
+                    <input type="number" id="disputaMargemMin" min="0" step="0.01" placeholder="0" value="0" />
+                    <select id="disputaMargemTipo" title="Tipo de margem">
+                      <option value="reais">R$</option>
+                      <option value="pct">%</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="cfg-field">
+                  <label class="fld" for="disputaDegrau">Degrau / intervalo (R$)</label>
+                  <input type="number" id="disputaDegrau" min="0" step="0.01" placeholder="0,01" value="0.01" />
+                </div>
+                <div class="cfg-field">
+                  <label class="fld" for="disputaPiso">Piso absoluto (R$)</label>
+                  <input type="number" id="disputaPiso" min="0" step="0.01" placeholder="0,00" title="Não lança abaixo deste valor" />
+                </div>
+                <div class="cfg-field">
+                  <label class="fld" for="disputaDelay">Delay entre lances (ms)</label>
+                  <input type="number" id="disputaDelay" min="0" step="100" placeholder="800" value="800" />
+                </div>
+                <div class="cfg-field">
+                  <label class="fld" for="disputaPrecoRef">Preço de referência (opcional)</label>
+                  <input type="number" id="disputaPrecoRef" min="0" step="0.01" placeholder="Para % de desconto" />
                 </div>
               </div>
-              <div class="form-row">
-                <div>
-                  <label class="fld" for="disputaDegrau">Lance Mínimo Permitido (Degrau)</label>
-                  <input type="number" id="disputaDegrau" min="0" step="0.01" placeholder="0,00" />
-                </div>
-                <div>
-                  <label class="fld" for="disputaLanceConcorrente">Lance Atual do Concorrente</label>
-                  <input type="number" id="disputaLanceConcorrente" min="0" step="0.01" placeholder="0,00" />
-                </div>
-              </div>
-              <div class="form-row">
-                <div style="flex:1;width:100%">
-                  <label class="fld" for="disputaMeuCusto">Meu Custo (para margem restante)</label>
-                  <input type="number" id="disputaMeuCusto" min="0" step="0.01" placeholder="Custo sem margem" />
+
+              <h3 class="disputa-sec-title" style="margin-top:16px">Lance ao vivo</h3>
+              <div class="cfg-form-grid">
+                <div class="cfg-field cfg-field-span2">
+                  <label class="fld" for="disputaLanceConcorrente">Lance atual do concorrente (R$)</label>
+                  <input type="number" id="disputaLanceConcorrente" min="0" step="0.01" placeholder="Digite ou cole o lance do portal" />
                 </div>
               </div>
 
               <div class="disputa-kpi">
-                <div class="disputa-card" id="cardDescontoAtual">
-                  <div class="dc-label">Desconto atual (%)</div>
-                  <div class="dc-value" id="disputaDescontoPct">—</div>
-                  <div class="dc-sub" id="disputaDescontoSub">Em relação ao preço de referência</div>
+                <div class="disputa-card" id="cardProximoLance">
+                  <div class="dc-label">Próximo lance</div>
+                  <div class="dc-value" id="disputaMeuProximoLanceTxt">—</div>
+                  <div class="dc-sub" id="disputaProximoSub">Concorrente − degrau</div>
                 </div>
                 <div class="disputa-card" id="cardMargemRestante">
-                  <div class="dc-label">Margem restante</div>
+                  <div class="dc-label">Margem no próximo</div>
                   <div class="dc-value" id="disputaMargemRestante">—</div>
-                  <div class="dc-sub" id="disputaMargemSub">Lance atual − meu custo</div>
+                  <div class="dc-sub" id="disputaMargemSub">Lance − meu custo</div>
+                </div>
+                <div class="disputa-card" id="cardDescontoAtual">
+                  <div class="dc-label">Desconto vs referência</div>
+                  <div class="dc-value" id="disputaDescontoPct">—</div>
+                  <div class="dc-sub" id="disputaDescontoSub">Opcional</div>
+                </div>
+                <div class="disputa-card" id="cardRoboDecisao">
+                  <div class="dc-label">Decisão</div>
+                  <div class="dc-value" id="disputaDecisao" style="font-size:18px">—</div>
+                  <div class="dc-sub" id="disputaDecisaoSub">Aguardando dados</div>
                 </div>
               </div>
 
-              <div class="form-row">
-                <div style="flex:1">
-                  <label class="fld" for="disputaMeuProximoLance">Meu próximo lance (sugerido)</label>
-                  <input type="number" id="disputaMeuProximoLance" min="0" step="0.01" readonly />
-                </div>
-              </div>
+              <input type="hidden" id="disputaMeuProximoLance" value="" />
               <div class="btn-row">
-                <button type="button" class="btn btn-navy" id="btnRegistrarLance">📌 Registrar Meu Lance</button>
+                <button type="button" class="btn btn-navy" id="btnRegistrarLance">⚡ Cobrir agora</button>
                 <button type="button" class="btn btn-ghost" id="btnLimparDisputa">Limpar sessão</button>
               </div>
             </div>
 
-            <!-- Coluna direita: histórico -->
             <div class="entrega-subcard">
               <div class="card-head" style="padding:0;margin:0 0 10px;border:0">
-                <h3 style="margin:0;font-size:13px;font-weight:700;color:var(--ls-navy)">Histórico de lances</h3>
+                <h3 class="disputa-sec-title" style="margin:0">Histórico do robô</h3>
                 <span class="small muted" id="disputaHistCount">0 registro(s)</span>
               </div>
               <ul class="lance-hist" id="disputaHistorico">
-                <li class="lh-empty">Nenhum lance registrado ainda.</li>
+                <li class="lh-empty">Nenhum lance ainda. Ligue o robô e informe o lance do concorrente.</li>
               </ul>
             </div>
           </div>
