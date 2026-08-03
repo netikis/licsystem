@@ -1109,6 +1109,8 @@
   LICSYSTEM.state = {
     authUser: null,
     _orcDirty: true,
+    _orcTyping: false,
+    _orcLastEditAt: 0,
     _orcRendered: false,
     _dashReady: false,
     _cofreRendered: false,
@@ -1179,6 +1181,8 @@
   LICSYSTEM.cloudSync = {
     DEBOUNCE_MS: 900,
     REMOTE_DEFER_MS: 700,
+    /** Longer defer while orçamento cells may still be mid-edit. */
+    ORC_REMOTE_DEFER_MS: 2500,
     /** Soft cap under RTDB single-write limit (~16MB); warn/slim before hard fail. */
     RTDB_SOFT_MAX_BYTES: 900 * 1024,
     KEYS: ["orcamento", "catalogo", "cofre", "docsChecklist", "leiloesParticipo", "arp", "entregas", "histEntregas", "pncpWatches", "pncpAlerts"],
@@ -1351,7 +1355,7 @@
       try{ LICSYSTEM.orcamento.updateMeta(); }catch(e){}
       // Always remount sheet when visible so % / vunit inputs match state.
       if(LICSYSTEM.state.currentView === "orcamento"){
-        try{ LICSYSTEM.orcamento.render({ save:false }); }catch(e){}
+        try{ LICSYSTEM.orcamento.render({ save:false, sync:false }); }catch(e){}
       }
     },
 
@@ -1453,7 +1457,7 @@
           LICSYSTEM.state._orcDirty = false;
           try{ LICSYSTEM.orcamento.updateMeta(); }catch(e){}
           if(LICSYSTEM.state.currentView === "orcamento"){
-            try{ LICSYSTEM.orcamento.render({ save:false }); }catch(e){}
+            try{ LICSYSTEM.orcamento.render({ save:false, sync:false }); }catch(e){}
           }
         } else {
           if(data && typeof data === "object" && !Array.isArray(data)){
@@ -1496,14 +1500,16 @@
       if(key === "leiloesParticipo"){
         if(LICSYSTEM.leiloesParticipo){
           LICSYSTEM.leiloesParticipo.applyData(utils.fbToArray(data), { skipPersist: false });
-          // Refresh open edital sheet, but do not clobber a newer global orçamento mirror.
+          // Refresh open edital sheet, but never clobber cells while the user is typing.
           try{
             if(LICSYSTEM.state.activeLeilaoId && LICSYSTEM.leiloesParticipo.findById(LICSYSTEM.state.activeLeilaoId)){
               var orcTs = this.metaTs("orcamento");
-              if(!(orcTs > ts + 500)){
+              if(this.isOrcBusy() || orcTs > ts + 500){
+                // Keep in-memory orçamento; workspace list already updated above.
+              } else {
                 LICSYSTEM.leiloesParticipo.loadActiveWorkspace({ docs: false, analise: false });
                 if(LICSYSTEM.state.currentView === "orcamento"){
-                  LICSYSTEM.orcamento.render({ save:false });
+                  LICSYSTEM.orcamento.render({ save:false, sync:false });
                 }
               }
             }
@@ -1761,11 +1767,14 @@
     },
 
     isOrcBusy: function(){
+      if(LICSYSTEM.state._orcTyping) return true;
       if(LICSYSTEM.state._orcDirty) return true;
       if(LICSYSTEM.orcamento && LICSYSTEM.orcamento._saveTimer) return true;
+      // Grace window: ignore remote apply shortly after last keystroke even if focus left the cell.
+      if(LICSYSTEM.state._orcLastEditAt && (Date.now() - LICSYSTEM.state._orcLastEditAt) < 2500) return true;
       try{
         var ae = document.activeElement;
-        if(ae && ae.closest && ae.closest("#orcBody, #orcMetaNome, #orcMetaNumero")) return true;
+        if(ae && ae.closest && ae.closest("#orcBody, #orcTable, #orcMetaNome, #orcMetaNumero")) return true;
       }catch(e){}
       return false;
     },
@@ -1803,11 +1812,14 @@
     schedulePendingRemote: function(key){
       var self = this;
       clearTimeout(self._pendingRemoteTimers[key]);
+      var delay = (key === "orcamento" || key === "leiloesParticipo")
+        ? self.ORC_REMOTE_DEFER_MS
+        : self.REMOTE_DEFER_MS;
       self._pendingRemoteTimers[key] = setTimeout(function(){
         self._pendingRemoteTimers[key] = null;
         var env = self._pendingRemote[key];
         if(!env) return;
-        if(key === "orcamento" && self.isOrcBusy()){
+        if((key === "orcamento" || key === "leiloesParticipo") && self.isOrcBusy()){
           // Keep deferring while typing; local saves will win via newer updatedAt.
           self.schedulePendingRemote(key);
           return;
@@ -1815,7 +1827,7 @@
         delete self._pendingRemote[key];
         if(self.isEcho(key, env)) return;
         self.applyRemoteEnvelope(key, env);
-      }, self.REMOTE_DEFER_MS);
+      }, delay);
     },
 
     onRemoteSnap: function(key, snap){
@@ -1826,7 +1838,7 @@
       if(!cloudEnv) return;
       if(self.isEcho(key, cloudEnv)) return;
 
-      if(key === "orcamento" && self.isOrcBusy()){
+      if((key === "orcamento" || key === "leiloesParticipo") && self.isOrcBusy()){
         self._pendingRemote[key] = cloudEnv;
         self.schedulePendingRemote(key);
         self.setStatus("syncing", "Sync pendente…");
@@ -5218,7 +5230,7 @@
       var compensa = null;
       if(it.compensa === true || it.compensa === "true" || it.statusCompensa === "compensa") compensa = true;
       else if(it.compensa === false || it.compensa === "false" || it.statusCompensa === "nao") compensa = false;
-      return {
+      var out = {
         lote: it.lote != null && it.lote !== "" ? String(it.lote) : "",
         qtd: qtd,
         qtdEstoque: qtdEstoque,
@@ -5226,10 +5238,12 @@
         editalVunit: editalVunit,
         editalTotal: editalTotal,
         vunit: Number(it.vunit) || 0,
-        pct: LICSYSTEM.orcamento.readPct(it),
+        pct: 0,
         link: String(it.link || ""),
         compensa: compensa
       };
+      out.pct = LICSYSTEM.orcamento.calcPctAuto(out);
+      return out;
     },
     isEmptyRow:function(it){
       if(!it) return true;
@@ -5300,13 +5314,33 @@
         console.warn("Orçamento: não foi possível salvar tudo no navegador (limite de armazenamento).", e);
       }
     },
+    markTyping:function(){
+      LICSYSTEM.state._orcTyping = true;
+      LICSYSTEM.state._orcLastEditAt = Date.now();
+      clearTimeout(LICSYSTEM.orcamento._typingTimer);
+      LICSYSTEM.orcamento._typingTimer = setTimeout(function(){
+        LICSYSTEM.orcamento._typingTimer = null;
+        try{
+          var ae = document.activeElement;
+          if(ae && ae.closest && ae.closest("#orcBody, #orcTable")){
+            LICSYSTEM.state._orcTyping = true;
+            return;
+          }
+        }catch(e){}
+        LICSYSTEM.state._orcTyping = false;
+      }, 2500);
+    },
     scheduleSave:function(){
       clearTimeout(LICSYSTEM.orcamento._saveTimer);
       LICSYSTEM.orcamento._saveTimer = setTimeout(function(){
         LICSYSTEM.orcamento._saveTimer = null;
+        LICSYSTEM.orcamento.syncFromDom();
         LICSYSTEM.orcamento.save();
-        LICSYSTEM.state._orcDirty = false;
-      }, 400);
+        // Keep dirty while still editing so cloud remote apply stays deferred.
+        if(!LICSYSTEM.cloudSync || !LICSYSTEM.cloudSync.isOrcBusy()){
+          LICSYSTEM.state._orcDirty = false;
+        }
+      }, 600);
     },
     flushSave:function(opts){
       opts = opts || {};
@@ -5314,7 +5348,23 @@
       LICSYSTEM.orcamento._saveTimer = null;
       LICSYSTEM.orcamento.syncFromDom();
       LICSYSTEM.orcamento.save(opts);
+      if(!opts.keepDirty) LICSYSTEM.state._orcDirty = false;
+    },
+    /** Explicit user save: local + cloud push + confirmation. */
+    salvarAgora:function(){
+      LICSYSTEM.orcamento.markTyping();
+      LICSYSTEM.orcamento.flushSave({ immediate: true });
+      LICSYSTEM.state._orcTyping = false;
       LICSYSTEM.state._orcDirty = false;
+      var n = (LICSYSTEM.state.orcItems || []).filter(function(it){
+        return !LICSYSTEM.orcamento.isEmptyRow(it);
+      }).length;
+      showAlert("orcAlert", "ok", "Salvo — <b>"+n+"</b> item(ns) gravado(s) no navegador"+(utils.hasFirebaseConfig()?" e na nuvem":"")+".");
+      try{
+        if(LICSYSTEM.state.activeLeilaoId && LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.saveActiveWorkspace){
+          LICSYSTEM.leiloesParticipo.saveActiveWorkspace();
+        }
+      }catch(e){}
     },
     /** Pull live input values into state (covers pending keystrokes before leave). */
     syncFromDom:function(){
@@ -5328,12 +5378,13 @@
         var it = LICSYSTEM.state.orcItems[i];
         if(!it || !f) continue;
         if(f === "produto" || f === "link" || f === "lote") it[f] = inp.value;
-        else if(f === "pct") it.pct = LICSYSTEM.orcamento.readPct({ pct: inp.value });
+        else if(f === "pct") continue;
         else it[f] = Number(inp.value) || 0;
-        if(f === "qtd" || f === "editalVunit"){
+        if(f === "qtd" || f === "editalVunit" || f === "vunit"){
           if(Number(it.editalVunit) > 0){
             it.editalTotal = (Number(it.qtd) || 0) * (Number(it.editalVunit) || 0);
           }
+          it.pct = LICSYSTEM.orcamento.calcPctAuto(it);
         }
       }
     },
@@ -5342,10 +5393,24 @@
       if(stored > 0) return stored;
       return (Number(it.qtd)||0) * (Number(it.editalVunit)||0);
     },
-    /** MEUS PREÇOS V. Final: always qtdEstoque (0 → R$ 0,00), never edital qtd. */
+    /** % automática: (meu V.Unit − edital V.Unit) / edital V.Unit × 100 */
+    calcPctAuto:function(it){
+      var base = Number(it && it.editalVunit) || 0;
+      var v = Number(it && it.vunit) || 0;
+      if(!(base > 0) || !(v > 0)) return 0;
+      return Math.round(((v - base) / base) * 1000) / 10;
+    },
+    formatPctAuto:function(pct){
+      var n = Number(pct) || 0;
+      if(!isFinite(n)) n = 0;
+      var s = (Math.round(n * 10) / 10).toFixed(1).replace(".", ",");
+      return s + "%";
+    },
+    /** MEUS PREÇOS V. Final: Qtd do edital × meu V. Unitário */
     calcTotal:function(it){
-      var q=Number(it.qtdEstoque)||0, v=Number(it.vunit)||0, p=Number(it.pct)||0;
-      return q*v*(1+p/100);
+      var q = Number(it.qtd) || 0;
+      var v = Number(it.vunit) || 0;
+      return q * v;
     },
     pageCount:function(){
       var n = LICSYSTEM.state.orcItems.length;
@@ -5380,18 +5445,40 @@
       if(next) next.disabled = page >= pages;
     },
     goPage:function(delta){
+      LICSYSTEM.orcamento.syncFromDom();
       var pages = LICSYSTEM.orcamento.pageCount();
       var next = (LICSYSTEM.state.orcPage || 1) + delta;
       if(next < 1) next = 1;
       if(next > pages) next = pages;
       LICSYSTEM.state.orcPage = next;
       LICSYSTEM.state._orcDirty = true;
-      LICSYSTEM.orcamento.render({ save:false });
+      LICSYSTEM.orcamento.render({ save:false, sync:false });
     },
     render:function(opts){
       opts = opts || {};
       var body = el("orcBody");
       if(!body) return;
+      // Sync DOM→state only when a cell is focused (or caller asks). Never when applying remote data.
+      try{
+        var needSync = opts.sync === true;
+        if(opts.sync !== false && !needSync){
+          var ae0 = document.activeElement;
+          if(ae0 && body.contains(ae0) && ae0.getAttribute && ae0.getAttribute("data-f")) needSync = true;
+        }
+        if(needSync) LICSYSTEM.orcamento.syncFromDom();
+      }catch(e){}
+      var focusInfo = null;
+      try{
+        var ae = document.activeElement;
+        if(ae && body.contains(ae) && ae.getAttribute){
+          focusInfo = {
+            i: ae.getAttribute("data-i"),
+            f: ae.getAttribute("data-f"),
+            start: typeof ae.selectionStart === "number" ? ae.selectionStart : null,
+            end: typeof ae.selectionEnd === "number" ? ae.selectionEnd : null
+          };
+        }
+      }catch(e){}
       var items = LICSYSTEM.state.orcItems;
       var n = items.length;
       var size = LICSYSTEM.state.orcPageSize || 100;
@@ -5424,19 +5511,21 @@
         var btnNaoCls = "btn btn-sm orcNaoCompensa"+(it.compensa === false ? " is-active" : "");
         var hasLink = !!(String(it.link || "").trim());
         var btnLinkCls = "btn btn-ghost btn-sm orcOpenLink"+(hasLink ? " is-ready" : "");
+        var pctAuto = LICSYSTEM.orcamento.calcPctAuto(it);
+        it.pct = pctAuto;
+        var pctCls = "orc-pct-auto"+(pctAuto > 0 ? " is-pos" : (pctAuto < 0 ? " is-neg" : ""));
         buf.push(
           '<tr class="'+rowCls.join(" ")+'" data-item-idx="'+i+'">'+
             '<td class="td-chk"><input type="checkbox" class="orcChk" data-i="'+i+'" aria-label="Selecionar lote '+(it.lote||(i+1))+'"></td>'+
             '<td class="td-lote"><input type="text" class="orc-lote" data-i="'+i+'" data-f="lote" value="'+utils.escapeHtml(it.lote)+'" placeholder="—" title="Lote ou Item do edital"></td>'+
             '<td class="td-qtd"><input type="number" class="orc-qtd" data-i="'+i+'" data-f="qtd" value="'+utils.escapeHtml(it.qtd)+'" step="1" min="0" title="Quantidade"></td>'+
-            '<td><div class="orc-desc-wrap'+(risco.length?' risk-cell':'')+'">'+flag+
-              '<input type="text" data-i="'+i+'" data-f="produto" value="'+utils.escapeHtml(it.produto)+'" placeholder="Descrição do edital">'+
+            '<td class="td-desc"><div class="orc-desc-wrap'+(risco.length?' risk-cell':'')+'">'+flag+
+              '<input type="text" data-i="'+i+'" data-f="produto" value="'+utils.escapeHtml(it.produto)+'" placeholder="Descrição do edital" title="'+utils.escapeHtml(it.produto)+'">'+
             '</div></td>'+
             '<td class="td-money"><input type="number" data-i="'+i+'" data-f="editalVunit" value="'+utils.escapeHtml(editalUnitShow)+'" step="0.0001" min="0" title="Valor unitário do edital"></td>'+
             '<td class="td-money split-end"><span class="cell-ro" data-edital-total="'+i+'">'+utils.formatBrl(totalEdital)+'</span></td>'+
-            '<td class="td-qtd split-start"><input type="number" class="orc-qtd" data-i="'+i+'" data-f="qtdEstoque" value="'+utils.escapeHtml(it.qtdEstoque)+'" step="1" min="0" title="Quantidade em estoque / posso entregar"></td>'+
-            '<td class="td-money"><input type="number" data-i="'+i+'" data-f="vunit" value="'+utils.escapeHtml(it.vunit)+'" step="0.01" min="0" title="Meu valor unitário"></td>'+
-            '<td class="td-pct"><input type="number" class="orc-pct" data-i="'+i+'" data-f="pct" value="'+utils.escapeHtml(it.pct)+'" step="0.1" title="Porcentagem"></td>'+
+            '<td class="td-money split-start"><input type="number" data-i="'+i+'" data-f="vunit" value="'+utils.escapeHtml(it.vunit)+'" step="0.01" min="0" title="Valor que desejo vender (unitário)"></td>'+
+            '<td class="td-pct"><span class="'+pctCls+'" data-pct-auto="'+i+'" title="% automática vs V. Unitário do edital">'+utils.escapeHtml(LICSYSTEM.orcamento.formatPctAuto(pctAuto))+'</span></td>'+
             '<td class="td-money"><span class="cell-total" data-meus-total="'+i+'">'+utils.formatBrl(totalMeus)+'</span></td>'+
             '<td class="td-link"><input type="text" data-i="'+i+'" data-f="link" value="'+utils.escapeHtml(it.link||"")+'" placeholder="Link"></td>'+
             '<td class="td-actions"><div class="orc-actions">'+
@@ -5451,7 +5540,7 @@
         );
       }
       if(!buf.length){
-        body.innerHTML = '<tr><td colspan="12" class="orc-empty">Nenhum item nesta página. Importe o Excel do edital ou adicione uma linha.</td></tr>';
+        body.innerHTML = '<tr><td colspan="11" class="orc-empty">Nenhum item nesta página. Importe o Excel do edital ou adicione uma linha.</td></tr>';
       } else {
         body.innerHTML = buf.join("");
       }
@@ -5459,10 +5548,24 @@
       if(el("orcTotalEdital")) el("orcTotalEdital").textContent = utils.formatBrl(geralEdital);
       var all = el("orcCheckAll");
       if(all) all.checked = false;
-      LICSYSTEM.state._orcDirty = false;
+      // Do not clear dirty here — remote sync may still need the busy flag.
       LICSYSTEM.state._orcRendered = true;
       LICSYSTEM.orcamento.updatePager();
       if(opts.save !== false) LICSYSTEM.orcamento.save();
+      if(focusInfo && focusInfo.i != null && focusInfo.f){
+        try{
+          var restore = body.querySelector('input[data-i="'+focusInfo.i+'"][data-f="'+focusInfo.f+'"]');
+          if(restore){
+            restore.focus();
+            if(focusInfo.start != null && typeof restore.setSelectionRange === "function"){
+              var len = String(restore.value || "").length;
+              var a = Math.min(focusInfo.start, len);
+              var b = Math.min(focusInfo.end != null ? focusInfo.end : focusInfo.start, len);
+              restore.setSelectionRange(a, b);
+            }
+          }
+        }catch(e){}
+      }
     },
     addLinha:function(){
       LICSYSTEM.state.orcItems.push(LICSYSTEM.orcamento.emptyItem());
@@ -5989,23 +6092,43 @@
 
     onEdit:function(i,f,val){
       var it=LICSYSTEM.state.orcItems[i]; if(!it) return;
+      LICSYSTEM.orcamento.markTyping();
+      if(f==="pct") return;
       if(f==="produto"||f==="link"||f==="lote") it[f]=val;
-      else if(f==="pct") it.pct = LICSYSTEM.orcamento.readPct({ pct: val });
-      else it[f]=Number(val)||0;
+      else {
+        // Preserve empty mid-edit so number inputs are not forced to 0 until committed.
+        if(val === "" || val == null){
+          it[f] = 0;
+        } else {
+          var num = Number(String(val).replace(",", "."));
+          it[f] = isFinite(num) ? num : (Number(it[f]) || 0);
+        }
+      }
 
       if(f==="qtd" || f==="editalVunit"){
         if(Number(it.editalVunit) > 0){
           it.editalTotal = (Number(it.qtd)||0) * (Number(it.editalVunit)||0);
         }
       }
+      if(f==="vunit" || f==="editalVunit" || f==="qtd"){
+        it.pct = LICSYSTEM.orcamento.calcPctAuto(it);
+      }
 
       LICSYSTEM.state._orcDirty = true;
+      // Update only totals / link button — never remount the whole table on each keystroke.
       var row = document.querySelector('#orcBody [data-item-idx="'+i+'"]');
       if(row){
         var edCell = row.querySelector('[data-edital-total="'+i+'"]');
         var meCell = row.querySelector('[data-meus-total="'+i+'"]');
+        var pctCell = row.querySelector('[data-pct-auto="'+i+'"]');
         if(edCell) edCell.textContent = utils.formatBrl(LICSYSTEM.orcamento.calcEditalTotal(it));
         if(meCell) meCell.textContent = utils.formatBrl(LICSYSTEM.orcamento.calcTotal(it));
+        if(pctCell){
+          var pctNow = Number(it.pct) || 0;
+          pctCell.textContent = LICSYSTEM.orcamento.formatPctAuto(pctNow);
+          pctCell.classList.toggle("is-pos", pctNow > 0);
+          pctCell.classList.toggle("is-neg", pctNow < 0);
+        }
         if(f==="link"){
           var linkBtn = row.querySelector(".orcOpenLink");
           if(linkBtn){
@@ -9449,6 +9572,7 @@
     // Orçamento
     on("btnAddLinha","click", LICSYSTEM.orcamento.addLinha);
     on("btnLimparOrc","click", LICSYSTEM.orcamento.limpar);
+    on("btnSalvarOrc","click", function(){ LICSYSTEM.orcamento.salvarAgora(); });
     on("btnPropostaOrc","click", LICSYSTEM.orcamento.gerarProposta);
     on("btnPropostaOrcExcel","click", LICSYSTEM.orcamento.gerarPropostaExcel);
     on("btnExportOrcExcel","click", LICSYSTEM.orcamento.exportarExcel);
@@ -9479,6 +9603,23 @@
       var onChk = this.checked;
       document.querySelectorAll(".orcChk").forEach(function(c){ c.checked = onChk; });
     });
+    on("orcBody","focusin", function(e){
+      if(e.target && e.target.matches && e.target.matches("input[data-i][data-f]")){
+        LICSYSTEM.orcamento.markTyping();
+      }
+    });
+    on("orcBody","focusout", function(){
+      // Grace period handled inside markTyping timer — keep dirty until idle.
+      clearTimeout(LICSYSTEM.orcamento._blurSaveTimer);
+      LICSYSTEM.orcamento._blurSaveTimer = setTimeout(function(){
+        try{
+          var ae = document.activeElement;
+          if(ae && ae.closest && ae.closest("#orcBody")) return;
+          LICSYSTEM.orcamento.syncFromDom();
+          LICSYSTEM.orcamento.scheduleSave();
+        }catch(e){}
+      }, 200);
+    });
     on("orcBody","input", function(e){
       var inp = e.target.closest("input[data-i]");
       if(!inp) return;
@@ -9486,24 +9627,33 @@
     });
     on("orcBody","click", function(e){
       var del = e.target.closest(".orcDel");
-      if(del){ var i=Number(del.getAttribute("data-i")); LICSYSTEM.state.orcItems.splice(i,1); if(!LICSYSTEM.state.orcItems.length) LICSYSTEM.state.orcItems.push(LICSYSTEM.orcamento.emptyItem()); LICSYSTEM.orcamento.render(); return; }
+      if(del){
+        LICSYSTEM.orcamento.syncFromDom();
+        var i=Number(del.getAttribute("data-i"));
+        LICSYSTEM.state.orcItems.splice(i,1);
+        if(!LICSYSTEM.state.orcItems.length) LICSYSTEM.state.orcItems.push(LICSYSTEM.orcamento.emptyItem());
+        LICSYSTEM.orcamento.render({ sync:false });
+        return;
+      }
       var yes = e.target.closest(".orcCompensa");
       if(yes){
+        LICSYSTEM.orcamento.syncFromDom();
         var iy = Number(yes.getAttribute("data-i"));
         var ity = LICSYSTEM.state.orcItems[iy];
         if(ity){
           ity.compensa = (ity.compensa === true) ? null : true;
-          LICSYSTEM.orcamento.render();
+          LICSYSTEM.orcamento.render({ sync:false });
         }
         return;
       }
       var no = e.target.closest(".orcNaoCompensa");
       if(no){
+        LICSYSTEM.orcamento.syncFromDom();
         var ino = Number(no.getAttribute("data-i"));
         var itn = LICSYSTEM.state.orcItems[ino];
         if(itn){
           itn.compensa = (itn.compensa === false) ? null : false;
-          LICSYSTEM.orcamento.render();
+          LICSYSTEM.orcamento.render({ sync:false });
         }
         return;
       }
@@ -9716,11 +9866,17 @@
     }
 
     // Entrando em ferramenta com edital ativo: carrega dados dele
+    // Skip orçamento reload when the sheet already has unsaved edits in memory.
     if(
       LICSYSTEM.state.activeLeilaoId &&
       (LEILAO_SCOPED_VIEWS[view] || (view === "analiseIa" && LICSYSTEM.state._lwAnaliseContext))
     ){
-      try{ LICSYSTEM.leiloesParticipo.loadActiveWorkspace(); }catch(e){}
+      try{
+        var skipOrcReload = (view === "orcamento" && LICSYSTEM.cloudSync && LICSYSTEM.cloudSync.isOrcBusy());
+        LICSYSTEM.leiloesParticipo.loadActiveWorkspace(
+          skipOrcReload ? { orcamento: false } : {}
+        );
+      }catch(e){}
     }
 
     if(view !== "analiseIa" && !LEILAO_SCOPED_VIEWS[view]){
@@ -9748,7 +9904,7 @@
     }
     if(view==="orcamento"){
       // Remonta a partir do estado em memória (não zera orcItems; garante tabela após troca de aba)
-      LICSYSTEM.orcamento.render({ save:false });
+      LICSYSTEM.orcamento.render({ save:false, sync:false });
       LICSYSTEM.orcamento.updateMeta();
     }
     if(view==="cofre"){

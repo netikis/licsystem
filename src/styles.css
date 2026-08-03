@@ -967,14 +967,13 @@
     width:100%;max-width:100%;max-height:min(70vh,780px);
   }
   .orc-table{
-    width:100%;min-width:1530px;border-collapse:collapse;table-layout:fixed;
+    width:100%;min-width:1280px;border-collapse:collapse;table-layout:fixed;
     font-size:12.5px;
   }
   .orc-table col.c-chk{width:36px}
   .orc-table col.c-lote{width:72px}
   .orc-table col.c-qtd{width:76px}
-  .orc-table col.c-desc{width:auto;min-width:280px}
-  .orc-table col.c-qtd-estoque{width:72px}
+  .orc-table col.c-desc{width:140px;min-width:140px;max-width:140px}
   .orc-table col.c-money{width:120px}
   .orc-table col.c-money-meus{width:100px}
   .orc-table col.c-pct{width:76px}
@@ -1042,8 +1041,9 @@
   .orc-table tbody input.orc-qtd::-webkit-inner-spin-button{
     -webkit-appearance:none;margin:0;
   }
-  /* % — coluna ~76px; input legível p/ 12,50 / 100; sem spinners */
-  .orc-table tbody input.orc-pct{
+  /* % automática — balão ao lado do V. Unitário (MEUS PREÇOS) */
+  .orc-table tbody input.orc-pct,
+  .orc-table tbody .orc-pct-auto{
     display:block;width:100%;min-width:56px;max-width:100%;
     margin:0 auto;text-align:center;
     padding:6px 8px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;
@@ -1051,9 +1051,21 @@
     -moz-appearance:textfield;
     appearance:textfield;
   }
+  .orc-table tbody .orc-pct-auto{
+    border:1px solid var(--ls-line);background:#f7f9fc;color:var(--ls-navy);
+    box-sizing:border-box;cursor:default;user-select:none;
+  }
+  .orc-table tbody .orc-pct-auto.is-neg{color:var(--ls-red);background:var(--ls-red-bg)}
+  .orc-table tbody .orc-pct-auto.is-pos{color:var(--ls-green);background:var(--ls-green-bg)}
   .orc-table tbody input.orc-pct::-webkit-outer-spin-button,
   .orc-table tbody input.orc-pct::-webkit-inner-spin-button{
     -webkit-appearance:none;margin:0;
+  }
+  .orc-table tbody td.td-desc{
+    max-width:140px;overflow:hidden;
+  }
+  .orc-table tbody td.td-desc input{
+    max-width:100%;
   }
   .orc-table tbody input:focus{
     outline:0;border-color:var(--ls-gold);box-shadow:0 0 0 3px rgba(201,162,39,.15);
