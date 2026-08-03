@@ -79,6 +79,10 @@
 
       <button data-view="leiloesParticipo"><span class="ico">🏆</span> <span class="nav-label" data-i18n="nav.leiloesParticipo">Leilão que Participo</span></button>
 
+      <button data-view="concorrencia"><span class="ico">🔎</span> <span data-i18n="nav.concorrencia">Concorrência</span></button>
+      <button data-view="catalogo"><span class="ico">📚</span> <span data-i18n="nav.catalogo">Catálogo</span></button>
+      <button data-view="disputa"><span class="ico">🤖</span> <span data-i18n="nav.disputa">Robô de Disputa</span></button>
+
       <div class="nav-group" data-nav-group="entrega">
         <button type="button" class="nav-parent" data-view="entregas" data-nav-toggle="entrega" aria-expanded="false">
           <span class="ico">🚚</span><span class="nav-label" data-i18n="nav.entregas">Entrega</span><span class="nav-chevron" aria-hidden="true"></span>
@@ -89,10 +93,6 @@
       </div>
 
       <button data-view="cofre"><span class="ico">🔐</span> <span data-i18n="nav.cofre">Cofre de Documentos</span></button>
-      <button data-view="concorrencia"><span class="ico">🔎</span> <span data-i18n="nav.concorrencia">Concorrência</span></button>
-      <button data-view="catalogo"><span class="ico">📚</span> <span data-i18n="nav.catalogo">Catálogo</span></button>
-      <button data-view="arp"><span class="ico">📄</span> <span data-i18n="nav.arp">Atas de Registro</span></button>
-      <button data-view="disputa"><span class="ico">🤖</span> <span data-i18n="nav.disputa">Robô de Disputa</span></button>
       <button data-view="ferramentas"><span class="ico">⚙️</span> <span data-i18n="nav.ferramentas">Configurações</span></button>
 
       <div class="nav-group" data-nav-group="chat">
@@ -599,7 +599,7 @@
               <button class="btn btn-gold" id="btnPropostaOrcExcel">📊 Proposta Excel</button>
             </div>
           </div>
-          <div class="desc">Espelho do edital: à esquerda os dados importados; à direita seus preços na mesma linha do lote. <b>Meu total</b> = Qtd × V. Unit × (1 + %/100).</div>
+          <div class="desc">Espelho do edital: à esquerda os dados importados; à direita seus preços na mesma linha do lote. <b>Meu total</b> = Qtd do edital × meu V. Unitário. A <b>%</b> calcula sozinha em relação ao V. Unitário do edital.</div>
           <div id="orcMeta" class="orc-meta" style="display:none"></div>
           <div id="orcAlert" class="alert"></div>
 
@@ -619,7 +619,6 @@
                 <col class="c-desc" />
                 <col class="c-money" />
                 <col class="c-money" />
-                <col class="c-qtd-estoque" />
                 <col class="c-money-meus" />
                 <col class="c-pct" />
                 <col class="c-money" />
@@ -629,7 +628,7 @@
               <thead>
                 <tr class="orc-titles">
                   <th colspan="6" class="orc-title-edital">EDITAL</th>
-                  <th colspan="6" class="orc-title-meus">MEUS PREÇOS</th>
+                  <th colspan="5" class="orc-title-meus">MEUS PREÇOS</th>
                 </tr>
                 <tr class="orc-cols">
                   <th class="col-chk"><input type="checkbox" id="orcCheckAll" title="Selecionar todos" /></th>
@@ -638,9 +637,8 @@
                   <th>Descrição</th>
                   <th>V. Unitário</th>
                   <th class="split-end">V. Final</th>
-                  <th class="col-qtd split-start" title="Quantidade em estoque / posso entregar">Qtd</th>
-                  <th>V. Unitário</th>
-                  <th class="col-pct">%</th>
+                  <th class="split-start">V. Unitário</th>
+                  <th class="col-pct" title="Calculada automaticamente: (meu preço − edital) / edital">%</th>
                   <th>V. Final</th>
                   <th>Link de Acesso</th>
                   <th>Ações</th>
@@ -651,7 +649,7 @@
                 <tr>
                   <td colspan="5" class="foot-edital-label">TOTAL EDITAL</td>
                   <td class="foot-edital-value split-end"><span id="orcTotalEdital">R$ 0,00</span></td>
-                  <td colspan="3" class="foot-meus-label split-start">TOTAL MEUS PREÇOS</td>
+                  <td colspan="2" class="foot-meus-label split-start">TOTAL MEUS PREÇOS</td>
                   <td class="foot-meus-value"><span id="orcTotalGeral">R$ 0,00</span></td>
                   <td colspan="2"></td>
                 </tr>
