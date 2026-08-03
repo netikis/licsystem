@@ -815,6 +815,32 @@
     });
   };
 
+  /**
+   * Firebase RTDB often returns dense arrays as arrays, but sparse / holey lists
+   * come back as objects `{ "0":..., "2":... }`. Always coerce before .map/.length.
+   */
+  utils.fbToArray = function(val){
+    if(val == null) return [];
+    if(Array.isArray(val)) return val;
+    if(typeof val !== "object") return [];
+    return Object.keys(val)
+      .filter(function(k){ return /^\d+$/.test(k); })
+      .sort(function(a, b){ return Number(a) - Number(b); })
+      .map(function(k){ return val[k]; })
+      .filter(function(row){ return row != null; });
+  };
+
+  /** UTF-8 byte length of JSON (for RTDB write-size guards). */
+  utils.jsonByteLength = function(obj){
+    try{
+      var s = JSON.stringify(obj);
+      if(typeof TextEncoder !== "undefined") return new TextEncoder().encode(s).length;
+      return unescape(encodeURIComponent(s)).length;
+    }catch(e){
+      return 0;
+    }
+  };
+
   /* ------- Mercado Livre via proxy backend (nunca direto no browser) ------- */
   utils.mlProxyBase = function(){
     // Frete e utilidades legadas
@@ -1137,8 +1163,11 @@
   /* ============================ CLOUD SYNC (Firebase RTDB per uid) ============================
    * Paths: users/{uid}/orcamento|catalogo|cofre|docsChecklist|leiloesParticipo|arp|entregas|histEntregas|pncpWatches|pncpAlerts
    * Envelope: { updatedAt:ms, cleared?:bool, writeId?:string, data:... }
+   * Orçamento: always mirrored to users/{uid}/orcamento (all fields incl. pct), even with edital ativo.
+   * Leilão workspace also keeps a copy; cloud leiloes payload slims relatorioMd if oversized.
    * Merge: newest updatedAt wins; empty local never overwrites cloud unless Limpar (cleared).
    * Live: after login, onValue listeners apply newer remote envelopes without re-login.
+   * RTDB may return arrays as object maps — utils.fbToArray coerces on read.
    *
    * Suggested RTDB rules (optional; open "auth != null" still works):
    *   { "rules": { "users": {
@@ -1150,6 +1179,8 @@
   LICSYSTEM.cloudSync = {
     DEBOUNCE_MS: 900,
     REMOTE_DEFER_MS: 700,
+    /** Soft cap under RTDB single-write limit (~16MB); warn/slim before hard fail. */
+    RTDB_SOFT_MAX_BYTES: 900 * 1024,
     KEYS: ["orcamento", "catalogo", "cofre", "docsChecklist", "leiloesParticipo", "arp", "entregas", "histEntregas", "pncpWatches", "pncpAlerts"],
     _uid: null,
     _onlineWired: false,
@@ -1224,10 +1255,40 @@
       catch(e){ return obj; }
     },
 
+    /** Strip nulls (RTDB drops them) but keep 0 / false / "". */
+    stripNulls: function(val){
+      if(val == null) return undefined;
+      if(Array.isArray(val)){
+        return val.map(function(v){ return LICSYSTEM.cloudSync.stripNulls(v); });
+      }
+      if(typeof val === "object"){
+        var out = {};
+        Object.keys(val).forEach(function(k){
+          var v = LICSYSTEM.cloudSync.stripNulls(val[k]);
+          if(v !== undefined) out[k] = v;
+        });
+        return out;
+      }
+      return val;
+    },
+
+    /** Shrink leiloesParticipo cloud payload so orçamento rows are never dropped. */
+    slimLeiloesForCloud: function(list){
+      var arr = utils.fbToArray(list);
+      return arr.map(function(it, idx){
+        var row = LICSYSTEM.leiloesParticipo.normalizeItem(it, idx);
+        if(row.workspace && row.workspace.relatorioMd){
+          // Keep a short snippet only — full report stays in localStorage / Análise IA.
+          row.workspace.relatorioMd = String(row.workspace.relatorioMd || "").slice(0, 8000);
+        }
+        return row;
+      });
+    },
+
     isOrcDataEmpty: function(data){
       if(!data) return true;
-      var items = Array.isArray(data) ? data : data.items;
-      if(!items || !items.length) return true;
+      var items = utils.fbToArray(Array.isArray(data) ? data : data.items);
+      if(!items.length) return true;
       var meta = (!Array.isArray(data) && data.meta) ? data.meta : {};
       var hasMeta = !!(meta && (String(meta.nome||"").trim() || String(meta.numero||"").trim() || meta.catalogId));
       var hasRow = false;
@@ -1262,7 +1323,7 @@
 
     applyOrcData: function(data){
       if(!data) return;
-      var items = Array.isArray(data) ? data : (data.items || []);
+      var items = utils.fbToArray(Array.isArray(data) ? data : data.items);
       var meta = (!Array.isArray(data) && data.meta) ? data.meta : {};
       LICSYSTEM.state.orcItems = (items.length ? items : [LICSYSTEM.orcamento.emptyItem()])
         .map(function(it){ return LICSYSTEM.orcamento.normalizeItem(it); });
@@ -1288,6 +1349,7 @@
       try{ localStorage.setItem(ORC_KEY, JSON.stringify(payload)); }catch(e){}
       LICSYSTEM.state._orcRendered = false;
       try{ LICSYSTEM.orcamento.updateMeta(); }catch(e){}
+      // Always remount sheet when visible so % / vunit inputs match state.
       if(LICSYSTEM.state.currentView === "orcamento"){
         try{ LICSYSTEM.orcamento.render({ save:false }); }catch(e){}
       }
@@ -1301,13 +1363,14 @@
           var data = Array.isArray(raw)
             ? { v:2, items: raw, meta:{}, page:1, savedAt: this.metaTs("orcamento") }
             : raw;
+          if(data && data.items != null) data.items = utils.fbToArray(data.items);
           var ts = Number(data.updatedAt || data.savedAt || this.metaTs("orcamento") || 0);
           return { updatedAt: ts, cleared: !!data.cleared, data: data };
         }
         if(key === "catalogo"){
           var cat = JSON.parse(localStorage.getItem("licsystem_catalogo_v1") || "null");
           if(cat == null) return null;
-          return { updatedAt: this.metaTs("catalogo"), data: Array.isArray(cat) ? cat : [] };
+          return { updatedAt: this.metaTs("catalogo"), data: utils.fbToArray(cat) };
         }
         if(key === "cofre"){
           var cof = JSON.parse(localStorage.getItem(COFRE_KEY) || "null");
@@ -1322,32 +1385,32 @@
         if(key === "leiloesParticipo"){
           var lp = JSON.parse(localStorage.getItem(LEILOES_PARTICIPO_KEY) || "null");
           if(lp == null) return null;
-          return { updatedAt: this.metaTs("leiloesParticipo"), data: Array.isArray(lp) ? lp : [] };
+          return { updatedAt: this.metaTs("leiloesParticipo"), data: utils.fbToArray(lp) };
         }
         if(key === "pncpWatches"){
           var pw = JSON.parse(localStorage.getItem(PNCP_WATCHES_KEY) || "null");
           if(pw == null) return null;
-          return { updatedAt: this.metaTs("pncpWatches"), data: Array.isArray(pw) ? pw : [] };
+          return { updatedAt: this.metaTs("pncpWatches"), data: utils.fbToArray(pw) };
         }
         if(key === "pncpAlerts"){
           var pa = JSON.parse(localStorage.getItem(PNCP_ALERTS_KEY) || "null");
           if(pa == null) return null;
-          return { updatedAt: this.metaTs("pncpAlerts"), data: Array.isArray(pa) ? pa : [] };
+          return { updatedAt: this.metaTs("pncpAlerts"), data: utils.fbToArray(pa) };
         }
         if(key === "arp"){
           var arp = JSON.parse(localStorage.getItem("licsystem_arp_v1") || "null");
           if(arp == null) return null;
-          return { updatedAt: this.metaTs("arp"), data: Array.isArray(arp) ? arp : [] };
+          return { updatedAt: this.metaTs("arp"), data: utils.fbToArray(arp) };
         }
         if(key === "entregas"){
           var ent = JSON.parse(localStorage.getItem("licsystem_entregas_v1") || "null");
           if(ent == null) return null;
-          return { updatedAt: this.metaTs("entregas"), data: Array.isArray(ent) ? ent : [] };
+          return { updatedAt: this.metaTs("entregas"), data: utils.fbToArray(ent) };
         }
         if(key === "histEntregas"){
           var hist = JSON.parse(localStorage.getItem("licsystem_hist_entregas_v1") || "null");
           if(hist == null) return null;
-          return { updatedAt: this.metaTs("histEntregas"), data: Array.isArray(hist) ? hist : [] };
+          return { updatedAt: this.metaTs("histEntregas"), data: utils.fbToArray(hist) };
         }
       }catch(e){}
       return null;
@@ -1404,7 +1467,7 @@
         return;
       }
       if(key === "catalogo"){
-        LICSYSTEM.catalogo.items = Array.isArray(data) ? data : [];
+        LICSYSTEM.catalogo.items = utils.fbToArray(data);
         try{ localStorage.setItem("licsystem_catalogo_v1", JSON.stringify(LICSYSTEM.catalogo.items)); }catch(e){}
         this.touchMeta("catalogo", ts);
         try{ if(typeof listarProdutos === "function") listarProdutos(); }catch(e){}
@@ -1432,40 +1495,52 @@
       }
       if(key === "leiloesParticipo"){
         if(LICSYSTEM.leiloesParticipo){
-          LICSYSTEM.leiloesParticipo.applyData(Array.isArray(data) ? data : [], { skipPersist: false });
+          LICSYSTEM.leiloesParticipo.applyData(utils.fbToArray(data), { skipPersist: false });
+          // Refresh open edital sheet, but do not clobber a newer global orçamento mirror.
+          try{
+            if(LICSYSTEM.state.activeLeilaoId && LICSYSTEM.leiloesParticipo.findById(LICSYSTEM.state.activeLeilaoId)){
+              var orcTs = this.metaTs("orcamento");
+              if(!(orcTs > ts + 500)){
+                LICSYSTEM.leiloesParticipo.loadActiveWorkspace({ docs: false, analise: false });
+                if(LICSYSTEM.state.currentView === "orcamento"){
+                  LICSYSTEM.orcamento.render({ save:false });
+                }
+              }
+            }
+          }catch(e){}
         } else {
-          try{ localStorage.setItem(LEILOES_PARTICIPO_KEY, JSON.stringify(Array.isArray(data) ? data : [])); }catch(e){}
+          try{ localStorage.setItem(LEILOES_PARTICIPO_KEY, JSON.stringify(utils.fbToArray(data))); }catch(e){}
         }
         this.touchMeta("leiloesParticipo", ts);
         return;
       }
       if(key === "pncpWatches"){
         if(LICSYSTEM.alertas){
-          LICSYSTEM.alertas.applyWatches(Array.isArray(data) ? data : [], { skipPersist: false, skipCloud: true });
+          LICSYSTEM.alertas.applyWatches(utils.fbToArray(data), { skipPersist: false, skipCloud: true });
         } else {
-          try{ localStorage.setItem(PNCP_WATCHES_KEY, JSON.stringify(Array.isArray(data) ? data : [])); }catch(e){}
+          try{ localStorage.setItem(PNCP_WATCHES_KEY, JSON.stringify(utils.fbToArray(data))); }catch(e){}
         }
         this.touchMeta("pncpWatches", ts);
         return;
       }
       if(key === "pncpAlerts"){
         if(LICSYSTEM.alertas){
-          LICSYSTEM.alertas.applyAlerts(Array.isArray(data) ? data : [], { skipPersist: false, skipCloud: true });
+          LICSYSTEM.alertas.applyAlerts(utils.fbToArray(data), { skipPersist: false, skipCloud: true });
         } else {
-          try{ localStorage.setItem(PNCP_ALERTS_KEY, JSON.stringify(Array.isArray(data) ? data : [])); }catch(e){}
+          try{ localStorage.setItem(PNCP_ALERTS_KEY, JSON.stringify(utils.fbToArray(data))); }catch(e){}
         }
         this.touchMeta("pncpAlerts", ts);
         return;
       }
       if(key === "arp"){
-        LICSYSTEM.arp.atas = Array.isArray(data) ? data : [];
+        LICSYSTEM.arp.atas = utils.fbToArray(data);
         try{ localStorage.setItem("licsystem_arp_v1", JSON.stringify(LICSYSTEM.arp.atas)); }catch(e){}
         this.touchMeta("arp", ts);
         try{ if(LICSYSTEM.arp.renderAll) LICSYSTEM.arp.renderAll(); }catch(e){}
         return;
       }
       if(key === "entregas"){
-        LICSYSTEM.entregas.items = Array.isArray(data) ? data : [];
+        LICSYSTEM.entregas.items = utils.fbToArray(data);
         try{ localStorage.setItem("licsystem_entregas_v1", JSON.stringify(LICSYSTEM.entregas.items)); }catch(e){}
         this.touchMeta("entregas", ts);
         try{
@@ -1476,7 +1551,7 @@
         return;
       }
       if(key === "histEntregas"){
-        LICSYSTEM.histEntregas.items = Array.isArray(data) ? data : [];
+        LICSYSTEM.histEntregas.items = utils.fbToArray(data);
         LICSYSTEM.histEntregas._loaded = true;
         try{ localStorage.setItem("licsystem_hist_entregas_v1", JSON.stringify(LICSYSTEM.histEntregas.items)); }catch(e){}
         this.touchMeta("histEntregas", ts);
@@ -1530,13 +1605,53 @@
       if(!env.updatedAt) env.updatedAt = Date.now();
       if(!env.writeId) env.writeId = self.newWriteId();
 
+      var dataForCloud = env.data;
+      if(key === "leiloesParticipo"){
+        dataForCloud = self.slimLeiloesForCloud(env.data);
+      } else if(key === "orcamento" && dataForCloud && typeof dataForCloud === "object" && !Array.isArray(dataForCloud)){
+        // Ensure items is a dense array with normalized fields (incl. pct).
+        dataForCloud = {
+          v: 2,
+          items: utils.fbToArray(dataForCloud.items).map(function(it){
+            return LICSYSTEM.orcamento.normalizeItem(it);
+          }),
+          meta: dataForCloud.meta || { nome: "", numero: "", catalogId: null },
+          page: Math.max(1, Number(dataForCloud.page) || 1),
+          savedAt: Number(dataForCloud.savedAt || env.updatedAt || Date.now()),
+          updatedAt: Number(dataForCloud.updatedAt || env.updatedAt || Date.now()),
+          cleared: !!dataForCloud.cleared
+        };
+      }
+
       self.setStatus("syncing", "Sincronizando…");
-      var payload = self.toFb({
+      var payload = self.stripNulls(self.toFb({
         updatedAt: env.updatedAt,
         cleared: !!env.cleared,
         writeId: env.writeId,
-        data: env.data
-      });
+        data: dataForCloud
+      }));
+      var bytes = utils.jsonByteLength(payload);
+      if(bytes > self.RTDB_SOFT_MAX_BYTES){
+        // Last resort for leiloes: drop report text entirely, keep orçamento rows.
+        if(key === "leiloesParticipo"){
+          dataForCloud = self.slimLeiloesForCloud(env.data).map(function(row){
+            if(row.workspace) row.workspace.relatorioMd = "";
+            return row;
+          });
+          payload = self.stripNulls(self.toFb({
+            updatedAt: env.updatedAt,
+            cleared: !!env.cleared,
+            writeId: env.writeId,
+            data: dataForCloud
+          }));
+          bytes = utils.jsonByteLength(payload);
+        }
+      }
+      if(bytes > self.RTDB_SOFT_MAX_BYTES){
+        console.warn("cloudSync push "+key+" too large ("+bytes+" bytes)");
+        self.setStatus("error", "Sync falhou (dados grandes)");
+        return Promise.resolve({ ok: false, error: new Error("payload-too-large"), bytes: bytes });
+      }
       self._echoAt[key] = Number(env.updatedAt) || 0;
       self._echoWriteId[key] = env.writeId;
       return utils.firebaseSet(path, payload).then(function(){
@@ -1545,7 +1660,12 @@
         return { ok: true };
       }).catch(function(err){
         console.warn("cloudSync push "+key, err);
-        self.setStatus("error", "Sync falhou");
+        var msg = (err && err.message) ? String(err.message) : "";
+        if(/too large|PAYLOAD|size|MAX_|Permission/i.test(msg)){
+          self.setStatus("error", "Sync falhou (limite nuvem)");
+        } else {
+          self.setStatus("error", "Sync falhou");
+        }
         return { ok: false, error: err };
       });
     },
@@ -1621,11 +1741,22 @@
 
     parseCloudEnv: function(raw){
       if(!raw || typeof raw !== "object") return null;
+      var data = raw.data !== undefined ? raw.data : raw;
+      if(data && typeof data === "object" && !Array.isArray(data)){
+        if(data.items != null){
+          data = Object.assign({}, data, { items: utils.fbToArray(data.items) });
+        } else {
+          var keys = Object.keys(data);
+          if(keys.length && keys.every(function(k){ return /^\d+$/.test(k); })){
+            data = utils.fbToArray(data);
+          }
+        }
+      }
       return {
         updatedAt: Number(raw.updatedAt || 0),
         cleared: !!raw.cleared,
         writeId: raw.writeId ? String(raw.writeId) : "",
-        data: raw.data !== undefined ? raw.data : raw
+        data: data
       };
     },
 
@@ -5062,6 +5193,19 @@
     emptyItem:function(){
       return {lote:"", qtd:1, qtdEstoque:0, produto:"", editalVunit:0, editalTotal:0, vunit:0, pct:0, link:"", compensa:null};
     },
+    /** Read % from pct / percentual / percent / "%" (legacy aliases). */
+    readPct:function(it){
+      it = it || {};
+      var raw = it.pct;
+      if(raw == null || raw === "") raw = it.percentual;
+      if(raw == null || raw === "") raw = it.percent;
+      if(raw == null || raw === "") raw = it["%"];
+      if(typeof raw === "string"){
+        raw = raw.replace(/%/g, "").replace(/\s/g, "").replace(",", ".");
+      }
+      var n = Number(raw);
+      return isFinite(n) ? n : 0;
+    },
     normalizeItem:function(it){
       it = it || {};
       var qtd = Number(it.qtd); if(!isFinite(qtd) || qtd < 0) qtd = 1;
@@ -5082,7 +5226,7 @@
         editalVunit: editalVunit,
         editalTotal: editalTotal,
         vunit: Number(it.vunit) || 0,
-        pct: Number(it.pct) || 0,
+        pct: LICSYSTEM.orcamento.readPct(it),
         link: String(it.link || ""),
         compensa: compensa
       };
@@ -5110,7 +5254,7 @@
           if(raw.page != null) LICSYSTEM.state.orcPage = Math.max(1, Number(raw.page) || 1);
         }
         if(items){
-          LICSYSTEM.state.orcItems = items.map(function(it){ return LICSYSTEM.orcamento.normalizeItem(it); });
+          LICSYSTEM.state.orcItems = utils.fbToArray(items).map(function(it){ return LICSYSTEM.orcamento.normalizeItem(it); });
         }
       }catch(e){}
       if(!LICSYSTEM.state.orcItems.length){
@@ -5137,19 +5281,20 @@
           updatedAt: now
         };
         if(opts.forceClear) payload.cleared = true;
-        // Com edital ativo: grava no workspace do leilão (independente).
-        // Sem edital ativo: mantém o orçamento global do app.
+        // Sempre grava o orçamento global (fonte da nuvem users/{uid}/orcamento),
+        // inclusive com edital ativo — assim % / vunit / todos os campos sincronizam entre PCs.
+        try{ localStorage.setItem(ORC_KEY, JSON.stringify(payload)); }catch(eLs){
+          console.warn("Orçamento: falha ao gravar localStorage.", eLs);
+        }
         if(LICSYSTEM.state.activeLeilaoId && LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.syncActiveOrcamento){
           LICSYSTEM.leiloesParticipo.syncActiveOrcamento(payload);
-        } else {
-          localStorage.setItem(ORC_KEY, JSON.stringify(payload));
-          if(!opts.skipCloud && LICSYSTEM.cloudSync){
-            LICSYSTEM.cloudSync.notifyLocalChange("orcamento", {
-              updatedAt: now,
-              forceClear: !!opts.forceClear,
-              immediate: !!opts.immediate
-            });
-          }
+        }
+        if(!opts.skipCloud && LICSYSTEM.cloudSync){
+          LICSYSTEM.cloudSync.notifyLocalChange("orcamento", {
+            updatedAt: now,
+            forceClear: !!opts.forceClear,
+            immediate: !!opts.immediate
+          });
         }
       }catch(e){
         console.warn("Orçamento: não foi possível salvar tudo no navegador (limite de armazenamento).", e);
@@ -5183,6 +5328,7 @@
         var it = LICSYSTEM.state.orcItems[i];
         if(!it || !f) continue;
         if(f === "produto" || f === "link" || f === "lote") it[f] = inp.value;
+        else if(f === "pct") it.pct = LICSYSTEM.orcamento.readPct({ pct: inp.value });
         else it[f] = Number(inp.value) || 0;
         if(f === "qtd" || f === "editalVunit"){
           if(Number(it.editalVunit) > 0){
@@ -5844,6 +5990,7 @@
     onEdit:function(i,f,val){
       var it=LICSYSTEM.state.orcItems[i]; if(!it) return;
       if(f==="produto"||f==="link"||f==="lote") it[f]=val;
+      else if(f==="pct") it.pct = LICSYSTEM.orcamento.readPct({ pct: val });
       else it[f]=Number(val)||0;
 
       if(f==="qtd" || f==="editalVunit"){
@@ -7550,7 +7697,7 @@
 
     applyData: function(list, opts){
       opts = opts || {};
-      var arr = Array.isArray(list) ? list : [];
+      var arr = utils.fbToArray(list);
       LICSYSTEM.leiloesParticipo.items = arr.map(function(it, i){
         return LICSYSTEM.leiloesParticipo.normalizeItem(it, i);
       });
@@ -7565,12 +7712,12 @@
     normalizeWorkspace: function(ws){
       ws = ws || {};
       var orc = ws.orcamento && typeof ws.orcamento === "object" ? ws.orcamento : {};
-      var items = Array.isArray(orc.items) ? orc.items : [];
+      var items = utils.fbToArray(orc.items);
       var meta = orc.meta && typeof orc.meta === "object" ? orc.meta : {};
       return {
         relatorioMd: String(ws.relatorioMd || "").slice(0, 100000),
         pdfKeywords: String(ws.pdfKeywords || "").slice(0, 300),
-        captacaoLines: Array.isArray(ws.captacaoLines) ? ws.captacaoLines.slice(0, 500) : [],
+        captacaoLines: utils.fbToArray(ws.captacaoLines).slice(0, 500),
         orcamento: {
           v: 2,
           items: items.slice(0, 500).map(function(row){
@@ -7583,7 +7730,7 @@
           },
           page: Math.max(1, Number(orc.page) || 1)
         },
-        cruzamentoAprovados: Array.isArray(ws.cruzamentoAprovados) ? ws.cruzamentoAprovados.slice(0, 300) : []
+        cruzamentoAprovados: utils.fbToArray(ws.cruzamentoAprovados).slice(0, 300)
       };
     },
 
@@ -7661,9 +7808,12 @@
       var item = LICSYSTEM.leiloesParticipo.getActiveItem();
       if(!item) return;
       if(!item.workspace) item.workspace = LICSYSTEM.leiloesParticipo.emptyWorkspace();
+      var rows = utils.fbToArray(payload && payload.items).slice(0, 500).map(function(row){
+        return LICSYSTEM.orcamento.normalizeItem(row);
+      });
       item.workspace.orcamento = {
         v: 2,
-        items: Array.isArray(payload && payload.items) ? payload.items.slice(0, 500) : [],
+        items: rows,
         meta: (payload && payload.meta) || { nome: "", numero: "", catalogId: null },
         page: Math.max(1, Number(payload && payload.page) || 1)
       };
@@ -7683,7 +7833,9 @@
         captacaoLines: Array.isArray(LICSYSTEM.state.captacaoLines) ? LICSYSTEM.state.captacaoLines : (prev.captacaoLines || []),
         orcamento: {
           v: 2,
-          items: Array.isArray(LICSYSTEM.state.orcItems) ? LICSYSTEM.state.orcItems : [],
+          items: utils.fbToArray(LICSYSTEM.state.orcItems).map(function(row){
+            return LICSYSTEM.orcamento.normalizeItem(row);
+          }),
           meta: {
             nome: LICSYSTEM.state.orcMetaNome || "",
             numero: LICSYSTEM.state.orcMetaNumero || "",
@@ -7717,7 +7869,7 @@
 
       if(opts.orcamento !== false){
         var orc = ws.orcamento || {};
-        var rows = Array.isArray(orc.items) ? orc.items : [];
+        var rows = utils.fbToArray(orc.items);
         LICSYSTEM.state.orcItems = rows.length
           ? rows.map(function(row){ return LICSYSTEM.orcamento.normalizeItem(row); })
           : [LICSYSTEM.orcamento.emptyItem()];
@@ -7726,6 +7878,7 @@
         LICSYSTEM.state.orcMetaNumero = meta.numero != null ? String(meta.numero) : "";
         LICSYSTEM.state.orcCatalogId = meta.catalogId != null ? meta.catalogId : null;
         LICSYSTEM.state.orcPage = Math.max(1, Number(orc.page) || 1);
+        LICSYSTEM.state._orcRendered = false;
         try{ LICSYSTEM.orcamento.updateMeta(); }catch(e){}
       }
 
