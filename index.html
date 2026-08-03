@@ -103,7 +103,7 @@
       <button data-view="catalogo"><span class="ico">📚</span> Catálogo</button>
       <button data-view="arp"><span class="ico">📄</span> Atas de Registro</button>
       <button data-view="disputa"><span class="ico">⚔️</span> Sala de Disputa</button>
-      <button data-view="ferramentas"><span class="ico">🛠️</span> Ferramentas</button>
+      <button data-view="ferramentas"><span class="ico">⚙️</span> Configurações</button>
 
       <div class="nav-group" data-nav-group="chat">
         <button type="button" class="nav-parent" data-nav-toggle="chat" aria-expanded="false">
@@ -883,32 +883,30 @@
           <div id="catalogoAlert" class="alert"></div>
           <div class="badge-edit-mode" id="catEditBadge">Editando produto — altere os campos e clique em Salvar.</div>
 
-          <div class="entrega-subcard" style="margin-bottom:18px">
-            <h3 style="margin:0 0 12px;font-size:13px;font-weight:700;color:var(--ls-navy)">Cadastro de produto</h3>
+          <div class="entrega-subcard cat-form-card">
+            <h3 class="cat-form-title">Cadastro de produto</h3>
             <input type="hidden" id="catEditId" value="" />
-            <div class="form-row">
-              <div style="flex:2">
+            <div class="cat-form-grid">
+              <div class="cat-field">
                 <label class="fld" for="catNome">Nome do Produto / Descrição</label>
                 <input type="text" id="catNome" placeholder="ex.: Abraçadeira Borboleta 12–20mm (kit 10)" />
               </div>
-              <div>
+              <div class="cat-field">
                 <label class="fld" for="catSku">Código / SKU</label>
                 <input type="text" id="catSku" placeholder="ex.: ABR-BOR-1220" />
               </div>
-            </div>
-            <div class="form-row">
-              <div>
+              <div class="cat-field">
                 <label class="fld" for="catPreco">Preço de Referência (R$)</label>
                 <input type="number" id="catPreco" min="0" step="0.01" placeholder="0,00" />
               </div>
-              <div>
+              <div class="cat-field">
                 <label class="fld" for="catMarca">Marca / Fabricante</label>
                 <input type="text" id="catMarca" placeholder="ex.: Vonder" />
               </div>
-              <div style="display:flex;align-items:flex-end;gap:8px;flex:0 0 auto">
-                <button type="button" class="btn btn-green" id="btnSalvarProduto">💾 Salvar Produto</button>
-                <button type="button" class="btn btn-ghost" id="btnCancelarEditCat" style="display:none">Cancelar edição</button>
-              </div>
+            </div>
+            <div class="cat-form-actions">
+              <button type="button" class="btn btn-ghost" id="btnCancelarEditCat" style="display:none">Cancelar edição</button>
+              <button type="button" class="btn btn-green" id="btnSalvarProduto">💾 Salvar Produto</button>
             </div>
           </div>
 
@@ -1103,58 +1101,54 @@
         </div>
       </section>
 
-      <!-- ===================== FERRAMENTAS ===================== -->
+      <!-- ===================== CONFIGURAÇÕES ===================== -->
       <section id="view-ferramentas" class="view">
         <div class="card">
           <div class="card-head">
-            <h2>🛠️ Perfil da Empresa</h2>
+            <h2>⚙️ Configurações</h2>
             <button class="btn btn-primary" id="btnSalvarPerfil">💾 Salvar perfil</button>
           </div>
-          <div class="desc">Dados usados no cabeçalho dos PDFs. Persistidos em <b>empresa_perfil</b> no Firebase.</div>
           <div id="ferramentasStatus" class="alert"></div>
-          <div class="form-row">
-            <div style="flex:2">
-              <label class="fld">Nome</label>
+          <div class="cfg-form-grid">
+            <div class="cfg-field">
+              <label class="fld" for="empNome">Nome</label>
               <input type="text" id="empNome" placeholder="Razão social / nome fantasia" />
             </div>
-            <div>
-              <label class="fld">CNPJ</label>
+            <div class="cfg-field">
+              <label class="fld" for="empCnpj">CNPJ</label>
               <input type="text" id="empCnpj" placeholder="00.000.000/0000-00" />
             </div>
-          </div>
-          <div class="form-row">
-            <div style="flex:2">
-              <label class="fld">Endereço</label>
+            <div class="cfg-field cfg-field-span2">
+              <label class="fld" for="empEndereco">Endereço</label>
               <input type="text" id="empEndereco" placeholder="Rua, número, bairro, cidade/UF" />
             </div>
-            <div>
-              <label class="fld">Telefone</label>
+            <div class="cfg-field">
+              <label class="fld" for="empTelefone">Telefone</label>
               <input type="text" id="empTelefone" placeholder="(00) 00000-0000" />
             </div>
-            <div>
-              <label class="fld">CEP (frete / cruzamento)</label>
+            <div class="cfg-field">
+              <label class="fld" for="empCep">CEP (frete / cruzamento)</label>
               <input type="text" id="empCep" placeholder="00000-000" />
             </div>
-          </div>
-          <div class="form-row">
-            <div>
-              <label class="fld">Logo (PNG/JPG — convertido para Base64)</label>
-              <input type="file" id="empLogo" accept="image/png,image/jpeg,image/webp,image/gif" />
-              <div class="small muted" style="margin-top:6px">Máx. recomendado ~500 KB para PDFs leves.</div>
-            </div>
-            <div style="display:flex;align-items:center;justify-content:center;min-height:80px">
-              <img id="empLogoPreview" alt="Prévia do logo" style="display:none;max-height:72px;max-width:180px;object-fit:contain;border:1px solid var(--ls-line);border-radius:10px;padding:6px;background:#fff" />
+            <div class="cfg-field cfg-field-span2">
+              <label class="fld" for="empLogo">Logo (PNG/JPG — convertido para Base64)</label>
+              <div class="cfg-logo-row">
+                <input type="file" id="empLogo" accept="image/png,image/jpeg,image/webp,image/gif" />
+                <div class="cfg-logo-preview">
+                  <img id="empLogoPreview" alt="Prévia do logo" hidden />
+                </div>
+              </div>
+              <div class="small muted cfg-logo-hint">Máx. recomendado ~500 KB para PDFs leves.</div>
             </div>
           </div>
         </div>
 
         <div class="card">
-          <div class="card-head"><h2>📦 Backup Firebase</h2></div>
-          <div class="desc">Exporte o nó <b>licitacoes/</b> ou importe um JSON na raiz do Realtime Database.</div>
+          <div class="card-head"><h2>📦 Backup</h2></div>
           <div id="backupStatus" class="alert"></div>
           <div class="btn-row">
-            <button class="btn btn-gold" id="btnExportBackup">⬇️ Exportar backup (licitacoes/)</button>
-            <button class="btn btn-ghost" id="btnImportBackup">⬆️ Importar backup (raiz)</button>
+            <button class="btn btn-gold" id="btnExportBackup">⬇️ Exportar backup</button>
+            <button class="btn btn-ghost" id="btnImportBackup">⬆️ Importar backup</button>
             <input type="file" id="backupFile" accept="application/json,.json" style="display:none" />
           </div>
         </div>
