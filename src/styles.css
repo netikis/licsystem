@@ -979,7 +979,7 @@
   .orc-table col.c-money-venda{width:110px}
   .orc-table col.c-pct{width:76px}
   .orc-table col.c-link{width:96px}
-  .orc-table col.c-actions{width:220px}
+  .orc-table col.c-actions{width:150px}
 
   .orc-table thead th{
     position:static;z-index:auto;
@@ -1095,9 +1095,7 @@
   .orc-actions .orcGoogle,
   .orc-actions .orcMl,
   .orc-actions .orcOpenLink,
-  .orc-actions .orcDel,
-  .orc-actions .orcCompensa,
-  .orc-actions .orcNaoCompensa{padding:3px 5px;flex-shrink:0}
+  .orc-actions .orcDel{padding:3px 5px;flex-shrink:0}
   .orc-actions .orcOpenLink{
     font-size:9.5px;font-weight:800;letter-spacing:.2px;text-transform:uppercase;
   }
@@ -1111,23 +1109,18 @@
   .orc-actions .orcOpenLink.is-ready:hover{
     background:#eef2f8;border-color:var(--ls-navy-3);
   }
-  .orc-actions .orcCompensa,
-  .orc-actions .orcNaoCompensa{
-    font-size:10px;letter-spacing:.15px;white-space:nowrap;line-height:1.15;
-    border:1px solid transparent;font-weight:700;min-width:22px;
-  }
-  .orc-actions .orcCompensa:not(.is-active){
-    background:var(--ls-green-bg);color:var(--ls-green);border-color:#b6e3ca;
-  }
-  .orc-actions .orcCompensa:not(.is-active):hover{background:#d4f0e2}
-  .orc-actions .orcCompensa.is-active{background:var(--ls-green);color:#fff;border-color:var(--ls-green)}
-  .orc-actions .orcNaoCompensa:not(.is-active){
-    background:var(--ls-red-bg);color:var(--ls-red);border-color:#f2c4c4;
-  }
-  .orc-actions .orcNaoCompensa:not(.is-active):hover{background:#f7d4d4}
-  .orc-actions .orcNaoCompensa.is-active{background:var(--ls-red);color:#fff;border-color:var(--ls-red)}
   .orc-actions .orcDel{opacity:.65}
   .orc-actions .orcDel:hover{opacity:1}
+  .orc-meus-final{
+    display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0;
+  }
+  .orc-compensa-badge{
+    display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.2px;
+    text-transform:uppercase;padding:2px 6px;border-radius:999px;line-height:1.2;
+  }
+  .orc-compensa-badge.is-ok{background:var(--ls-green);color:#fff}
+  .orc-compensa-badge.is-bad{background:var(--ls-red);color:#fff}
+  .orc-compensa-badge.is-empty{display:none}
   .orc-table tbody tr.orc-row-compensa td{background:#f0faf4}
   .orc-table tbody tr.orc-row-compensa:nth-child(even) td{background:#e8f6ee}
   .orc-table tbody tr.orc-row-compensa:hover td{background:#dff3e8}

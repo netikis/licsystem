@@ -5227,9 +5227,6 @@
       var editalTotal = Number(it.editalTotal != null ? it.editalTotal : 0) || 0;
       if(!editalTotal && editalVunit) editalTotal = qtd * editalVunit;
       if(!editalVunit && editalTotal && qtd) editalVunit = editalTotal / qtd;
-      var compensa = null;
-      if(it.compensa === true || it.compensa === "true" || it.statusCompensa === "compensa") compensa = true;
-      else if(it.compensa === false || it.compensa === "false" || it.statusCompensa === "nao") compensa = false;
       var pctManual = !!(it.pctManual === true || it.pctManual === "true");
       var out = {
         lote: it.lote != null && it.lote !== "" ? String(it.lote) : "",
@@ -5243,11 +5240,12 @@
         pct: 0,
         pctManual: pctManual,
         link: String(it.link || ""),
-        compensa: compensa
+        compensa: null
       };
       out.pct = pctManual
         ? LICSYSTEM.orcamento.readPct(it)
         : LICSYSTEM.orcamento.calcPctAuto(out);
+      out.compensa = LICSYSTEM.orcamento.autoCompensa(out);
       return out;
     },
     isEmptyRow:function(it){
@@ -5430,6 +5428,32 @@
       var v = Number(it.valorVenda) || 0;
       return q * v;
     },
+    /**
+     * Compensa automático:
+     * - meu V.Final <= edital V.Final → true (verde)
+     * - meu V.Final > edital V.Final → false (vermelho)
+     * - sem valores → null
+     */
+    autoCompensa:function(it){
+      var meus = LICSYSTEM.orcamento.calcTotal(it);
+      var edital = LICSYSTEM.orcamento.calcEditalTotal(it);
+      if(!(meus > 0) || !(edital > 0)) return null;
+      return meus <= edital;
+    },
+    syncCompensa:function(it){
+      if(!it) return null;
+      it.compensa = LICSYSTEM.orcamento.autoCompensa(it);
+      return it.compensa;
+    },
+    compensaBadgeHtml:function(compensa){
+      if(compensa === true){
+        return '<span class="orc-compensa-badge is-ok" data-compensa-badge>Compensa</span>';
+      }
+      if(compensa === false){
+        return '<span class="orc-compensa-badge is-bad" data-compensa-badge>Não compensa</span>';
+      }
+      return '<span class="orc-compensa-badge is-empty" data-compensa-badge></span>';
+    },
     pageCount:function(){
       var n = LICSYSTEM.state.orcItems.length;
       var size = LICSYSTEM.state.orcPageSize || 100;
@@ -5521,12 +5545,11 @@
         }
         var risco = utils.riscoMatch(it.produto);
         var flag = risco.length ? '<span class="risk-flag" title="Risco: '+utils.escapeHtml(risco.join(", "))+'">⚠</span>' : "";
+        var compensa = LICSYSTEM.orcamento.syncCompensa(it);
         var rowCls = [];
         if(risco.length) rowCls.push("risk-row");
-        if(it.compensa === true) rowCls.push("orc-row-compensa");
-        else if(it.compensa === false) rowCls.push("orc-row-nao-compensa");
-        var btnCompensaCls = "btn btn-sm orcCompensa"+(it.compensa === true ? " is-active" : "");
-        var btnNaoCls = "btn btn-sm orcNaoCompensa"+(it.compensa === false ? " is-active" : "");
+        if(compensa === true) rowCls.push("orc-row-compensa");
+        else if(compensa === false) rowCls.push("orc-row-nao-compensa");
         var hasLink = !!(String(it.link || "").trim());
         var btnLinkCls = "btn btn-ghost btn-sm orcOpenLink"+(hasLink ? " is-ready" : "");
         if(!it.pctManual) it.pct = LICSYSTEM.orcamento.calcPctAuto(it);
@@ -5545,14 +5568,15 @@
             '<td class="td-money split-start"><input type="number" data-i="'+i+'" data-f="vunit" value="'+utils.escapeHtml(it.vunit)+'" step="0.01" min="0" title="Meu custo / preço de compra (unitário)"></td>'+
             '<td class="td-money"><input type="number" data-i="'+i+'" data-f="valorVenda" value="'+utils.escapeHtml(it.valorVenda)+'" step="0.01" min="0" title="Valor de venda (unitário)"></td>'+
             '<td class="td-pct"><input type="number" class="'+pctCls+'" data-i="'+i+'" data-f="pct" data-pct-field="'+i+'" value="'+(Math.round(pctNow*10)/10)+'" step="0.1" title="'+(it.pctManual?"% manual (ignora automático)":"% lucro automática — digite para definir manualmente")+'"></td>'+
-            '<td class="td-money"><span class="cell-total" data-meus-total="'+i+'">'+utils.formatBrl(totalMeus)+'</span></td>'+
+            '<td class="td-money td-meus-final"><div class="orc-meus-final" data-meus-final="'+i+'">'+
+              '<span class="cell-total" data-meus-total="'+i+'">'+utils.formatBrl(totalMeus)+'</span>'+
+              LICSYSTEM.orcamento.compensaBadgeHtml(compensa)+
+            '</div></td>'+
             '<td class="td-link"><input type="text" data-i="'+i+'" data-f="link" value="'+utils.escapeHtml(it.link||"")+'" placeholder="Link"></td>'+
             '<td class="td-actions"><div class="orc-actions">'+
               '<button type="button" class="btn btn-ghost btn-sm orcGoogle" data-i="'+i+'" title="Google">G</button>'+
               '<button type="button" class="btn btn-ghost btn-sm orcMl" data-i="'+i+'" title="Mercado Livre">ML</button>'+
               '<button type="button" class="'+btnLinkCls+'" data-i="'+i+'" title="'+(hasLink?"Abrir link de acesso":"Cole um link no campo Link de Acesso")+'"'+(hasLink?"":" disabled")+'>LINK</button>'+
-              '<button type="button" class="'+btnCompensaCls+'" data-i="'+i+'" title="COMPENSA">(C)</button>'+
-              '<button type="button" class="'+btnNaoCls+'" data-i="'+i+'" title="NÃO COMPENSA">(N)</button>'+
               '<button type="button" class="btn btn-ghost btn-sm orcDel" data-i="'+i+'" title="Remover">✕</button>'+
             '</div></td>'+
           '</tr>'
@@ -6147,8 +6171,16 @@
         var meCell = row.querySelector('[data-meus-total="'+i+'"]');
         var pctInp = row.querySelector('[data-pct-field="'+i+'"]');
         var vendaInp = row.querySelector('input[data-i="'+i+'"][data-f="valorVenda"]');
+        var badge = row.querySelector("[data-compensa-badge]");
+        var compensa = LICSYSTEM.orcamento.syncCompensa(it);
         if(edCell) edCell.textContent = utils.formatBrl(LICSYSTEM.orcamento.calcEditalTotal(it));
         if(meCell) meCell.textContent = utils.formatBrl(LICSYSTEM.orcamento.calcTotal(it));
+        row.classList.toggle("orc-row-compensa", compensa === true);
+        row.classList.toggle("orc-row-nao-compensa", compensa === false);
+        if(badge){
+          badge.className = "orc-compensa-badge"+(compensa === true ? " is-ok" : (compensa === false ? " is-bad" : " is-empty"));
+          badge.textContent = compensa === true ? "Compensa" : (compensa === false ? "Não compensa" : "");
+        }
         if(f==="pct" && vendaInp){
           vendaInp.value = String(Number(it.valorVenda) || 0);
         }
@@ -9671,28 +9703,6 @@
         LICSYSTEM.state.orcItems.splice(i,1);
         if(!LICSYSTEM.state.orcItems.length) LICSYSTEM.state.orcItems.push(LICSYSTEM.orcamento.emptyItem());
         LICSYSTEM.orcamento.render({ sync:false });
-        return;
-      }
-      var yes = e.target.closest(".orcCompensa");
-      if(yes){
-        LICSYSTEM.orcamento.syncFromDom();
-        var iy = Number(yes.getAttribute("data-i"));
-        var ity = LICSYSTEM.state.orcItems[iy];
-        if(ity){
-          ity.compensa = (ity.compensa === true) ? null : true;
-          LICSYSTEM.orcamento.render({ sync:false });
-        }
-        return;
-      }
-      var no = e.target.closest(".orcNaoCompensa");
-      if(no){
-        LICSYSTEM.orcamento.syncFromDom();
-        var ino = Number(no.getAttribute("data-i"));
-        var itn = LICSYSTEM.state.orcItems[ino];
-        if(itn){
-          itn.compensa = (itn.compensa === false) ? null : false;
-          LICSYSTEM.orcamento.render({ sync:false });
-        }
         return;
       }
       var g = e.target.closest(".orcGoogle");
