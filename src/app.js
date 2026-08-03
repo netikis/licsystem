@@ -9577,6 +9577,14 @@
     LICSYSTEM.state.currentView = view;
     try{ localStorage.setItem(LAST_VIEW_KEY, navKey || view); }catch(e){}
     try{ LICSYSTEM.leiloesParticipo.updateContextBar(); }catch(e){}
+    // Reaplica idioma na tela ativa (textos estáticos + data-i18n)
+    try{
+      if(LICSYSTEM.i18n && typeof LICSYSTEM.i18n.apply === "function"){
+        var viewEl = document.getElementById("view-" + view);
+        if(viewEl) LICSYSTEM.i18n.apply(viewEl);
+        else LICSYSTEM.i18n.apply(document);
+      }
+    }catch(e){}
 
     // Não remonta telas pesadas a cada clique no menu
     if(view==="dashboard"){
