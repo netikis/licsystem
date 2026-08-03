@@ -77,17 +77,7 @@
 
       <button data-view="analiseIa"><span class="ico">🤖</span> <span data-i18n="nav.analiseIa">Análise IA</span></button>
 
-      <div class="nav-group" data-nav-group="leilao">
-        <button type="button" class="nav-parent" data-view="leiloesParticipo" data-nav-toggle="leilao" aria-expanded="false">
-          <span class="ico">🏆</span><span class="nav-label" data-i18n="nav.leiloesParticipo">Leilão que Participo</span><span class="nav-chevron" aria-hidden="true"></span>
-        </button>
-        <div class="nav-children" role="group" data-i18n-aria="nav.leiloesParticipo" aria-label="Leilão que Participo" hidden>
-          <button type="button" data-view="docsChecklist"><span class="ico">✅</span> <span data-i18n="nav.docsChecklist">Docs do Edital</span></button>
-          <button type="button" data-view="importarEdital"><span class="ico">📥</span> <span data-i18n="nav.importarEdital">Importar Edital (PDF)</span></button>
-          <button type="button" data-view="orcamento"><span class="ico">🧮</span> <span data-i18n="nav.orcamento">Orçamento</span></button>
-          <button type="button" data-view="cruzamento"><span class="ico">🔀</span> <span data-i18n="nav.cruzamento">Cruzamento ML</span></button>
-        </div>
-      </div>
+      <button data-view="leiloesParticipo"><span class="ico">🏆</span> <span class="nav-label" data-i18n="nav.leiloesParticipo">Leilão que Participo</span></button>
 
       <div class="nav-group" data-nav-group="entrega">
         <button type="button" class="nav-parent" data-view="entregas" data-nav-toggle="entrega" aria-expanded="false">
@@ -601,6 +591,7 @@
             <div class="btn-row" style="margin:0">
               <button class="btn btn-ghost btn-sm" id="btnAddLinha">+ Linha</button>
               <button class="btn btn-ghost btn-sm" id="btnLimparOrc">Limpar</button>
+              <button class="btn btn-green btn-sm" id="btnSalvarOrc" title="Grava os itens no navegador e na nuvem agora">💾 Salvar orçamento</button>
               <button class="btn btn-ghost btn-sm" id="btnExportOrcExcel">⬇️ Excel</button>
               <button class="btn btn-ghost btn-sm" id="btnExportOrcPdf">⬇️ PDF</button>
               <button class="btn btn-primary btn-sm" id="btnSalvarOrcCatalogo">💾 Salvar no Catálogo</button>
