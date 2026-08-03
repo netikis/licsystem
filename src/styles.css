@@ -967,15 +967,16 @@
     width:100%;max-width:100%;max-height:min(70vh,780px);
   }
   .orc-table{
-    width:100%;min-width:1280px;border-collapse:collapse;table-layout:fixed;
+    width:100%;min-width:1420px;border-collapse:collapse;table-layout:fixed;
     font-size:12.5px;
   }
   .orc-table col.c-chk{width:36px}
   .orc-table col.c-lote{width:72px}
   .orc-table col.c-qtd{width:76px}
-  .orc-table col.c-desc{width:140px;min-width:140px;max-width:140px}
+  .orc-table col.c-desc{width:182px;min-width:182px;max-width:182px}
   .orc-table col.c-money{width:120px}
   .orc-table col.c-money-meus{width:100px}
+  .orc-table col.c-money-venda{width:110px}
   .orc-table col.c-pct{width:76px}
   .orc-table col.c-link{width:96px}
   .orc-table col.c-actions{width:220px}
@@ -1041,28 +1042,25 @@
   .orc-table tbody input.orc-qtd::-webkit-inner-spin-button{
     -webkit-appearance:none;margin:0;
   }
-  /* % automática — balão ao lado do V. Unitário (MEUS PREÇOS) */
-  .orc-table tbody input.orc-pct,
-  .orc-table tbody .orc-pct-auto{
+  /* % lucro — automática pelo Valor de Venda; editável (manual ignora auto) */
+  .orc-table tbody input.orc-pct{
     display:block;width:100%;min-width:56px;max-width:100%;
     margin:0 auto;text-align:center;
     padding:6px 8px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;
     border-radius:var(--ls-radius-balloon);line-height:1.2;
     -moz-appearance:textfield;
     appearance:textfield;
+    background:#f7f9fc;
   }
-  .orc-table tbody .orc-pct-auto{
-    border:1px solid var(--ls-line);background:#f7f9fc;color:var(--ls-navy);
-    box-sizing:border-box;cursor:default;user-select:none;
-  }
-  .orc-table tbody .orc-pct-auto.is-neg{color:var(--ls-red);background:var(--ls-red-bg)}
-  .orc-table tbody .orc-pct-auto.is-pos{color:var(--ls-green);background:var(--ls-green-bg)}
+  .orc-table tbody input.orc-pct.is-neg{color:var(--ls-red);background:var(--ls-red-bg)}
+  .orc-table tbody input.orc-pct.is-pos{color:var(--ls-green);background:var(--ls-green-bg)}
+  .orc-table tbody input.orc-pct.is-manual{background:#fff8e8;border-color:#e0c56a}
   .orc-table tbody input.orc-pct::-webkit-outer-spin-button,
   .orc-table tbody input.orc-pct::-webkit-inner-spin-button{
     -webkit-appearance:none;margin:0;
   }
   .orc-table tbody td.td-desc{
-    max-width:140px;overflow:hidden;
+    max-width:182px;overflow:hidden;
   }
   .orc-table tbody td.td-desc input{
     max-width:100%;
