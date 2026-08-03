@@ -8375,10 +8375,12 @@
       if(prev){
         if(perfil.logoBase64){
           prev.src = perfil.logoBase64;
-          prev.style.display = "block";
+          prev.removeAttribute("hidden");
+          prev.style.display = "";
         } else {
           prev.removeAttribute("src");
-          prev.style.display = "none";
+          prev.setAttribute("hidden", "");
+          prev.style.display = "";
         }
       }
       LICSYSTEM.ferramentas._logoPending = perfil.logoBase64 || null;
@@ -8411,7 +8413,7 @@
           logoBase64: logoBase64
         });
       }).then(function(){
-        showAlert("ferramentasStatus","ok","✅ Perfil salvo em empresa_perfil.");
+        showAlert("ferramentasStatus","ok","✅ Perfil salvo.");
         if(el("empLogo")) el("empLogo").value = "";
       }).catch(function(err){
         showAlert("ferramentasStatus","error","Falha ao salvar: "+utils.escapeHtml(err.message));
@@ -8424,14 +8426,14 @@
       LICSYSTEM.ferramentas.fileToBase64(file).then(function(b64){
         LICSYSTEM.ferramentas._logoPending = b64;
         var prev = el("empLogoPreview");
-        if(prev){ prev.src = b64; prev.style.display = "block"; }
+        if(prev){ prev.src = b64; prev.removeAttribute("hidden"); prev.style.display = ""; }
       }).catch(function(err){
         showAlert("ferramentasStatus","warn",utils.escapeHtml(err.message));
       });
     },
 
     exportarBackup: function(){
-      showAlert("backupStatus","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Exportando licitacoes/…');
+      showAlert("backupStatus","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Exportando backup…');
       utils.firebaseGet("licitacoes").then(function(data){
         var payload = {
           exportadoEm: new Date().toISOString(),
@@ -8447,7 +8449,7 @@
         a.click();
         a.remove();
         setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
-        showAlert("backupStatus","ok","✅ Backup baixado (nó licitacoes/).");
+        showAlert("backupStatus","ok","✅ Backup baixado.");
       }).catch(function(err){
         showAlert("backupStatus","error","Falha ao exportar: "+utils.escapeHtml(err.message));
       });
@@ -8455,7 +8457,7 @@
 
     importarBackup: function(file){
       if(!file){ showAlert("backupStatus","warn","Selecione um arquivo JSON."); return; }
-      if(!confirm("Importar backup na raiz do Firebase?\nIsso pode sobrescrever dados existentes na raiz do Realtime Database.")) return;
+      if(!confirm("Importar este backup?\nIsso pode sobrescrever dados existentes.")) return;
       showAlert("backupStatus","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Importando…');
       var reader = new FileReader();
       reader.onload = function(){
@@ -8468,9 +8470,9 @@
             if(LICSYSTEM.state.empresaPerfil) rootPayload.empresa_perfil = LICSYSTEM.state.empresaPerfil;
           }
           utils.firebaseSet("/", rootPayload).then(function(){
-            showAlert("backupStatus","ok","✅ Backup importado na raiz do Firebase.");
+            showAlert("backupStatus","ok","✅ Backup importado.");
           }).catch(function(err){
-            showAlert("backupStatus","error","Falha no firebaseSet: "+utils.escapeHtml(err.message));
+            showAlert("backupStatus","error","Falha ao importar: "+utils.escapeHtml(err.message));
           });
         }catch(err){
           showAlert("backupStatus","error","JSON inválido: "+utils.escapeHtml(err.message));
@@ -9492,7 +9494,7 @@
     catalogo:'Catálogo Interno',
     arp:'Atas de Registro (ARP)',
     disputa:'Sala de Disputa',
-    ferramentas:'Ferramentas',
+    ferramentas:'Configurações',
     chat:'Pergunte ao Chat',
     suporte:'Suporte LICSYSTEM',
     'chat-ia':'Chat IA'
