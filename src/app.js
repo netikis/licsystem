@@ -5386,6 +5386,7 @@
         else if(f === "pct"){
           it.pct = LICSYSTEM.orcamento.readPct({ pct: inp.value });
           it.pctManual = true;
+          it.valorVenda = LICSYSTEM.orcamento.calcValorVendaFromPct(it);
         } else it[f] = Number(inp.value) || 0;
         if(f === "qtd" || f === "editalVunit"){
           if(Number(it.editalVunit) > 0){
@@ -5409,6 +5410,13 @@
       var venda = Number(it && it.valorVenda) || 0;
       if(!(custo > 0) || !(venda > 0)) return 0;
       return Math.round(((venda - custo) / custo) * 1000) / 10;
+    },
+    /** Valor de Venda a partir da % desejada: custo × (1 + %/100) */
+    calcValorVendaFromPct:function(it){
+      var custo = Number(it && it.vunit) || 0;
+      var p = Number(it && it.pct) || 0;
+      if(!(custo > 0)) return 0;
+      return Math.round(custo * (1 + p / 100) * 100) / 100;
     },
     formatPctAuto:function(pct){
       var n = Number(pct) || 0;
@@ -6109,6 +6117,7 @@
       else if(f==="pct"){
         it.pct = LICSYSTEM.orcamento.readPct({ pct: val });
         it.pctManual = true;
+        it.valorVenda = LICSYSTEM.orcamento.calcValorVendaFromPct(it);
       } else {
         // Preserve empty mid-edit so number inputs are not forced to 0 until committed.
         if(val === "" || val == null){
@@ -6137,8 +6146,12 @@
         var edCell = row.querySelector('[data-edital-total="'+i+'"]');
         var meCell = row.querySelector('[data-meus-total="'+i+'"]');
         var pctInp = row.querySelector('[data-pct-field="'+i+'"]');
+        var vendaInp = row.querySelector('input[data-i="'+i+'"][data-f="valorVenda"]');
         if(edCell) edCell.textContent = utils.formatBrl(LICSYSTEM.orcamento.calcEditalTotal(it));
         if(meCell) meCell.textContent = utils.formatBrl(LICSYSTEM.orcamento.calcTotal(it));
+        if(f==="pct" && vendaInp){
+          vendaInp.value = String(Number(it.valorVenda) || 0);
+        }
         if(pctInp && f!=="pct"){
           var pctNow = Number(it.pct) || 0;
           pctInp.value = String(Math.round(pctNow * 10) / 10);
@@ -6146,13 +6159,13 @@
           pctInp.classList.toggle("is-neg", pctNow < 0);
           pctInp.classList.toggle("is-manual", !!it.pctManual);
           pctInp.title = it.pctManual
-            ? "% manual (ignora automático)"
-            : "% lucro automática — digite para definir manualmente";
+            ? "% manual — Valor de Venda calculado a partir do custo"
+            : "% lucro automática — digite a % desejada para calcular o Valor de Venda";
         } else if(pctInp && f==="pct"){
           pctInp.classList.add("is-manual");
           pctInp.classList.toggle("is-pos", Number(it.pct) > 0);
           pctInp.classList.toggle("is-neg", Number(it.pct) < 0);
-          pctInp.title = "% manual (ignora automático)";
+          pctInp.title = "% manual — Valor de Venda calculado a partir do custo";
         }
         if(f==="link"){
           var linkBtn = row.querySelector(".orcOpenLink");
