@@ -9504,7 +9504,15 @@
     suporte:'Suporte LICSYSTEM',
     'chat-ia':'Chat IA'
   };
-  LICSYSTEM.VIEW_TITLES = VIEW_TITLES;
+  LICSYSTEM.VIEW_TITLES = (LICSYSTEM.i18n && typeof LICSYSTEM.i18n.viewTitles === "function")
+    ? LICSYSTEM.i18n.viewTitles()
+    : VIEW_TITLES;
+  try{
+    if(LICSYSTEM.i18n && typeof LICSYSTEM.i18n.apply === "function"){
+      LICSYSTEM.i18n.wire();
+      LICSYSTEM.i18n.apply(document);
+    }
+  }catch(e){}
 
   LICSYSTEM.beforeActivateView = function(view, opts){
     opts = opts || {};

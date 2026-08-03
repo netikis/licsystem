@@ -157,30 +157,32 @@
         views[j].classList.toggle("active", views[j].id===("view-"+targetView));
       }
       var titleEl=document.getElementById("topTitle");
-      var map={
-        dashboard:"Dashboard",
-        pesquisas:"Pesquisas de Editais",
-        perguntarEditais:"Perguntar editais",
-        editaisProximos:"Editais próximos",
-        radarPncp:"Radar PNCP",
-        captacao:"Pesquisas de Editais",
-        analiseIa:"Análise Inteligente de Editais",
-        leiloesParticipo:"Leilão que Participo",
-        leilaoWorkspace:"Painel do Edital",
-        importarEdital:"Importar Edital (PDF)",
-        orcamento:"Orçamento",
-        cruzamento:"Cruzamento Inteligente (ML)",
-        cofre:"Cofre de Documentos",
-        docsChecklist:"Docs do Edital",
-        entregas:"Entrega",
-        histEntregas:"Histórico de Entregas",
-        concorrencia:"Análise de Concorrência",
-        catalogo:"Catálogo Interno",
-        arp:"Atas de Registro (ARP)",
-        disputa:"Robô de Disputa",
-        ferramentas:"Configurações",
-        chat:"Pergunte ao Chat"
-      };
+      var map = (window.LICSYSTEM && LICSYSTEM.i18n && typeof LICSYSTEM.i18n.viewTitles === "function")
+        ? LICSYSTEM.i18n.viewTitles()
+        : {
+            dashboard:"Dashboard",
+            pesquisas:"Pesquisas de Editais",
+            perguntarEditais:"Perguntar editais",
+            editaisProximos:"Editais próximos",
+            radarPncp:"Radar PNCP",
+            captacao:"Pesquisas de Editais",
+            analiseIa:"Análise Inteligente de Editais",
+            leiloesParticipo:"Leilão que Participo",
+            leilaoWorkspace:"Painel do Edital",
+            importarEdital:"Importar Edital (PDF)",
+            orcamento:"Orçamento",
+            cruzamento:"Cruzamento Inteligente (ML)",
+            cofre:"Cofre de Documentos",
+            docsChecklist:"Docs do Edital",
+            entregas:"Entrega",
+            histEntregas:"Histórico de Entregas",
+            concorrencia:"Análise de Concorrência",
+            catalogo:"Catálogo Interno",
+            arp:"Atas de Registro (ARP)",
+            disputa:"Robô de Disputa",
+            ferramentas:"Configurações",
+            chat:"Pergunte ao Chat"
+          };
       if(titleEl) titleEl.textContent = map[navKey]||map[targetView]||"LICSYSTEM";
       if(!opts.skipEnsureGroup) ensureGroupForView(navKey);
       try{ if(window.LICSYSTEM && LICSYSTEM.onViewChange) LICSYSTEM.onViewChange(targetView, navKey); }catch(e){}
