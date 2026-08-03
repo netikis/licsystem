@@ -146,7 +146,7 @@
         var bv = btn.getAttribute("data-view");
         var isParent = btn.classList.contains("nav-parent");
         var gid = btn.getAttribute("data-nav-toggle");
-        var isActive = bv === navKey;
+        var isActive = bv === navKey || (bv === "leiloesParticipo" && CHILD_TO_GROUP[navKey] === "leilao");
         var branchActive = isParent && gid && CHILD_TO_GROUP[navKey] === gid && !isActive;
         btn.classList.toggle("active", isActive);
         btn.classList.toggle("nav-branch-active", !!branchActive);
