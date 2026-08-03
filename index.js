@@ -4,6 +4,7 @@
  */
 import "./src/styles.css";
 import "./firebaseConfig.js";
+import "./src/i18n.js";
 import "./src/nav.js";
 import "./src/app.js";
 import "./src/voiceflow.js";
