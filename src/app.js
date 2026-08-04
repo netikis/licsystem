@@ -6645,6 +6645,10 @@
     data: { v: 2, items: [] },
     _pendingFile: null,
     _selected: {},
+    _attachTargetId: null,
+    _viewBlobUrl: null,
+    _viewZoom: 1,
+    _viewItemId: null,
 
     emptyData: function(){
       return { v: 2, items: [] };
@@ -6868,8 +6872,8 @@
       var info = el("cofreArquivoInfo");
       if(info){
         info.textContent = editing && item.arquivoNome
-          ? ("Arquivo atual: " + item.arquivoNome + " (envie outro para substituir)")
-          : "Nenhum arquivo anexado.";
+          ? ("Arquivo atual: " + item.arquivoNome + " — envie outro para substituir (máx. 1,5 MB, sem compressão)")
+          : "Nenhum arquivo anexado. PDF ou imagem até 1,5 MB (qualidade original).";
       }
       ov.classList.add("open");
       ov.setAttribute("aria-hidden","false");
@@ -6888,19 +6892,219 @@
       return new Promise(function(resolve, reject){
         if(!file){ resolve(null); return; }
         if(file.size > COFRE_MAX_FILE){
-          reject(new Error("Máximo 1,5 MB. Para arquivos maiores, use o campo Link."));
+          reject(new Error("Máximo 1,5 MB. Comprima o PDF/imagem ou use o campo Link para arquivos maiores."));
           return;
         }
         var okMime = /^(application\/pdf|image\/)/i.test(file.type) || /\.(pdf|png|jpe?g|webp|gif)$/i.test(file.name || "");
         if(!okMime){
-          reject(new Error("Formato não suportado. Use PDF ou imagem."));
+          reject(new Error("Formato não suportado. Use PDF ou imagem (PNG/JPG/WEBP)."));
           return;
         }
+        // Sem redimensionar/comprimir — mantém nitidez original do arquivo.
         var reader = new FileReader();
-        reader.onload = function(){ resolve({ nome: file.name, mime: file.type || "application/octet-stream", data: String(reader.result || "") }); };
+        reader.onload = function(){
+          resolve({
+            nome: file.name,
+            mime: file.type || (/\.pdf$/i.test(file.name) ? "application/pdf" : "application/octet-stream"),
+            data: String(reader.result || ""),
+            size: file.size
+          });
+        };
         reader.onerror = function(){ reject(new Error("Falha ao ler o arquivo.")); };
         reader.readAsDataURL(file);
       });
+    },
+
+    formatBytes: function(n){
+      n = Number(n) || 0;
+      if(n < 1024) return n + " B";
+      if(n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+      return (n / (1024 * 1024)).toFixed(2) + " MB";
+    },
+
+    isImageMime: function(mime, name){
+      return /^image\//i.test(mime || "") || /\.(png|jpe?g|webp|gif|bmp)$/i.test(name || "");
+    },
+
+    isPdfMime: function(mime, name){
+      return /pdf/i.test(mime || "") || /\.pdf$/i.test(name || "");
+    },
+
+    revokeViewBlob: function(){
+      if(LICSYSTEM.cofre._viewBlobUrl){
+        try{ URL.revokeObjectURL(LICSYSTEM.cofre._viewBlobUrl); }catch(e){}
+        LICSYSTEM.cofre._viewBlobUrl = null;
+      }
+    },
+
+    dataUrlToBlobUrl: function(dataUrl, mime){
+      var bytes = LICSYSTEM.cofre.dataUrlToUint8(dataUrl);
+      if(!bytes) return null;
+      var blob = new Blob([bytes], { type: mime || "application/octet-stream" });
+      return URL.createObjectURL(blob);
+    },
+
+    attachPrompt: function(id){
+      var item = LICSYSTEM.cofre.findById(id);
+      if(!item){
+        showAlert("cofreAlert","error","Documento não encontrado.");
+        return;
+      }
+      LICSYSTEM.cofre._attachTargetId = String(id);
+      var inp = el("cofreQuickFile");
+      if(!inp){
+        showAlert("cofreAlert","error","Campo de anexo não encontrado. Recarregue a página.");
+        return;
+      }
+      inp.value = "";
+      inp.click();
+    },
+
+    attachFromQuickFile: function(file){
+      var id = LICSYSTEM.cofre._attachTargetId;
+      LICSYSTEM.cofre._attachTargetId = null;
+      if(!id || !file) return;
+      var item = LICSYSTEM.cofre.findById(id);
+      if(!item){
+        showAlert("cofreAlert","error","Documento não encontrado.");
+        return;
+      }
+      showAlert("cofreAlert","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Anexando…');
+      LICSYSTEM.cofre.readFileAsDataUrl(file).then(function(meta){
+        if(!meta || !meta.data){
+          showAlert("cofreAlert","error","Arquivo vazio.");
+          return;
+        }
+        var list = LICSYSTEM.cofre.items().map(function(it){
+          if(it.id !== item.id) return it;
+          return LICSYSTEM.cofre.normalizeItem(Object.assign({}, it, {
+            arquivoNome: meta.nome,
+            arquivoMime: meta.mime,
+            arquivoData: meta.data
+          }));
+        });
+        LICSYSTEM.cofre.data = { v: 2, items: list };
+        if(!LICSYSTEM.cofre.persist({ immediate: true })) return;
+        LICSYSTEM.cofre.render();
+        showAlert(
+          "cofreAlert",
+          "ok",
+          "📎 Anexo salvo em <b>" + utils.escapeHtml(item.nome) + "</b> (" +
+            utils.escapeHtml(meta.nome) + " · " + LICSYSTEM.cofre.formatBytes(meta.size) + ")."
+        );
+      }).catch(function(err){
+        showAlert("cofreAlert","error", err.message || "Erro ao anexar.");
+      });
+    },
+
+    applyViewZoom: function(){
+      var z = LICSYSTEM.cofre._viewZoom || 1;
+      var img = el("cofreViewImg");
+      var frame = el("cofreViewFrame");
+      var label = el("btnCofreViewZoomReset");
+      if(label) label.textContent = Math.round(z * 100) + "%";
+      if(img){
+        img.style.transform = "scale(" + z + ")";
+        img.style.transformOrigin = "center top";
+      }
+      if(frame){
+        frame.style.transform = "scale(" + z + ")";
+        frame.style.transformOrigin = "top left";
+        frame.style.width = (100 / z) + "%";
+        frame.style.height = (100 / z) + "%";
+      }
+    },
+
+    closeView: function(){
+      var ov = el("cofreViewOverlay");
+      if(ov){
+        ov.classList.remove("open");
+        ov.setAttribute("aria-hidden","true");
+      }
+      var body = el("cofreViewBody");
+      if(body) body.innerHTML = "";
+      LICSYSTEM.cofre.revokeViewBlob();
+      LICSYSTEM.cofre._viewItemId = null;
+      LICSYSTEM.cofre._viewZoom = 1;
+    },
+
+    viewById: function(id){
+      var item = LICSYSTEM.cofre.findById(id);
+      if(!item){
+        showAlert("cofreAlert","error","Documento não encontrado.");
+        return;
+      }
+      if(!item.arquivoData && item.link){
+        var url = utils.normalizeHttpUrl ? utils.normalizeHttpUrl(item.link) : item.link;
+        if(url) window.open(url, "_blank", "noopener,noreferrer");
+        else showAlert("cofreAlert","warn","Link inválido. Anexe um arquivo ou corrija o link.");
+        return;
+      }
+      if(!item.arquivoData){
+        showAlert("cofreAlert","warn","Nenhum arquivo anexado. Clique em <b>Anexar</b> (máx. 1,5 MB).");
+        return;
+      }
+
+      LICSYSTEM.cofre.revokeViewBlob();
+      LICSYSTEM.cofre._viewItemId = item.id;
+      LICSYSTEM.cofre._viewZoom = 1;
+
+      var mime = item.arquivoMime || "";
+      var blobUrl = LICSYSTEM.cofre.dataUrlToBlobUrl(item.arquivoData, mime);
+      if(blobUrl) LICSYSTEM.cofre._viewBlobUrl = blobUrl;
+      var src = blobUrl || item.arquivoData;
+
+      var title = el("cofreViewTitle");
+      var meta = el("cofreViewMeta");
+      var body = el("cofreViewBody");
+      var ov = el("cofreViewOverlay");
+      if(!body || !ov){
+        // Fallback: abre em nova aba
+        window.open(src, "_blank", "noopener");
+        return;
+      }
+      if(title) title.textContent = item.nome || "Documento";
+      if(meta){
+        meta.textContent = (item.arquivoNome || "arquivo") +
+          (item.validade ? " · Validade " + item.validade.split("-").reverse().join("/") : "");
+      }
+
+      var html = "";
+      if(LICSYSTEM.cofre.isImageMime(mime, item.arquivoNome)){
+        html =
+          '<div class="cofre-view-scroll">' +
+            '<img id="cofreViewImg" class="cofre-view-img" alt="' + utils.escapeHtml(item.nome || "Documento") +
+              '" src="' + utils.escapeHtml(src) + '" draggable="false" />' +
+          "</div>";
+      } else if(LICSYSTEM.cofre.isPdfMime(mime, item.arquivoNome)){
+        html =
+          '<div class="cofre-view-scroll cofre-view-scroll-pdf">' +
+            '<iframe id="cofreViewFrame" class="cofre-view-frame" title="PDF" src="' +
+              utils.escapeHtml(src) + '#toolbar=1&navpanes=0"></iframe>' +
+          "</div>";
+      } else {
+        html =
+          '<div class="cofre-view-fallback">' +
+            '<p>Pré-visualização não disponível para este tipo.</p>' +
+            '<a class="btn btn-primary" href="' + utils.escapeHtml(src) + '" download="' +
+              utils.escapeHtml(item.arquivoNome || "documento") + '">⬇️ Baixar arquivo</a>' +
+          "</div>";
+      }
+      body.innerHTML = html;
+      ov.classList.add("open");
+      ov.setAttribute("aria-hidden","false");
+      LICSYSTEM.cofre.applyViewZoom();
+    },
+
+    downloadView: function(){
+      var item = LICSYSTEM.cofre.findById(LICSYSTEM.cofre._viewItemId);
+      if(!item || !item.arquivoData) return;
+      var a = document.createElement("a");
+      a.href = LICSYSTEM.cofre._viewBlobUrl || item.arquivoData;
+      a.download = LICSYSTEM.cofre.safeFileName(item.arquivoNome || item.nome, "documento");
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function(){ a.remove(); }, 500);
     },
 
     saveFromModal: function(){
@@ -7090,22 +7294,19 @@
         var rowCls = "cofre-item";
         if(st.kind === "expired" || st.kind === "none") rowCls += " is-expired";
         else if(st.kind === "warn") rowCls += " is-warn";
+        var hasFile = !!(it.arquivoData && it.arquivoNome);
+        var hasLink = !!String(it.link || "").trim();
         var fileHtml = "";
-        if(it.arquivoData && it.arquivoNome){
-          fileHtml = '<span class="cofre-file-tag">📎 <a href="' + utils.escapeHtml(it.arquivoData) +
-            '" download="' + utils.escapeHtml(it.arquivoNome) + '" target="_blank" rel="noopener">'+
-            utils.escapeHtml(it.arquivoNome) + "</a></span>";
-        } else if(it.arquivoNome){
-          fileHtml = '<span class="cofre-file-tag">📎 ' + utils.escapeHtml(it.arquivoNome) + "</span>";
+        if(hasFile){
+          fileHtml = '<span class="cofre-file-tag is-ok">📎 ' + utils.escapeHtml(it.arquivoNome) + "</span>";
+        } else {
+          fileHtml = '<span class="cofre-file-tag is-empty">Sem anexo</span>';
         }
-        if(it.link){
-          var url = utils.normalizeHttpUrl ? utils.normalizeHttpUrl(it.link) : it.link;
-          if(url){
-            fileHtml += (fileHtml ? " · " : "") +
-              '<span class="cofre-file-tag">🔗 <a href="' + utils.escapeHtml(url) +
-              '" target="_blank" rel="noopener noreferrer">Abrir link</a></span>';
-          }
+        if(hasLink){
+          fileHtml += (fileHtml ? " · " : "") +
+            '<span class="cofre-file-tag">🔗 Link</span>';
         }
+        var canView = hasFile || hasLink;
         html +=
           '<div class="' + rowCls + '" data-id="' + utils.escapeHtml(it.id) + '">' +
             '<div class="ci-check"><input type="checkbox" class="cofreSelChk" data-id="' +
@@ -7123,6 +7324,12 @@
               (it.obs ? '<div class="ci-obs">' + utils.escapeHtml(it.obs) + "</div>" : "") +
             "</div>" +
             '<div class="ci-actions">' +
+              '<button type="button" class="btn btn-primary btn-sm cofreViewOne" data-id="' +
+                utils.escapeHtml(it.id) + '"' + (canView ? "" : " disabled") +
+                ' title="' + (canView ? "Ver documento nítido" : "Anexe um arquivo ou informe um link") +
+                '">👁 Ver</button>' +
+              '<button type="button" class="btn btn-gold btn-sm cofreAttachOne" data-id="' +
+                utils.escapeHtml(it.id) + '" title="Anexar PDF ou imagem (máx. 1,5 MB)">📎 Anexar</button>' +
               '<button type="button" class="btn btn-ghost btn-sm cofreEditOne" data-id="' +
                 utils.escapeHtml(it.id) + '">Editar</button>' +
             "</div>" +
@@ -7150,6 +7357,25 @@
       bind("btnCofreSeed","click", function(){ LICSYSTEM.cofre.seedDefaults(true); });
       bind("btnCofreModalCancel","click", function(){ LICSYSTEM.cofre.closeModal(); });
       bind("btnCofreModalSave","click", function(){ LICSYSTEM.cofre.saveFromModal(); });
+      bind("btnCofreViewClose","click", function(){ LICSYSTEM.cofre.closeView(); });
+      bind("btnCofreViewDownload","click", function(){ LICSYSTEM.cofre.downloadView(); });
+      bind("btnCofreViewZoomIn","click", function(){
+        LICSYSTEM.cofre._viewZoom = Math.min(3, (LICSYSTEM.cofre._viewZoom || 1) + 0.25);
+        LICSYSTEM.cofre.applyViewZoom();
+      });
+      bind("btnCofreViewZoomOut","click", function(){
+        LICSYSTEM.cofre._viewZoom = Math.max(0.5, (LICSYSTEM.cofre._viewZoom || 1) - 0.25);
+        LICSYSTEM.cofre.applyViewZoom();
+      });
+      bind("btnCofreViewZoomReset","click", function(){
+        LICSYSTEM.cofre._viewZoom = 1;
+        LICSYSTEM.cofre.applyViewZoom();
+      });
+      bind("cofreQuickFile","change", function(){
+        var f = this.files && this.files[0] ? this.files[0] : null;
+        if(f) LICSYSTEM.cofre.attachFromQuickFile(f);
+        this.value = "";
+      });
       bind("cofreSelectAll","change", function(){
         var onAll = !!(el("cofreSelectAll") && el("cofreSelectAll").checked);
         var box = el("cofreList");
@@ -7160,9 +7386,19 @@
       if(list && !list._cofreWired){
         list._cofreWired = true;
         list.addEventListener("click", function(e){
-          var btn = e.target.closest(".cofreEditOne");
-          if(btn){
-            LICSYSTEM.cofre.editById(btn.getAttribute("data-id"));
+          var viewBtn = e.target.closest(".cofreViewOne");
+          if(viewBtn && !viewBtn.disabled){
+            LICSYSTEM.cofre.viewById(viewBtn.getAttribute("data-id"));
+            return;
+          }
+          var attachBtn = e.target.closest(".cofreAttachOne");
+          if(attachBtn){
+            LICSYSTEM.cofre.attachPrompt(attachBtn.getAttribute("data-id"));
+            return;
+          }
+          var editBtn = e.target.closest(".cofreEditOne");
+          if(editBtn){
+            LICSYSTEM.cofre.editById(editBtn.getAttribute("data-id"));
           }
         });
       }
@@ -7171,6 +7407,21 @@
         ov._cofreWired = true;
         ov.addEventListener("click", function(e){
           if(e.target === ov) LICSYSTEM.cofre.closeModal();
+        });
+      }
+      var viewOv = el("cofreViewOverlay");
+      if(viewOv && !viewOv._cofreWired){
+        viewOv._cofreWired = true;
+        viewOv.addEventListener("click", function(e){
+          if(e.target === viewOv) LICSYSTEM.cofre.closeView();
+        });
+      }
+      if(!LICSYSTEM.cofre._escWired){
+        LICSYSTEM.cofre._escWired = true;
+        document.addEventListener("keydown", function(e){
+          if(e.key !== "Escape") return;
+          var v = el("cofreViewOverlay");
+          if(v && v.classList.contains("open")) LICSYSTEM.cofre.closeView();
         });
       }
     },

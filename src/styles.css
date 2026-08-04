@@ -1650,15 +1650,60 @@
   .cofre-item .ci-name{font-weight:700;color:var(--ls-navy);font-size:13.5px;word-break:break-word}
   .cofre-item .ci-meta{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:6px;align-items:center}
   .cofre-item .ci-obs{font-size:12px;color:var(--ls-muted);margin-top:4px;word-break:break-word}
-  .cofre-item .ci-actions{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+  .cofre-item .ci-actions{display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:110px}
+  .cofre-item .ci-actions .btn{width:100%;justify-content:center}
   .cofre-tipo{
     display:inline-block;font-size:10.5px;font-weight:700;text-transform:uppercase;
     letter-spacing:.35px;padding:2px 7px;border-radius:6px;background:#e8f0fe;color:#1a4fa0;
   }
   .cofre-file-tag{font-size:11.5px;color:var(--ls-muted);font-weight:600}
+  .cofre-file-tag.is-ok{color:#136c3d}
+  .cofre-file-tag.is-empty{color:#a12626}
   .cofre-file-tag a{color:var(--ls-navy-3);font-weight:700;text-decoration:none}
   .cofre-file-tag a:hover{text-decoration:underline}
   .cofre-empty{padding:28px 12px;text-align:center;color:var(--ls-muted);font-size:13px}
+
+  /* Visualizador nítido (sem blur / sem compressão visual) */
+  #cofreViewOverlay{
+    position:fixed;inset:0;z-index:130;background:rgba(10,16,28,.78);
+    display:none;align-items:stretch;justify-content:center;padding:12px;
+  }
+  #cofreViewOverlay.open{display:flex}
+  .cofre-view-card{
+    width:min(1100px,100%);max-height:100%;margin:auto;background:#fff;border-radius:14px;
+    display:flex;flex-direction:column;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.35);
+  }
+  .cofre-view-head{
+    display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    padding:14px 16px;border-bottom:1px solid var(--ls-line);background:#f7f9fc;flex-shrink:0;
+  }
+  .cofre-view-head h3{margin:0;font-size:16px;color:var(--ls-navy)}
+  .cofre-view-head-text{min-width:0;flex:1}
+  .cofre-view-toolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .cofre-view-body{flex:1;min-height:0;background:#1a1f2a;overflow:hidden}
+  .cofre-view-scroll{
+    width:100%;height:min(78vh,820px);overflow:auto;-webkit-overflow-scrolling:touch;
+    display:flex;justify-content:center;align-items:flex-start;padding:16px;box-sizing:border-box;
+  }
+  .cofre-view-scroll-pdf{padding:0;display:block}
+  .cofre-view-img{
+    display:block;max-width:100%;height:auto;margin:0 auto;
+    /* Mantém nitidez — sem filter blur e sem downscale forçado */
+    image-rendering:auto;
+    image-rendering:-webkit-optimize-contrast;
+    -ms-interpolation-mode:bicubic;
+    filter:none !important;
+    backface-visibility:hidden;
+    transform:translateZ(0);
+    box-shadow:0 4px 24px rgba(0,0,0,.35);background:#fff;
+  }
+  .cofre-view-frame{
+    border:0;width:100%;height:min(78vh,820px);background:#fff;display:block;
+  }
+  .cofre-view-fallback{
+    color:#fff;text-align:center;padding:48px 20px;display:flex;flex-direction:column;
+    align-items:center;gap:14px;min-height:240px;justify-content:center;
+  }
   .placeholder-ico{font-size:40px;margin-bottom:10px;color:var(--ls-gold)}
   .spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
   @keyframes spin{to{transform:rotate(360deg)}}
@@ -1720,7 +1765,10 @@
     .checklist-item{flex-direction:column;align-items:stretch;gap:8px}
     .checklist-item input[type=date]{max-width:100%}
     .cofre-item{grid-template-columns:auto 1fr;gap:10px}
-    .cofre-item .ci-actions{grid-column:1 / -1;flex-direction:row;justify-content:flex-start;flex-wrap:wrap}
+    .cofre-item .ci-actions{grid-column:1 / -1;flex-direction:row;justify-content:flex-start;flex-wrap:wrap;min-width:0}
+    .cofre-item .ci-actions .btn{width:auto}
+    .cofre-view-head{flex-direction:column}
+    .cofre-view-scroll,.cofre-view-frame{height:min(70vh,640px)}
     .pill-group{width:100%}
     .pill-group label{flex:1 1 auto;text-align:center}
     .dropzone{padding:18px 14px}
