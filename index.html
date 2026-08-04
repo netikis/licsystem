@@ -80,7 +80,6 @@
 
       <button data-view="concorrencia"><span class="ico">🔎</span> <span data-i18n="nav.concorrencia">Concorrência</span></button>
       <button data-view="catalogo"><span class="ico">📚</span> <span data-i18n="nav.catalogo">Catálogo</span></button>
-      <button data-view="arp"><span class="ico">📄</span> <span data-i18n="nav.arp">Atas de Registro</span></button>
       <button data-view="disputa"><span class="ico">🤖</span> <span data-i18n="nav.disputa">Robô de Disputa</span></button>
 
       <button data-view="cofre"><span class="ico">🔐</span> <span data-i18n="nav.cofre">Cofre de Documentos</span></button>
@@ -1247,6 +1246,12 @@
         <div>
           <label class="fld" for="entregaNumeroEmpenho">Número do Empenho</label>
           <input type="text" id="entregaNumeroEmpenho" placeholder="ex.: 2026NE001234" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div style="flex:1;width:100%">
+          <label class="fld" for="entregaPreenchidoPor">Preenchido por <span style="color:var(--ls-red)">*</span></label>
+          <input type="text" id="entregaPreenchidoPor" placeholder="Nome de quem está preenchendo este formulário" required autocomplete="name" />
         </div>
       </div>
     </div>
