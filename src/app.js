@@ -992,14 +992,14 @@
   utils.mlSearchFailMessage = function(j){
     if(j && (j.need_search_keys || j.need_serper)){
       return String(j.error || "") ||
-        "Configure as chaves de busca deste projeto na Vercel (SERPER_API_KEY ou Google CSE) e faça Redeploy.";
+        "Configure na Vercel: ML_APP_ID + ML_CLIENT_SECRET e/ou SERPER_API_KEY — depois Redeploy.";
     }
     if(j && j.error && !/forbidden|UNAUTHORIZED|sites\/MLB\/search/i.test(String(j.error))){
       return String(j.error);
     }
     return (
       "Busca no Mercado Livre indisponível no momento. " +
-      "Quem administra este sistema deve colocar as chaves DELE na Vercel (serper.dev grátis ou Google CSE) e fazer Redeploy."
+      "Confira na Vercel se ML_APP_ID + ML_CLIENT_SECRET (ou SERPER_API_KEY) estão configurados e faça Redeploy."
     );
   };
 
