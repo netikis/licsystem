@@ -1,16 +1,22 @@
 /**
  * GET /api/search-ml?q=PRODUTO&limit=10
  *
- * Produção (clientes / Vercel) — SEM ponte local:
- * 1) Serper (Google) se SERPER_API_KEY estiver na Vercel
- * 2) Listagem pública ML
- * 3) API /sites/MLB/search (quase sempre 403 no datacenter) — última tentativa
+ * Produção (clientes / Vercel):
+ * 1) Serper / Google CSE / listagem pública (ml-web-search)
+ * 2) API oficial COM OAuth (ML_APP_ID + ML_CLIENT_SECRET) — costuma passar onde o anônimo toma 403
+ * 3) API anônima /sites/MLB/search (quase sempre 403 no datacenter)
  *
  * Headers do cliente NUNCA são repassados ao ML.
  */
 var safeJson = require("./_lib/safe-json");
 var mlPublic = require("./_lib/ml-public-search");
 var mlWeb = require("./_lib/ml-web-search");
+var mlAuth = null;
+try {
+  mlAuth = require("./_lib/ml-auth");
+} catch (e) {
+  mlAuth = null;
+}
 
 var ML_FETCH_HEADERS = {
   "User-Agent":
@@ -44,6 +50,16 @@ function isolatedMlHeaders() {
   };
 }
 
+function hasMlOauth() {
+  if (!mlAuth || !mlAuth.getCredentials) return false;
+  var c = mlAuth.getCredentials();
+  return !!(c && c.appId && c.secret);
+}
+
+function hasAnySearchBackend() {
+  return mlWeb.hasPaidOrFreeSearchKeys() || hasMlOauth();
+}
+
 function mapOfficialItem(it) {
   var sellerNick =
     (it.seller && it.seller.nickname) ||
@@ -75,16 +91,34 @@ function mapOfficialItem(it) {
   };
 }
 
-async function searchPublicApi(q, limit) {
+async function searchPublicApi(q, limit, withOauth) {
   var url =
     "https://api.mercadolibre.com/sites/MLB/search?q=" +
     encodeURIComponent(q) +
     "&limit=" +
     encodeURIComponent(limit);
 
+  var headers = isolatedMlHeaders();
+  var authenticated = false;
+  if (withOauth && mlAuth) {
+    try {
+      var token = await mlAuth.getAccessToken();
+      headers = mlAuth.authHeaders(token);
+      authenticated = true;
+    } catch (e) {
+      return {
+        ok: false,
+        status: (e && e.status) || 500,
+        body: (e && e.body) || null,
+        message: (e && e.message) || "oauth_token_failed",
+        authenticated: false,
+      };
+    }
+  }
+
   var r = await fetch(url, {
     method: "GET",
-    headers: isolatedMlHeaders(),
+    headers: headers,
     redirect: "follow",
     cache: "no-store",
   });
@@ -96,17 +130,46 @@ async function searchPublicApi(q, limit) {
     j = null;
   }
 
+  /* Token expirado: limpa cache e tenta 1x */
+  if (
+    withOauth &&
+    authenticated &&
+    (r.status === 401 || r.status === 403) &&
+    mlAuth.clearTokenCache
+  ) {
+    try {
+      mlAuth.clearTokenCache();
+      var token2 = await mlAuth.getAccessToken();
+      r = await fetch(url, {
+        method: "GET",
+        headers: mlAuth.authHeaders(token2),
+        redirect: "follow",
+        cache: "no-store",
+      });
+      text = await r.text();
+      try {
+        j = text ? JSON.parse(text) : null;
+      } catch (e2) {
+        j = null;
+      }
+    } catch (e3) {
+      /* mantém resposta anterior */
+    }
+  }
+
   if (r.ok && j && Array.isArray(j.results) && j.results.length) {
     return {
       ok: true,
       results: j.results.map(mapOfficialItem),
       status: r.status,
+      authenticated: authenticated,
     };
   }
   return {
     ok: false,
     status: r.status,
     body: j,
+    authenticated: authenticated,
     message:
       (j && (j.message || j.error)) ||
       text.slice(0, 160) ||
@@ -138,7 +201,7 @@ async function handler(req, res) {
     });
   }
 
-  /* 1–2) Produção: Serper + listagem pública (não depende do IP do cliente) */
+  /* 1) Produção: público / Serper / Google CSE */
   try {
     var prod = await mlWeb.searchProduction(q, limit);
     if (prod.ok && prod.results && prod.results.length) {
@@ -157,12 +220,36 @@ async function handler(req, res) {
     /* segue */
   }
 
-  /* 3) Última tentativa: API oficial (geralmente 403 na Vercel) */
   var variants = mlPublic.buildQueryVariants(q);
   var lastApi = null;
+
+  /* 2) API oficial autenticada (ML_APP_ID + ML_CLIENT_SECRET) */
+  if (hasMlOauth()) {
+    for (var oi = 0; oi < Math.min(variants.length, 3); oi++) {
+      try {
+        var oauth = await searchPublicApi(variants[oi], limit, true);
+        if (oauth.ok && oauth.results.length) {
+          return json(res, 200, {
+            ok: true,
+            q: q,
+            query_used: variants[oi],
+            source: "api_oauth",
+            authenticated: true,
+            client_headers_forwarded: false,
+            results: oauth.results.slice(0, limit),
+          });
+        }
+        lastApi = oauth;
+      } catch (eO) {
+        lastApi = { status: 0, message: (eO && eO.message) || String(eO) };
+      }
+    }
+  }
+
+  /* 3) Última tentativa: API anônima (geralmente 403 na Vercel) */
   for (var i = 0; i < Math.min(variants.length, 2); i++) {
     try {
-      var api = await searchPublicApi(variants[i], limit);
+      var api = await searchPublicApi(variants[i], limit, false);
       if (api.ok && api.results.length) {
         return json(res, 200, {
           ok: true,
@@ -182,26 +269,37 @@ async function handler(req, res) {
     }
   }
 
-  var hasKeys = mlWeb.hasPaidOrFreeSearchKeys();
+  var hasKeys = hasAnySearchBackend();
+  var hint;
+  if (hasKeys) {
+    hint =
+      'Nenhum produto encontrado para "' +
+      q +
+      '" nas fontes disponíveis (público/Serper/Google/OAuth ML).';
+  } else {
+    hint =
+      "Busca ML bloqueada no servidor (API 403). Configure no projeto Vercel: ML_APP_ID + ML_CLIENT_SECRET (app do Mercado Livre) e/ou SERPER_API_KEY (serper.dev) ou GOOGLE_CSE_API_KEY + GOOGLE_CSE_CX — depois Redeploy.";
+  }
+
   return json(res, 200, {
     ok: false,
     q: q,
     results: [],
-    authenticated: false,
+    authenticated: !!(lastApi && lastApi.authenticated),
     client_headers_forwarded: false,
-    error: hasKeys
-      ? 'Nenhum produto encontrado para "' + q + '" nas fontes disponíveis.'
-      : "Busca ML bloqueada no servidor (API 403). No projeto Vercel deste cliente, configure as chaves DELE: SERPER_API_KEY (grátis em serper.dev) ou GOOGLE_CSE_API_KEY + GOOGLE_CSE_CX, depois Redeploy. Cada cliente usa as próprias chaves — custo zero para o vendedor.",
+    error: hint,
     ml_debug: lastApi
       ? {
           endpoint: "/sites/MLB/search",
           status: lastApi.status,
           body: lastApi.body,
           message: lastApi.message,
+          oauth_tried: hasMlOauth(),
         }
       : undefined,
     need_serper: !hasKeys,
     need_search_keys: !hasKeys,
+    need_ml_oauth: !hasMlOauth(),
     tried: variants,
   });
 }
