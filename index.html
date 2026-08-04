@@ -609,6 +609,7 @@
           <div class="card-head">
             <h2>🧮 Planilha de Orçamento</h2>
             <div class="btn-row" style="margin:0">
+              <button class="btn btn-gold btn-sm" id="btnSalvarOrcamento" title="Salvar tabela e sincronizar (pode fechar e continuar depois)">💾 Salvar orçamento</button>
               <button class="btn btn-ghost btn-sm" id="btnAddLinha">+ Linha</button>
               <button class="btn btn-ghost btn-sm" id="btnLimparOrc">Limpar</button>
               <button class="btn btn-ghost btn-sm" id="btnExportOrcExcel">⬇️ Excel</button>
@@ -793,7 +794,7 @@
             <h2>🚚 Entrega</h2>
             <button type="button" class="btn btn-gold btn-sm" id="btnNovaEntrega">+ Nova Entrega</button>
           </div>
-          <div class="desc">Registre empenho, nota fiscal, anexos e destinação logística. Dados locais por enquanto — prontos para Firebase Storage / Firestore.</div>
+          <div class="desc">Registre empenho, nota fiscal, anexos e destinação logística.</div>
           <div id="entregaAlert" class="alert"></div>
           <div id="entregaList" class="entrega-list">
             <div class="muted small" style="padding:18px;text-align:center">Nenhuma entrega registrada ainda.</div>
@@ -834,7 +835,7 @@
               <button type="button" class="btn btn-gold btn-sm" id="btnHistAdd">+ Novo item</button>
             </div>
           </div>
-          <div class="desc">Baixa manual de quantidade entregue, saldo pendente e lucro em tempo real. Persistência local — preparado para Firestore.</div>
+          <div class="desc">Baixa manual de quantidade entregue, saldo pendente e lucro em tempo real.</div>
           <div id="histEntregasAlert" class="alert"></div>
 
           <div class="hist-filters">
