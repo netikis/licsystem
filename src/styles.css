@@ -342,6 +342,35 @@
   }
   .alerta-balloon-actions .btn{flex:1;min-width:120px;justify-content:center}
   .ia-pending-wrap{margin-bottom:18px}
+  .ia-pending-editais-track{
+    display:flex;flex-wrap:nowrap;gap:12px;align-items:stretch;
+    overflow-x:auto;overflow-y:hidden;padding:4px 2px 12px;
+    scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;
+  }
+  .ia-pending-editais-track::-webkit-scrollbar{height:8px}
+  .ia-pending-editais-track::-webkit-scrollbar-thumb{
+    background:rgba(21,38,66,.28);border-radius:999px;
+  }
+  .ia-pending-editais-track > .small.muted{
+    flex:0 0 auto;padding:12px 4px;
+  }
+  .ia-pending-editais-track .alerta-balloon{
+    flex:0 0 210px;width:210px;min-width:210px;max-width:210px;
+    min-height:0;padding:12px 12px 10px;scroll-snap-align:start;
+    font-size:12px;
+  }
+  .ia-pending-editais-track .alerta-balloon-nome{font-size:13px}
+  .ia-pending-editais-track .alerta-balloon-edital{
+    -webkit-line-clamp:3;font-size:12px;min-height:3.6em;
+  }
+  .ia-pending-editais-track .alerta-balloon-prazo{font-size:10px;padding:3px 8px}
+  .ia-pending-editais-track .alerta-balloon-prazo-line{font-size:12px}
+  .ia-pending-editais-track .alerta-balloon-actions{
+    flex-direction:column;gap:6px;
+  }
+  .ia-pending-editais-track .alerta-balloon-actions .btn{
+    flex:1 1 auto;min-width:0;width:100%;font-size:11px;padding:6px 8px;
+  }
   .content{padding:26px;max-width:1400px;width:100%;margin:0 auto;box-sizing:border-box}
   .view{display:none;animation:fade .25s ease;width:100%;max-width:100%}
   .view.active{display:block}

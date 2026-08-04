@@ -9076,6 +9076,7 @@
       if(opts.mode === "interessado"){
         actions =
           '<div class="alerta-balloon-actions">'+
+            '<button type="button" class="btn btn-gold btn-sm" data-interessado-analisar="'+utils.escapeHtml(a.id)+'">✨ Analisar com IA</button>'+
             (a.link
               ? '<a class="btn btn-ghost btn-sm" href="'+utils.escapeHtml(a.link)+'" target="_blank" rel="noopener">Abrir no PNCP</a>'
               : '')+
@@ -9316,7 +9317,7 @@
         showAlert(
           "iaAlert",
           "ok",
-          "Edital com interesse adicionado ao painel. Envie o PDF para analisar com a IA."
+          "Edital com interesse adicionado ao painel. Use <b>Analisar com IA</b> no balão (sem PDF) ou envie o PDF para análise completa."
         );
       }catch(e){}
       return item;
@@ -9690,6 +9691,19 @@
       var iaPending = el("iaPendingEditais");
       if(iaPending){
         iaPending.addEventListener("click", function(e){
+          var an = e.target.closest("[data-interessado-analisar]");
+          if(an){
+            e.preventDefault();
+            var aid = an.getAttribute("data-interessado-analisar");
+            var ed = null;
+            for(var i = 0; i < self.interessados.length; i++){
+              if(self.interessados[i].id === aid){ ed = self.interessados[i]; break; }
+            }
+            if(ed && LICSYSTEM.analiseIa && LICSYSTEM.analiseIa.analisarDeInteresse){
+              LICSYSTEM.analiseIa.analisarDeInteresse(ed);
+            }
+            return;
+          }
           var rm = e.target.closest("[data-interessado-rm]");
           if(rm){
             e.preventDefault();
@@ -11967,53 +11981,110 @@
       });
     },
 
-    analisar: function(){
+    /** Monta texto de análise a partir dos dados do alerta PNCP (sem PDF). */
+    textoFromInteresse: function(ed){
+      ed = ed || {};
+      var lines = [];
+      lines.push("RESUMO DO EDITAL (fonte: PNCP / alerta automático — sem PDF completo).");
+      lines.push("Analise com base nestes dados públicos e indique o que ainda precisa ser confirmado no PDF oficial.");
+      lines.push("");
+      lines.push("Órgão / Nome: " + (ed.orgao || "—"));
+      var munUf = [ed.municipio || "", ed.uf || ""].filter(Boolean).join("/");
+      lines.push("Município/UF: " + (munUf || "—"));
+      lines.push("Modalidade: " + (ed.modalidade || "—"));
+      lines.push("Número da compra / controle: " + (ed.numeroCompra || ed.numeroControlePNCP || "—"));
+      lines.push("Objeto / Edital: " + (ed.objeto || "—"));
+      if(ed.valorEstimado != null && isFinite(Number(ed.valorEstimado))){
+        lines.push("Valor estimado: R$ " + Number(ed.valorEstimado).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+      }
+      lines.push("Data de abertura: " + (ed.dataAbertura || "—"));
+      lines.push("Data de encerramento (prazo): " + (ed.dataEncerramento || "—"));
+      lines.push("Link PNCP: " + (ed.link || "—"));
+      if(ed.watchLabel) lines.push("Monitoramento: " + ed.watchLabel);
+      lines.push("");
+      lines.push("INSTRUÇÕES PARA O RELATÓRIO:");
+      lines.push("- Preencha os 11 tópicos com o que for possível a partir deste resumo.");
+      lines.push("- Deixe explícito o que é INFERÊNCIA e o que FALTA confirmar no PDF (habilitação, cronograma detalhado, documentos).");
+      lines.push("- No checklist de documentos, liste os mais prováveis para este tipo de objeto e marque a incerteza na obs.");
+      return lines.join("\n");
+    },
+
+    analisarDeInteresse: function(ed){
       if(LICSYSTEM.analiseIa.busy) return;
-      var file = LICSYSTEM.analiseIa.file;
-      if(!file){
-        showAlert("iaAlert","warn","Selecione o PDF do edital primeiro.");
+      if(!ed){
+        showAlert("iaAlert","warn","Edital não encontrado.");
         return;
       }
+      var text = LICSYSTEM.analiseIa.textoFromInteresse(ed);
+      var nome =
+        (ed.orgao || "Edital") +
+        (ed.numeroCompra || ed.numeroControlePNCP ? " — " + (ed.numeroCompra || ed.numeroControlePNCP) : "");
+      LICSYSTEM.analiseIa.file = null;
+      var metaEl = el("iaFileMeta");
+      if(metaEl){
+        metaEl.className = "ia-file-meta show";
+        metaEl.textContent = "Análise rápida (sem PDF): " + nome;
+      }
+      showAlert(
+        "iaAlert",
+        "info",
+        '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Analisando dados do PNCP com a IA (sem PDF)…'
+      );
+      LICSYSTEM.analiseIa.analisarTexto(text, {
+        filename: nome.slice(0, 180) + ".txt",
+        editalNome: nome.slice(0, 220),
+        fromInteresse: true
+      });
+    },
 
-      LICSYSTEM.analiseIa.setBusy(true);
-      LICSYSTEM.analiseIa.limparRelatorio();
-      showAlert("iaAlert","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Carregando PDF e extraindo texto…');
+    /** Envia texto já pronto para /api/analyze-pdf e renderiza o relatório. */
+    analisarTexto: function(text, meta){
+      meta = meta || {};
+      if(LICSYSTEM.analiseIa.busy && !meta.alreadyBusy) return Promise.resolve();
+      text = String(text || "").replace(/\s+/g, " ").trim();
+      if(!text || text.length < 40){
+        showAlert("iaAlert","warn","Texto insuficiente para análise.");
+        return Promise.resolve();
+      }
 
-      LICSYSTEM.analiseIa.extrairTextoPdf(file).then(function(text){
-        text = String(text || "").replace(/\s+/g, " ").trim();
-        if(!text || text.length < 40){
-          throw new Error("Não foi possível extrair texto suficiente deste PDF (pode ser imagem escaneada).");
-        }
-        LICSYSTEM.analiseIa.text = text;
+      if(!meta.alreadyBusy) LICSYSTEM.analiseIa.setBusy(true);
+      if(!meta.keepReport) LICSYSTEM.analiseIa.limparRelatorio();
+      LICSYSTEM.analiseIa.text = text;
+      if(!meta.fromInteresse && !meta.silentProgress){
         showAlert(
           "iaAlert",
           "info",
-          '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Texto extraído ('+text.length+' caracteres). Gerando relatório com a IA…'
+          '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Gerando relatório com a IA…'
         );
+      }
 
-        return fetch("/api/analyze-pdf", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({
-            text: text,
-            filename: file.name || "edital.pdf"
-          })
-        }).then(function(res){
-          return res.text().then(function(raw){
-            var body = null;
-            try{ body = raw ? JSON.parse(raw) : null; }catch(e){
-              throw new Error("Resposta inválida da API (HTTP "+res.status+").");
-            }
-            if(!res.ok){
-              var msg = (body && (body.detail || body.error)) || ("Erro HTTP " + res.status);
-              throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
-            }
-            return body;
-          });
+      return fetch("/api/analyze-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          text: text,
+          filename: meta.filename || "edital.pdf"
+        })
+      }).then(function(res){
+        return res.text().then(function(raw){
+          var body = null;
+          try{ body = raw ? JSON.parse(raw) : null; }catch(e){
+            throw new Error("Resposta inválida da API (HTTP "+res.status+").");
+          }
+          if(!res.ok){
+            var msg = (body && (body.detail || body.error)) || ("Erro HTTP " + res.status);
+            throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+          }
+          return body;
         });
       }).then(function(body){
         var md = (body && body.relatorio) || "";
         if(!md) throw new Error("A API não retornou o campo relatorio.");
+        if(meta.fromInteresse){
+          md =
+            "> **Atenção:** análise gerada a partir dos dados públicos do PNCP (sem PDF completo). Confirme habilitação, cronograma e documentos no arquivo oficial.\n\n" +
+            md;
+        }
         var docs = LICSYSTEM.analiseIa.normDocsList(body && body.documentosExigidos);
         if(!docs.length){
           docs = LICSYSTEM.analiseIa.parseDocsFromMarkdown(md);
@@ -12024,19 +12095,20 @@
         showAlert(
           "iaAlert",
           "ok",
-          "✅ Relatório gerado com sucesso." +
-            (n ? (" " + n + " documento" + (n === 1 ? "" : "s") + " exigido" + (n === 1 ? "" : "s") + " identificado" + (n === 1 ? "" : "s") + ".") : "")
+          (meta.fromInteresse
+            ? "✅ Análise rápida concluída (sem PDF)."
+            : "✅ Relatório gerado com sucesso.") +
+            (n ? (" " + n + " documento" + (n === 1 ? "" : "s") + " identificado" + (n === 1 ? "" : "s") + ".") : "") +
+            (meta.fromInteresse ? " Para mais precisão, envie o PDF do edital." : "")
         );
-        var filename = (LICSYSTEM.analiseIa.file && LICSYSTEM.analiseIa.file.name) || "";
-        var meta = {
+        var filename = meta.filename || (LICSYSTEM.analiseIa.file && LICSYSTEM.analiseIa.file.name) || "";
+        var metaDocs = {
           filename: filename,
-          editalNome: filename ? filename.replace(/\.pdf$/i, "") : "Edital analisado"
+          editalNome: meta.editalNome || (filename ? filename.replace(/\.pdf$/i, "") : "Edital analisado")
         };
-        // Já grava o checklist (mesmo se o usuário fechar o modal)
         if(docs.length){
-          try{ LICSYSTEM.docsChecklist.setFromAnalysis(docs, meta); }catch(e){}
+          try{ LICSYSTEM.docsChecklist.setFromAnalysis(docs, metaDocs); }catch(e){}
         }
-        // Se estiver no painel de um edital, atualiza o relatório/docs dele
         if(LICSYSTEM.state.activeLeilaoId && LICSYSTEM.state._lwAnaliseContext){
           var act = LICSYSTEM.leiloesParticipo.getActiveItem();
           if(act){
@@ -12055,15 +12127,48 @@
             try{ LICSYSTEM.leiloesParticipo.persist({ immediate: true }); }catch(e){}
           }
         }
-        // Após fechar o modal de documentos, pergunta "Vamos participar?"
         LICSYSTEM.analiseIa._pendingParticiparAsk = true;
-        // Modal pós-análise com lista + atalho para marcar OK
         setTimeout(function(){
-          LICSYSTEM.docsChecklist.showModal(docs, meta);
+          LICSYSTEM.docsChecklist.showModal(docs, metaDocs);
         }, 120);
       }).catch(function(err){
         showAlert("iaAlert","error", utils.escapeHtml(LICSYSTEM.analiseIa.errMsg(err)));
       }).then(function(){
+        LICSYSTEM.analiseIa.setBusy(false);
+      });
+    },
+
+    analisar: function(){
+      if(LICSYSTEM.analiseIa.busy) return;
+      var file = LICSYSTEM.analiseIa.file;
+      if(!file){
+        showAlert("iaAlert","warn","Selecione o PDF do edital primeiro — ou use <b>Analisar com IA</b> em um balão de interesse.");
+        return;
+      }
+
+      LICSYSTEM.analiseIa.setBusy(true);
+      LICSYSTEM.analiseIa.limparRelatorio();
+      showAlert("iaAlert","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Carregando PDF e extraindo texto…');
+
+      LICSYSTEM.analiseIa.extrairTextoPdf(file).then(function(text){
+        text = String(text || "").replace(/\s+/g, " ").trim();
+        if(!text || text.length < 40){
+          throw new Error("Não foi possível extrair texto suficiente deste PDF (pode ser imagem escaneada).");
+        }
+        showAlert(
+          "iaAlert",
+          "info",
+          '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Texto extraído ('+text.length+' caracteres). Gerando relatório com a IA…'
+        );
+        return LICSYSTEM.analiseIa.analisarTexto(text, {
+          filename: file.name || "edital.pdf",
+          editalNome: (file.name || "edital").replace(/\.pdf$/i, ""),
+          alreadyBusy: true,
+          keepReport: true,
+          silentProgress: true
+        });
+      }).catch(function(err){
+        showAlert("iaAlert","error", utils.escapeHtml(LICSYSTEM.analiseIa.errMsg(err)));
         LICSYSTEM.analiseIa.setBusy(false);
       });
     },
