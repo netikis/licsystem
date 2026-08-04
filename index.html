@@ -77,11 +77,17 @@
 
       <button data-view="analiseIa"><span class="ico">🤖</span> <span data-i18n="nav.analiseIa">Análise IA</span></button>
 
-      <button data-view="leiloesParticipo"><span class="ico">🏆</span> <span class="nav-label" data-i18n="nav.leiloesParticipo">Leilão que Participo</span></button>
-
-      <button data-view="concorrencia"><span class="ico">🔎</span> <span data-i18n="nav.concorrencia">Concorrência</span></button>
-      <button data-view="catalogo"><span class="ico">📚</span> <span data-i18n="nav.catalogo">Catálogo</span></button>
-      <button data-view="disputa"><span class="ico">🤖</span> <span data-i18n="nav.disputa">Robô de Disputa</span></button>
+      <div class="nav-group" data-nav-group="leilao">
+        <button type="button" class="nav-parent" data-view="leiloesParticipo" data-nav-toggle="leilao" aria-expanded="false">
+          <span class="ico">🏆</span><span class="nav-label" data-i18n="nav.leiloesParticipo">Leilão que Participo</span><span class="nav-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="nav-children" role="group" data-i18n-aria="nav.leiloesParticipo" aria-label="Leilão que Participo" hidden>
+          <button type="button" data-view="docsChecklist"><span class="ico">✅</span> <span data-i18n="nav.docsChecklist">Docs do Edital</span></button>
+          <button type="button" data-view="importarEdital"><span class="ico">📥</span> <span data-i18n="nav.importarEdital">Importar Edital (PDF)</span></button>
+          <button type="button" data-view="orcamento"><span class="ico">🧮</span> <span data-i18n="nav.orcamento">Orçamento</span></button>
+          <button type="button" data-view="cruzamento"><span class="ico">🔀</span> <span data-i18n="nav.cruzamento">Cruzamento ML</span></button>
+        </div>
+      </div>
 
       <div class="nav-group" data-nav-group="entrega">
         <button type="button" class="nav-parent" data-view="entregas" data-nav-toggle="entrega" aria-expanded="false">
@@ -93,6 +99,10 @@
       </div>
 
       <button data-view="cofre"><span class="ico">🔐</span> <span data-i18n="nav.cofre">Cofre de Documentos</span></button>
+      <button data-view="concorrencia"><span class="ico">🔎</span> <span data-i18n="nav.concorrencia">Concorrência</span></button>
+      <button data-view="catalogo"><span class="ico">📚</span> <span data-i18n="nav.catalogo">Catálogo</span></button>
+      <button data-view="arp"><span class="ico">📄</span> <span data-i18n="nav.arp">Atas de Registro</span></button>
+      <button data-view="disputa"><span class="ico">🤖</span> <span data-i18n="nav.disputa">Robô de Disputa</span></button>
       <button data-view="ferramentas"><span class="ico">⚙️</span> <span data-i18n="nav.ferramentas">Configurações</span></button>
 
       <div class="nav-group" data-nav-group="chat">
@@ -217,10 +227,17 @@
             <button type="button" class="btn btn-ghost btn-sm" id="btnAlertasCheckNow">Verificar agora</button>
           </div>
           <div class="desc">
-            Salve um monitoramento — o mais importante é <b>Editais próximos</b> (cidade + raio / vizinhos). Também dá no Radar (UF + palavras) e em Perguntar editais. Enquanto o sistema estiver aberto, o PNCP é consultado e o sino avisa só o que for <b>novo</b>.
+            Salve um monitoramento — o mais importante é <b>Editais próximos</b> (cidade + raio / vizinhos). Também dá no Radar (UF + palavras) e em Perguntar editais. Os editais novos aparecem em <b>balões</b> abaixo, ordenados pelo prazo: <b>Há interesse</b> envia para a Análise IA; <b>Não há interesse</b> exclui do sistema.
           </div>
           <div id="alertasWatchList" class="alertas-watch-list">
             <div class="small muted">Nenhum alerta ativo. Use “Ativar alerta” em Editais próximos (recomendado), Radar ou Perguntar editais.</div>
+          </div>
+          <div class="alertas-editais-head">
+            <h3>Editais encontrados</h3>
+            <span class="small muted">Ordenados pelo prazo de encerramento · decida edital a edital</span>
+          </div>
+          <div id="alertasEditaisList" class="alertas-editais-list">
+            <div class="small muted">Nenhum edital novo ainda. Quando o monitoramento achar algo, aparece aqui em balões.</div>
           </div>
         </div>
 
@@ -435,6 +452,14 @@
           </div>
           <div id="iaAlert" class="alert"></div>
 
+          <div id="iaPendingEditaisWrap" class="ia-pending-wrap" hidden>
+            <div class="alertas-editais-head" style="margin-top:0">
+              <h3>Editais com interesse</h3>
+              <span class="small muted">Enviados dos Alertas Automáticos · envie o PDF para analisar</span>
+            </div>
+            <div id="iaPendingEditais" class="alertas-editais-list"></div>
+          </div>
+
           <div class="ia-layout">
             <div class="ia-panel">
               <div class="ia-panel-toolbar">
@@ -591,7 +616,6 @@
             <div class="btn-row" style="margin:0">
               <button class="btn btn-ghost btn-sm" id="btnAddLinha">+ Linha</button>
               <button class="btn btn-ghost btn-sm" id="btnLimparOrc">Limpar</button>
-              <button class="btn btn-green btn-sm" id="btnSalvarOrc" title="Grava os itens no navegador e na nuvem agora">💾 Salvar orçamento</button>
               <button class="btn btn-ghost btn-sm" id="btnExportOrcExcel">⬇️ Excel</button>
               <button class="btn btn-ghost btn-sm" id="btnExportOrcPdf">⬇️ PDF</button>
               <button class="btn btn-primary btn-sm" id="btnSalvarOrcCatalogo">💾 Salvar no Catálogo</button>
@@ -599,7 +623,7 @@
               <button class="btn btn-gold" id="btnPropostaOrcExcel">📊 Proposta Excel</button>
             </div>
           </div>
-          <div class="desc">Espelho do edital: à esquerda os dados importados; à direita seus preços. <b>Meu total</b> = Qtd do edital × Valor de Venda. Preencha o <b>Valor de Venda</b> para calcular a % de lucro, ou digite a <b>%</b> desejada para calcular o Valor de Venda (a partir do seu V. Unitário).</div>
+          <div class="desc">Espelho do edital: à esquerda os dados importados; à direita seus preços na mesma linha do lote. <b>Meu total</b> = Qtd × V. Unit × (1 + %/100).</div>
           <div id="orcMeta" class="orc-meta" style="display:none"></div>
           <div id="orcAlert" class="alert"></div>
 
@@ -619,8 +643,8 @@
                 <col class="c-desc" />
                 <col class="c-money" />
                 <col class="c-money" />
+                <col class="c-qtd-estoque" />
                 <col class="c-money-meus" />
-                <col class="c-money-venda" />
                 <col class="c-pct" />
                 <col class="c-money" />
                 <col class="c-link" />
@@ -638,9 +662,9 @@
                   <th>Descrição</th>
                   <th>V. Unitário</th>
                   <th class="split-end">V. Final</th>
-                  <th class="split-start" title="Meu custo / preço de compra">V. Unitário</th>
-                  <th title="Preço que vou vender">Valor de Venda</th>
-                  <th class="col-pct" title="Lucro % = (Valor de Venda − meu V. Unitário) / meu V. Unitário. Digite a % para calcular o Valor de Venda.">%</th>
+                  <th class="col-qtd split-start" title="Quantidade em estoque / posso entregar">Qtd</th>
+                  <th>V. Unitário</th>
+                  <th class="col-pct">%</th>
                   <th>V. Final</th>
                   <th>Link de Acesso</th>
                   <th>Ações</th>
