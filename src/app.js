@@ -5416,90 +5416,116 @@
     },
     /** Explicit user save: local + cloud push + confirmation. */
     salvarAgora:function(){
-      // Vincula a planilha ao edital aberto antes de gravar.
-      if(LICSYSTEM.state.activeLeilaoId && !LICSYSTEM.state.orcBoundLeilaoId){
-        LICSYSTEM.state.orcBoundLeilaoId = String(LICSYSTEM.state.activeLeilaoId);
-      }
-      LICSYSTEM.orcamento.markTyping();
-      LICSYSTEM.orcamento.flushSave({ immediate: true, bindActive: true });
-      LICSYSTEM.state._orcTyping = false;
-      LICSYSTEM.state._orcDirty = false;
-      try{
-        if(LICSYSTEM.state.activeLeilaoId && LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.saveActiveWorkspace){
-          LICSYSTEM.leiloesParticipo.saveActiveWorkspace({ immediate: true });
-        }
-      }catch(e){}
-      // Garante push imediato dos dois caminhos (global + workspace do edital).
-      var cloudJobs = [];
-      try{
-        if(LICSYSTEM.cloudSync){
-          cloudJobs.push(LICSYSTEM.cloudSync.flushPush("orcamento", { immediate: true }));
-          cloudJobs.push(LICSYSTEM.cloudSync.flushPush("leiloesParticipo", { immediate: true }));
-        }
-      }catch(e){}
-
-      var n = (LICSYSTEM.state.orcItems || []).filter(function(it){
-        return !LICSYSTEM.orcamento.isEmptyRow(it);
-      }).length;
-      var editalNome = "";
-      try{
-        var active = LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.getActiveItem
-          ? LICSYSTEM.leiloesParticipo.getActiveItem()
-          : null;
-        if(active) editalNome = active.titulo || active.filename || "";
-      }catch(e){}
-      var msg =
-        "✅ <b>ORÇAMENTO SALVO</b>" +
-        (editalNome ? " — <b>"+utils.escapeHtml(String(editalNome).slice(0, 80))+"</b>" : "") +
-        " · "+n+" item(ns) gravado(s) neste edital.";
-      showAlert("orcAlert", "ok", msg);
-      try{
-        var alertEl = el("orcAlert");
-        if(alertEl && alertEl.scrollIntoView){
-          alertEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        }
-      }catch(e){}
-      try{
-        var toast = el("orcSaveToast");
-        if(!toast){
-          toast = document.createElement("div");
-          toast.id = "orcSaveToast";
-          document.body.appendChild(toast);
-        }
-        toast.textContent = "ORÇAMENTO SALVO";
-        toast.className = "show";
-        clearTimeout(LICSYSTEM.orcamento._toastTimer);
-        LICSYSTEM.orcamento._toastTimer = setTimeout(function(){
-          toast.className = "";
-        }, 2800);
-      }catch(e){}
-      try{
-        if(LICSYSTEM.cloudSync && LICSYSTEM.cloudSync.setStatus){
-          LICSYSTEM.cloudSync.setStatus("ok", "ORÇAMENTO SALVO");
-        }
-      }catch(e){}
-      var btn = el("btnSalvarOrc");
-      if(btn){
-        var prev = btn.innerHTML;
-        btn.innerHTML = "✅ ORÇAMENTO SALVO";
-        btn.disabled = true;
+      // Feedback IMEDIATO — antes de qualquer gravação (evita botão “morto” se o save travar).
+      function showSavedFeedback(okMsg){
+        try{
+          showAlert("orcAlert", "ok", okMsg || "✅ <b>ORÇAMENTO SALVO</b>");
+          var alertEl = el("orcAlert");
+          if(alertEl && alertEl.scrollIntoView){
+            alertEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
+        }catch(e){}
+        try{
+          var toast = el("orcSaveToast");
+          if(!toast){
+            toast = document.createElement("div");
+            toast.id = "orcSaveToast";
+            document.body.appendChild(toast);
+          }
+          toast.textContent = "ORÇAMENTO SALVO";
+          toast.className = "show";
+          clearTimeout(LICSYSTEM.orcamento._toastTimer);
+          LICSYSTEM.orcamento._toastTimer = setTimeout(function(){
+            toast.className = "";
+          }, 2800);
+        }catch(e){}
+        try{
+          if(LICSYSTEM.cloudSync && LICSYSTEM.cloudSync.setStatus){
+            LICSYSTEM.cloudSync.setStatus("ok", "ORÇAMENTO SALVO");
+          }
+        }catch(e){}
+        ["btnSalvarOrcamento", "btnSalvarOrc"].forEach(function(id){
+          var btn = el(id);
+          if(!btn) return;
+          if(!btn.getAttribute("data-prev-html")){
+            btn.setAttribute("data-prev-html", btn.innerHTML);
+          }
+          btn.innerHTML = "✅ ORÇAMENTO SALVO";
+          btn.disabled = true;
+        });
         clearTimeout(LICSYSTEM.orcamento._salvarBtnTimer);
         LICSYSTEM.orcamento._salvarBtnTimer = setTimeout(function(){
-          btn.innerHTML = prev;
-          btn.disabled = false;
+          ["btnSalvarOrcamento", "btnSalvarOrc"].forEach(function(id){
+            var btn = el(id);
+            if(!btn) return;
+            var prev = btn.getAttribute("data-prev-html");
+            if(prev) btn.innerHTML = prev;
+            btn.disabled = false;
+            btn.removeAttribute("data-prev-html");
+          });
         }, 2800);
       }
-      Promise.all(cloudJobs.filter(Boolean)).then(function(results){
-        var failed = (results || []).some(function(r){ return r && r.ok === false; });
-        if(failed){
-          showAlert(
-            "orcAlert",
-            "warn",
-            "⚠️ Orçamento gravado neste PC, mas a nuvem falhou. Verifique a internet e clique em Salvar de novo."
-          );
-          try{ if(LICSYSTEM.cloudSync) LICSYSTEM.cloudSync.setStatus("error", "Sync falhou"); }catch(e){}
+
+      showSavedFeedback("✅ <b>ORÇAMENTO SALVO</b> — gravando…");
+
+      try{
+        // Vincula a planilha ao edital aberto antes de gravar.
+        if(LICSYSTEM.state.activeLeilaoId && !LICSYSTEM.state.orcBoundLeilaoId){
+          LICSYSTEM.state.orcBoundLeilaoId = String(LICSYSTEM.state.activeLeilaoId);
         }
-      }).catch(function(){});
+        LICSYSTEM.orcamento.markTyping();
+        LICSYSTEM.orcamento.flushSave({ immediate: true, bindActive: true });
+        LICSYSTEM.state._orcTyping = false;
+        LICSYSTEM.state._orcDirty = false;
+        try{
+          if(LICSYSTEM.state.activeLeilaoId && LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.saveActiveWorkspace){
+            LICSYSTEM.leiloesParticipo.saveActiveWorkspace({ immediate: true });
+          }
+        }catch(e){}
+
+        var cloudJobs = [];
+        try{
+          if(LICSYSTEM.cloudSync){
+            cloudJobs.push(LICSYSTEM.cloudSync.flushPush("orcamento", { immediate: true }));
+            cloudJobs.push(LICSYSTEM.cloudSync.flushPush("leiloesParticipo", { immediate: true }));
+          }
+        }catch(e){}
+
+        var n = (LICSYSTEM.state.orcItems || []).filter(function(it){
+          return !LICSYSTEM.orcamento.isEmptyRow(it);
+        }).length;
+        var editalNome = "";
+        try{
+          var active = LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.getActiveItem
+            ? LICSYSTEM.leiloesParticipo.getActiveItem()
+            : null;
+          if(active) editalNome = active.titulo || active.filename || "";
+        }catch(e){}
+        var msg =
+          "✅ <b>ORÇAMENTO SALVO</b>" +
+          (editalNome ? " — <b>"+utils.escapeHtml(String(editalNome).slice(0, 80))+"</b>" : "") +
+          " · "+n+" item(ns) gravado(s) neste edital.";
+        showSavedFeedback(msg);
+
+        Promise.all(cloudJobs.filter(Boolean)).then(function(results){
+          var failed = (results || []).some(function(r){ return r && r.ok === false; });
+          if(failed){
+            showAlert(
+              "orcAlert",
+              "warn",
+              "⚠️ Orçamento gravado neste PC, mas a nuvem falhou. Verifique a internet e clique em Salvar de novo."
+            );
+            try{ if(LICSYSTEM.cloudSync) LICSYSTEM.cloudSync.setStatus("error", "Sync falhou"); }catch(e){}
+          }
+        }).catch(function(){});
+      }catch(err){
+        console.warn("salvarAgora", err);
+        showAlert(
+          "orcAlert",
+          "error",
+          "❌ Falha ao salvar o orçamento. Tente de novo. Se persistir, atualize a página (Ctrl+F5)."
+        );
+      }
     },
     /** Pull live input values into state (covers pending keystrokes before leave). */
     syncFromDom:function(){
@@ -9864,9 +9890,10 @@
       }
     });
 
-    // Orçamento
+    // Orçamento — liga os dois IDs (produção usa btnSalvarOrcamento; legado btnSalvarOrc)
     on("btnAddLinha","click", LICSYSTEM.orcamento.addLinha);
     on("btnLimparOrc","click", LICSYSTEM.orcamento.limpar);
+    on("btnSalvarOrcamento","click", function(){ LICSYSTEM.orcamento.salvarAgora(); });
     on("btnSalvarOrc","click", function(){ LICSYSTEM.orcamento.salvarAgora(); });
     on("btnPropostaOrc","click", LICSYSTEM.orcamento.gerarProposta);
     on("btnPropostaOrcExcel","click", LICSYSTEM.orcamento.gerarPropostaExcel);
