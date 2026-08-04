@@ -5097,7 +5097,7 @@
   /* ============================ ORÇAMENTO ============================ */
   LICSYSTEM.orcamento = {
     emptyItem:function(){
-      return {lote:"", qtd:1, qtdEstoque:0, produto:"", editalVunit:0, editalTotal:0, vunit:0, pct:0, link:"", compensa:null};
+      return {lote:"", qtd:1, qtdEstoque:0, produto:"", editalVunit:0, editalTotal:0, vunit:0, vvenda:0, pct:0, link:"", compensa:null};
     },
     normalizeItem:function(it){
       it = it || {};
@@ -5108,21 +5108,99 @@
       var editalTotal = Number(it.editalTotal != null ? it.editalTotal : 0) || 0;
       if(!editalTotal && editalVunit) editalTotal = qtd * editalVunit;
       if(!editalVunit && editalTotal && qtd) editalVunit = editalTotal / qtd;
-      var compensa = null;
-      if(it.compensa === true || it.compensa === "true" || it.statusCompensa === "compensa") compensa = true;
-      else if(it.compensa === false || it.compensa === "false" || it.statusCompensa === "nao") compensa = false;
-      return {
+      var vunit = Number(it.vunit) || 0;
+      var pct = Number(it.pct) || 0;
+      var vvenda = Number(it.vvenda != null ? it.vvenda : it.vVenda);
+      if(!isFinite(vvenda) || vvenda < 0) vvenda = 0;
+      if(!vvenda && vunit){
+        vvenda = pct ? (vunit * (1 + pct / 100)) : vunit;
+      }
+      if(vunit > 0 && vvenda > 0 && !pct){
+        pct = ((vvenda - vunit) / vunit) * 100;
+      }
+      var row = {
         lote: it.lote != null && it.lote !== "" ? String(it.lote) : "",
         qtd: qtd,
         qtdEstoque: qtdEstoque,
         produto: String(it.produto || it.descricao || ""),
         editalVunit: editalVunit,
         editalTotal: editalTotal,
-        vunit: Number(it.vunit) || 0,
-        pct: Number(it.pct) || 0,
+        vunit: vunit,
+        vvenda: Math.round(vvenda * 10000) / 10000,
+        pct: Math.round(pct * 1000) / 1000,
         link: String(it.link || ""),
-        compensa: compensa
+        compensa: null
       };
+      row.compensa = LICSYSTEM.orcamento.evalCompensa(row);
+      return row;
+    },
+
+    /** Margem % a partir do custo (vunit) e do V. Venda. */
+    calcPctFromVenda:function(vunit, vvenda){
+      vunit = Number(vunit) || 0;
+      vvenda = Number(vvenda) || 0;
+      if(vunit <= 0) return 0;
+      return Math.round((((vvenda - vunit) / vunit) * 100) * 1000) / 1000;
+    },
+
+    /** V. Venda a partir do custo e da %. */
+    calcVendaFromPct:function(vunit, pct){
+      vunit = Number(vunit) || 0;
+      pct = Number(pct) || 0;
+      return Math.round((vunit * (1 + pct / 100)) * 10000) / 10000;
+    },
+
+    /**
+     * Mantém vunit ↔ vvenda ↔ % sincronizados.
+     * changed: "vunit" | "vvenda" | "pct"
+     */
+    syncPricing:function(it, changed){
+      if(!it) return;
+      var vunit = Number(it.vunit) || 0;
+      var vvenda = Number(it.vvenda) || 0;
+      var pct = Number(it.pct) || 0;
+      if(changed === "pct"){
+        it.vvenda = LICSYSTEM.orcamento.calcVendaFromPct(vunit, pct);
+      } else if(changed === "vvenda"){
+        it.pct = LICSYSTEM.orcamento.calcPctFromVenda(vunit, vvenda);
+      } else if(changed === "vunit"){
+        if(pct){
+          it.vvenda = LICSYSTEM.orcamento.calcVendaFromPct(vunit, pct);
+        } else if(vvenda > 0 && vunit > 0){
+          it.pct = LICSYSTEM.orcamento.calcPctFromVenda(vunit, vvenda);
+        } else if(vunit > 0 && !vvenda){
+          it.vvenda = vunit;
+          it.pct = 0;
+        }
+      }
+      it.compensa = LICSYSTEM.orcamento.evalCompensa(it);
+    },
+
+    /** COMPENSA se meu V. Final < V. Final do edital; NÃO COMPENSA se maior. */
+    evalCompensa:function(it){
+      var meus = LICSYSTEM.orcamento.calcTotal(it);
+      var edital = LICSYSTEM.orcamento.calcEditalTotal(it);
+      if(!(meus > 0) || !(edital > 0)) return null;
+      if(meus < edital) return true;
+      if(meus > edital) return false;
+      return true;
+    },
+
+    calcEditalTotal:function(it){
+      var stored = Number(it.editalTotal)||0;
+      if(stored > 0) return stored;
+      return (Number(it.qtd)||0) * (Number(it.editalVunit)||0);
+    },
+    /** MEUS PREÇOS V. Final = Qtd do edital × V. Venda */
+    calcTotal:function(it){
+      var q = Number(it.qtd) || 0;
+      var vv = Number(it.vvenda);
+      if(!isFinite(vv) || vv <= 0){
+        var v = Number(it.vunit) || 0;
+        var p = Number(it.pct) || 0;
+        vv = v * (1 + p / 100);
+      }
+      return q * vv;
     },
     isEmptyRow:function(it){
       if(!it) return true;
@@ -5247,17 +5325,12 @@
             it.editalTotal = (Number(it.qtd) || 0) * (Number(it.editalVunit) || 0);
           }
         }
+        if(f === "vunit" || f === "vvenda" || f === "pct"){
+          LICSYSTEM.orcamento.syncPricing(it, f);
+        } else if(f === "qtd" || f === "editalVunit"){
+          it.compensa = LICSYSTEM.orcamento.evalCompensa(it);
+        }
       }
-    },
-    calcEditalTotal:function(it){
-      var stored = Number(it.editalTotal)||0;
-      if(stored > 0) return stored;
-      return (Number(it.qtd)||0) * (Number(it.editalVunit)||0);
-    },
-    /** MEUS PREÇOS V. Final: always qtdEstoque (0 → R$ 0,00), never edital qtd. */
-    calcTotal:function(it){
-      var q=Number(it.qtdEstoque)||0, v=Number(it.vunit)||0, p=Number(it.pct)||0;
-      return q*v*(1+p/100);
     },
     pageCount:function(){
       var n = LICSYSTEM.state.orcItems.length;
@@ -5320,6 +5393,11 @@
       var buf = [];
       for(var i = start; i < end; i++){
         var it = items[i];
+        if(!(Number(it.vvenda) > 0) && Number(it.vunit) > 0){
+          LICSYSTEM.orcamento.syncPricing(it, Number(it.pct) ? "pct" : "vunit");
+        } else {
+          it.compensa = LICSYSTEM.orcamento.evalCompensa(it);
+        }
         var totalMeus = LICSYSTEM.orcamento.calcTotal(it);
         var totalEdital = LICSYSTEM.orcamento.calcEditalTotal(it);
         var editalUnitShow = Number(it.editalVunit)||0;
@@ -5332,10 +5410,16 @@
         if(risco.length) rowCls.push("risk-row");
         if(it.compensa === true) rowCls.push("orc-row-compensa");
         else if(it.compensa === false) rowCls.push("orc-row-nao-compensa");
-        var btnCompensaCls = "btn btn-sm orcCompensa"+(it.compensa === true ? " is-active" : "");
-        var btnNaoCls = "btn btn-sm orcNaoCompensa"+(it.compensa === false ? " is-active" : "");
+        var statusBadge = "";
+        if(it.compensa === true){
+          statusBadge = '<span class="orc-status-badge is-ok" title="Meu V. Final abaixo do edital">COMPENSA</span>';
+        } else if(it.compensa === false){
+          statusBadge = '<span class="orc-status-badge is-bad" title="Meu V. Final acima do edital">NÃO COMPENSA</span>';
+        }
         var hasLink = !!(String(it.link || "").trim());
         var btnLinkCls = "btn btn-ghost btn-sm orcOpenLink"+(hasLink ? " is-ready" : "");
+        var pctShow = Number(it.pct) || 0;
+        var vvendaShow = Number(it.vvenda) || 0;
         buf.push(
           '<tr class="'+rowCls.join(" ")+'" data-item-idx="'+i+'">'+
             '<td class="td-chk"><input type="checkbox" class="orcChk" data-i="'+i+'" aria-label="Selecionar lote '+(it.lote||(i+1))+'"></td>'+
@@ -5346,17 +5430,15 @@
             '</div></td>'+
             '<td class="td-money"><input type="number" data-i="'+i+'" data-f="editalVunit" value="'+utils.escapeHtml(editalUnitShow)+'" step="0.0001" min="0" title="Valor unitário do edital"></td>'+
             '<td class="td-money split-end"><span class="cell-ro" data-edital-total="'+i+'">'+utils.formatBrl(totalEdital)+'</span></td>'+
-            '<td class="td-qtd split-start"><input type="number" class="orc-qtd" data-i="'+i+'" data-f="qtdEstoque" value="'+utils.escapeHtml(it.qtdEstoque)+'" step="1" min="0" title="Quantidade em estoque / posso entregar"></td>'+
-            '<td class="td-money"><input type="number" data-i="'+i+'" data-f="vunit" value="'+utils.escapeHtml(it.vunit)+'" step="0.01" min="0" title="Meu valor unitário"></td>'+
-            '<td class="td-pct"><input type="number" class="orc-pct" data-i="'+i+'" data-f="pct" value="'+utils.escapeHtml(it.pct)+'" step="0.1" title="Porcentagem"></td>'+
-            '<td class="td-money"><span class="cell-total" data-meus-total="'+i+'">'+utils.formatBrl(totalMeus)+'</span></td>'+
+            '<td class="td-money split-start"><input type="number" data-i="'+i+'" data-f="vunit" value="'+utils.escapeHtml(it.vunit)+'" step="0.01" min="0" title="Meu valor unitário (custo)"></td>'+
+            '<td class="td-money"><input type="number" data-i="'+i+'" data-f="vvenda" value="'+utils.escapeHtml(vvendaShow)+'" step="0.01" min="0" title="Valor de venda"></td>'+
+            '<td class="td-pct"><input type="number" class="orc-pct" data-i="'+i+'" data-f="pct" value="'+utils.escapeHtml(pctShow)+'" step="0.1" title="Margem % (automática)"></td>'+
+            '<td class="td-money"><div class="orc-final-cell"><span class="cell-total" data-meus-total="'+i+'">'+utils.formatBrl(totalMeus)+'</span>'+statusBadge+'</div></td>'+
             '<td class="td-link"><input type="text" data-i="'+i+'" data-f="link" value="'+utils.escapeHtml(it.link||"")+'" placeholder="Link"></td>'+
             '<td class="td-actions"><div class="orc-actions">'+
               '<button type="button" class="btn btn-ghost btn-sm orcGoogle" data-i="'+i+'" title="Google">G</button>'+
               '<button type="button" class="btn btn-ghost btn-sm orcMl" data-i="'+i+'" title="Mercado Livre">ML</button>'+
               '<button type="button" class="'+btnLinkCls+'" data-i="'+i+'" title="'+(hasLink?"Abrir link de acesso":"Cole um link no campo Link de Acesso")+'"'+(hasLink?"":" disabled")+'>LINK</button>'+
-              '<button type="button" class="'+btnCompensaCls+'" data-i="'+i+'" title="COMPENSA">(C)</button>'+
-              '<button type="button" class="'+btnNaoCls+'" data-i="'+i+'" title="NÃO COMPENSA">(N)</button>'+
               '<button type="button" class="btn btn-ghost btn-sm orcDel" data-i="'+i+'" title="Remover">✕</button>'+
             '</div></td>'+
           '</tr>'
@@ -5911,6 +5993,11 @@
           it.editalTotal = (Number(it.qtd)||0) * (Number(it.editalVunit)||0);
         }
       }
+      if(f==="vunit" || f==="vvenda" || f==="pct"){
+        LICSYSTEM.orcamento.syncPricing(it, f);
+      } else {
+        it.compensa = LICSYSTEM.orcamento.evalCompensa(it);
+      }
 
       LICSYSTEM.state._orcDirty = true;
       var row = document.querySelector('#orcBody [data-item-idx="'+i+'"]');
@@ -5919,6 +6006,37 @@
         var meCell = row.querySelector('[data-meus-total="'+i+'"]');
         if(edCell) edCell.textContent = utils.formatBrl(LICSYSTEM.orcamento.calcEditalTotal(it));
         if(meCell) meCell.textContent = utils.formatBrl(LICSYSTEM.orcamento.calcTotal(it));
+        var pctInp = row.querySelector('input[data-f="pct"]');
+        var vvInp = row.querySelector('input[data-f="vvenda"]');
+        if(pctInp && document.activeElement !== pctInp) pctInp.value = Number(it.pct) || 0;
+        if(vvInp && document.activeElement !== vvInp) vvInp.value = Number(it.vvenda) || 0;
+        row.classList.toggle("orc-row-compensa", it.compensa === true);
+        row.classList.toggle("orc-row-nao-compensa", it.compensa === false);
+        var finalCell = row.querySelector(".orc-final-cell");
+        if(finalCell){
+          var badge = finalCell.querySelector(".orc-status-badge");
+          if(it.compensa === true){
+            if(!badge){
+              badge = document.createElement("span");
+              badge.className = "orc-status-badge is-ok";
+              finalCell.appendChild(badge);
+            }
+            badge.className = "orc-status-badge is-ok";
+            badge.title = "Meu V. Final abaixo do edital";
+            badge.textContent = "COMPENSA";
+          } else if(it.compensa === false){
+            if(!badge){
+              badge = document.createElement("span");
+              badge.className = "orc-status-badge is-bad";
+              finalCell.appendChild(badge);
+            }
+            badge.className = "orc-status-badge is-bad";
+            badge.title = "Meu V. Final acima do edital";
+            badge.textContent = "NÃO COMPENSA";
+          } else if(badge){
+            badge.remove();
+          }
+        }
         if(f==="link"){
           var linkBtn = row.querySelector(".orcOpenLink");
           if(linkBtn){
@@ -9807,26 +9925,6 @@
     on("orcBody","click", function(e){
       var del = e.target.closest(".orcDel");
       if(del){ var i=Number(del.getAttribute("data-i")); LICSYSTEM.state.orcItems.splice(i,1); if(!LICSYSTEM.state.orcItems.length) LICSYSTEM.state.orcItems.push(LICSYSTEM.orcamento.emptyItem()); LICSYSTEM.orcamento.render(); return; }
-      var yes = e.target.closest(".orcCompensa");
-      if(yes){
-        var iy = Number(yes.getAttribute("data-i"));
-        var ity = LICSYSTEM.state.orcItems[iy];
-        if(ity){
-          ity.compensa = (ity.compensa === true) ? null : true;
-          LICSYSTEM.orcamento.render();
-        }
-        return;
-      }
-      var no = e.target.closest(".orcNaoCompensa");
-      if(no){
-        var ino = Number(no.getAttribute("data-i"));
-        var itn = LICSYSTEM.state.orcItems[ino];
-        if(itn){
-          itn.compensa = (itn.compensa === false) ? null : false;
-          LICSYSTEM.orcamento.render();
-        }
-        return;
-      }
       var g = e.target.closest(".orcGoogle");
       if(g){ var it=LICSYSTEM.state.orcItems[Number(g.getAttribute("data-i"))]; if(it&&it.produto) window.open("https://www.google.com/search?q="+encodeURIComponent(it.produto),"_blank"); return; }
       var ml = e.target.closest(".orcMl");
