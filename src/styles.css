@@ -1126,6 +1126,14 @@
   .orc-table .cell-total{font-weight:800}
   .orc-desc-wrap{display:flex;align-items:center;gap:4px;min-width:0;width:100%}
   .orc-desc-wrap input{flex:1;min-width:0}
+  .orc-desc-wrap input.orc-produto-locked,
+  .orc-table input.orc-produto-locked{
+    background:#f3f5f8;color:var(--ls-navy);cursor:default;
+    border-color:transparent;box-shadow:none;font-weight:600;
+  }
+  .orc-desc-wrap input.orc-produto-locked:focus{
+    outline:0;box-shadow:none;border-color:transparent;
+  }
   .orc-table tbody td.td-link input{
     padding:5px 6px;font-size:11px;
   }

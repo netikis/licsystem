@@ -5294,7 +5294,7 @@
             '<td class="td-lote"><input type="text" class="orc-lote" data-i="'+i+'" data-f="lote" value="'+utils.escapeHtml(it.lote)+'" placeholder="—" title="Lote ou Item do edital"></td>'+
             '<td class="td-qtd"><input type="number" class="orc-qtd" data-i="'+i+'" data-f="qtd" value="'+utils.escapeHtml(it.qtd)+'" step="1" min="0" title="Quantidade"></td>'+
             '<td><div class="orc-desc-wrap'+(risco.length?' risk-cell':'')+'">'+flag+
-              '<input type="text" data-i="'+i+'" data-f="produto" value="'+utils.escapeHtml(it.produto)+'" placeholder="Descrição do edital">'+
+              '<input type="text" class="orc-produto-locked" data-i="'+i+'" data-f="produto" value="'+utils.escapeHtml(it.produto)+'" placeholder="Descrição do edital" readonly tabindex="-1" title="Descrição bloqueada — vem do edital e não pode ser alterada">'+
             '</div></td>'+
             '<td class="td-money"><input type="number" data-i="'+i+'" data-f="editalVunit" value="'+utils.escapeHtml(editalUnitShow)+'" step="0.0001" min="0" title="Valor unitário do edital"></td>'+
             '<td class="td-money split-end"><span class="cell-ro" data-edital-total="'+i+'">'+utils.formatBrl(totalEdital)+'</span></td>'+
@@ -5853,7 +5853,9 @@
 
     onEdit:function(i,f,val){
       var it=LICSYSTEM.state.orcItems[i]; if(!it) return;
-      if(f==="produto"||f==="link"||f==="lote") it[f]=val;
+      /* Descrição do produto vem do edital e não pode ser alterada */
+      if(f === "produto") return;
+      if(f==="link"||f==="lote") it[f]=val;
       else it[f]=Number(val)||0;
 
       if(f==="qtd" || f==="editalVunit"){
@@ -8161,7 +8163,8 @@
               (it.resumo ? '<div class="leilao-resumo">' + utils.escapeHtml(it.resumo) + "</div>" : "") +
             "</div>" +
             '<div class="leilao-actions">' +
-              (!isArch ? '<button type="button" class="btn btn-gold btn-sm lpOpen" title="Abrir painel">Abrir</button>' : "") +
+              (!isArch ? '<button type="button" class="btn btn-gold btn-sm lpOrcar" title="Abrir orçamento deste edital">Orçar</button>' : "") +
+              (!isArch ? '<button type="button" class="btn btn-ghost btn-sm lpEncaminhar" title="Encaminhar para Entrega">Encaminhar</button>' : "") +
               (docsN ? '<button type="button" class="btn btn-ghost btn-sm lpDocs" title="Abrir checklist">📑 Docs</button>' : "") +
               (!isArch ? '<button type="button" class="btn btn-ghost btn-sm lpArchive" title="Arquivar">Arquivar</button>' : "") +
               '<button type="button" class="btn btn-ghost btn-sm lpRemove" title="Remover">✕</button>' +
@@ -8185,12 +8188,20 @@
           LICSYSTEM.leiloesParticipo.openWorkspace(id, "leilaoWorkspace");
         });
       });
-      box.querySelectorAll(".lpOpen").forEach(function(btn){
+      box.querySelectorAll(".lpOrcar").forEach(function(btn){
         btn.addEventListener("click", function(ev){
           ev.stopPropagation();
           var row = btn.closest(".leilao-item");
           var id = row && row.getAttribute("data-id");
-          LICSYSTEM.leiloesParticipo.openWorkspace(id, "leilaoWorkspace");
+          LICSYSTEM.leiloesParticipo.openWorkspace(id, "orcamento");
+        });
+      });
+      box.querySelectorAll(".lpEncaminhar").forEach(function(btn){
+        btn.addEventListener("click", function(ev){
+          ev.stopPropagation();
+          var row = btn.closest(".leilao-item");
+          var id = row && row.getAttribute("data-id");
+          LICSYSTEM.leiloesParticipo.encaminharParaEntrega(id);
         });
       });
       box.querySelectorAll(".lpDocs").forEach(function(btn){
@@ -8217,6 +8228,36 @@
           LICSYSTEM.leiloesParticipo.remove(id);
         });
       });
+    },
+
+    /** Encaminha o edital para o módulo Entrega, com dados pré-preenchidos. */
+    encaminharParaEntrega: function(id){
+      var item = LICSYSTEM.leiloesParticipo.findById(id);
+      if(!item){
+        showAlert("leiloesAlert", "warn", "Edital não encontrado.");
+        return;
+      }
+      if(window.__lsActivateView) window.__lsActivateView("entregas");
+      if(LICSYSTEM.entregas){
+        try{
+          LICSYSTEM.entregas.resetForm();
+          var nome = el("entregaNomeLicitacao");
+          if(nome) nome.value = String(item.titulo || "").slice(0, 220);
+          var obs = el("entregaObservacoes");
+          if(obs){
+            var bits = [];
+            if(item.orgao) bits.push("Órgão: " + item.orgao);
+            if(item.municipio) bits.push("Município: " + item.municipio);
+            if(item.filename) bits.push("Arquivo: " + item.filename);
+            if(item.resumo) bits.push(item.resumo);
+            obs.value = bits.join("\n").slice(0, 2000);
+          }
+          LICSYSTEM.entregas.open();
+          showAlert("entregaAlert", "ok", "Edital encaminhado — complete os dados da entrega e salve.");
+        }catch(e){
+          showAlert("leiloesAlert", "error", "Não foi possível abrir o formulário de entrega.");
+        }
+      }
     }
   };
 
@@ -9711,6 +9752,7 @@
     on("orcBody","input", function(e){
       var inp = e.target.closest("input[data-i]");
       if(!inp) return;
+      if(inp.getAttribute("data-f") === "produto" || inp.readOnly) return;
       LICSYSTEM.orcamento.onEdit(Number(inp.getAttribute("data-i")), inp.getAttribute("data-f"), inp.value);
     });
     on("orcBody","click", function(e){
@@ -10042,6 +10084,7 @@
       // --- Identificação ---
       nomeLicitacao: val("entregaNomeLicitacao"),
       numeroEmpenho: val("entregaNumeroEmpenho"),
+      preenchidoPor: val("entregaPreenchidoPor"),
 
       // --- Faturamento / anexos ---
       statusNota: statusNota, // "FEITO" | "NAO_FEITO"
@@ -10091,6 +10134,9 @@
     if(!dados.nomeLicitacao){
       return { ok:false, erro:"Informe o Nome da Licitação." };
     }
+    if(!dados.preenchidoPor){
+      return { ok:false, erro:"Informe o nome de quem preencheu (obrigatório)." };
+    }
     if(tipoDestino === "MINHA_LOJA" && !(dados.minhaLoja && dados.minhaLoja.transporte)){
       return { ok:false, erro:"Selecione o transporte para envio futuro." };
     }
@@ -10134,7 +10180,17 @@
       }
       document.body.classList.add("entrega-open");
       hideAlert("entregaFormAlert");
-      setTimeout(function(){ var f = el("entregaNomeLicitacao"); if(f) f.focus(); }, 200);
+      try{
+        var last = localStorage.getItem("licsystem_entrega_preenchido_por") || "";
+        var por = el("entregaPreenchidoPor");
+        if(por && !por.value && last) por.value = last;
+      }catch(e){}
+      setTimeout(function(){
+        var f = el("entregaPreenchidoPor");
+        if(f && !String(f.value||"").trim()){ f.focus(); return; }
+        f = el("entregaNomeLicitacao");
+        if(f) f.focus();
+      }, 200);
     },
 
     close:function(){
@@ -10153,7 +10209,7 @@
 
     resetForm:function(){
       [
-        "entregaNomeLicitacao","entregaNumeroEmpenho","entregaObservacoes","entregaMaterialOrigem",
+        "entregaNomeLicitacao","entregaNumeroEmpenho","entregaPreenchidoPor","entregaObservacoes","entregaMaterialOrigem",
         "entregaLocalResponsavel","entregaCep","entregaEndereco","entregaNumero","entregaComplemento",
         "entregaBairro","entregaCidade","entregaUf"
       ].forEach(function(id){ if(el(id)) el(id).value = ""; });
@@ -10242,6 +10298,7 @@
             '<div class="ei-title">'+utils.escapeHtml(it.nomeLicitacao||"Sem nome")+'</div>'+
             '<div class="ei-meta">Empenho: '+utils.escapeHtml(it.numeroEmpenho||"—")+
               ' · '+utils.escapeHtml(dest)+
+              (it.preenchidoPor ? ' · Preenchido por: '+utils.escapeHtml(it.preenchidoPor) : '')+
               (it.anexo && it.anexo.nome ? ' · 📎 '+utils.escapeHtml(it.anexo.nome) : '')+
             '</div>'+
           '</div>'+badge+
@@ -10260,6 +10317,11 @@
       // TODO: integrar Storage + Firestore aqui usando pack.dados + pack.arquivo
       var registro = pack.dados;
       registro.id = "ent_"+Date.now();
+      try{
+        if(registro.preenchidoPor){
+          localStorage.setItem("licsystem_entrega_preenchido_por", registro.preenchidoPor);
+        }
+      }catch(e){}
       LICSYSTEM.entregas.load();
       LICSYSTEM.entregas.items.push(registro);
       LICSYSTEM.entregas.saveLocal();
