@@ -751,7 +751,7 @@
             </div>
           </div>
           <div class="desc">
-            Gerencie certidões e documentos habilitatórios: adicione, edite, remova vencidos e exporte em ZIP.
+            Gerencie certidões e documentos habilitatórios: <b>Anexar</b> PDF/imagem (máx. 1,5 MB), <b>Ver</b> em tela cheia nítida, editar validade e exportar ZIP.
             <b>Verde:</b> válido · <b>Amarelo:</b> vence em ≤15 dias · <b>Vermelho:</b> vencido/sem data.
           </div>
           <div id="cofreAlert" class="alert"></div>
@@ -759,6 +759,7 @@
             <label class="cofre-check-all"><input type="checkbox" id="cofreSelectAll" /> Selecionar todos</label>
             <button type="button" class="btn btn-ghost btn-sm" id="btnCofreSeed">Carregar padrões</button>
           </div>
+          <input type="file" id="cofreQuickFile" accept=".pdf,image/*,application/pdf" style="display:none" />
           <div id="cofreList" class="cofre-list"></div>
         </div>
       </section>
@@ -1468,7 +1469,7 @@
         <input type="url" id="cofreLink" placeholder="https://…" autocomplete="off" />
       </div>
     </div>
-    <label class="fld" for="cofreArquivo">Arquivo PDF ou imagem (opcional, máx. 1,5 MB)</label>
+    <label class="fld" for="cofreArquivo">Arquivo PDF ou imagem (opcional, máx. 1,5 MB — sem compressão)</label>
     <input type="file" id="cofreArquivo" accept=".pdf,image/*,application/pdf" />
     <div id="cofreArquivoInfo" class="muted small" style="margin:6px 0 10px"></div>
     <label class="fld" for="cofreObs">Observações</label>
@@ -1477,6 +1478,26 @@
       <button type="button" class="btn btn-ghost" id="btnCofreModalCancel">Cancelar</button>
       <button type="button" class="btn btn-green" id="btnCofreModalSave">💾 Salvar documento</button>
     </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: COFRE — VER DOCUMENTO (nítido) ============ -->
+<div id="cofreViewOverlay" aria-hidden="true">
+  <div class="cofre-view-card" role="dialog" aria-modal="true" aria-labelledby="cofreViewTitle">
+    <div class="cofre-view-head">
+      <div class="cofre-view-head-text">
+        <h3 id="cofreViewTitle">Documento</h3>
+        <p id="cofreViewMeta" class="muted small"></p>
+      </div>
+      <div class="cofre-view-toolbar">
+        <button type="button" class="btn btn-ghost btn-sm" id="btnCofreViewZoomOut" title="Diminuir">−</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btnCofreViewZoomReset" title="Tamanho original">100%</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btnCofreViewZoomIn" title="Aumentar">+</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btnCofreViewDownload">⬇️ Baixar</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btnCofreViewClose">Fechar</button>
+      </div>
+    </div>
+    <div id="cofreViewBody" class="cofre-view-body"></div>
   </div>
 </div>
 
