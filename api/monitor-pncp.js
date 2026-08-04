@@ -163,6 +163,7 @@ async function runRadarWatch(watch, deadline) {
       dataAbertura: item.dataAberturaProposta || null,
       dataEncerramento: item.dataEncerramentoProposta || null,
       numeroControlePNCP: item.numeroControlePNCP || null,
+      numeroCompra: item.numeroCompra != null ? String(item.numeroCompra) : null,
       link: null,
     };
     var cnpj =
