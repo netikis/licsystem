@@ -8530,6 +8530,20 @@
       this.renderInteressadosIa();
       this.renderPanelList();
       try{ LICSYSTEM.dashboard.renderPncp(); }catch(e){}
+      /* Alertas antigos sem prazo: busca de novo no PNCP e preenche as datas */
+      if(this.alertsMissingPrazo() > 0 && this.watches.some(function(w){ return w.enabled !== false; })){
+        var self = this;
+        if(!this._prazoBackfillScheduled){
+          this._prazoBackfillScheduled = true;
+          setTimeout(function(){
+            self.checkAll().catch(function(){}).then(function(){
+              self._prazoBackfillScheduled = false;
+            }, function(){
+              self._prazoBackfillScheduled = false;
+            });
+          }, 1200);
+        }
+      }
     },
 
     normalizeWatch: function(raw){
@@ -8576,8 +8590,8 @@
         objeto: String(raw.objeto || "").slice(0, 500),
         modalidade: String(raw.modalidade || "").slice(0, 80),
         valorEstimado: raw.valorEstimado != null ? Number(raw.valorEstimado) : null,
-        dataAbertura: raw.dataAbertura || null,
-        dataEncerramento: raw.dataEncerramento || null,
+        dataAbertura: LICSYSTEM.alertas.pickDataAbertura(raw),
+        dataEncerramento: LICSYSTEM.alertas.pickDataPrazo(raw),
         link: raw.link || null,
         watchId: String(raw.watchId || ""),
         watchLabel: String(raw.watchLabel || "").slice(0, 160),
@@ -8585,6 +8599,80 @@
         readAt: raw.readAt != null ? Number(raw.readAt) || null : null,
         interessadoAt: raw.interessadoAt != null ? Number(raw.interessadoAt) || null : null
       };
+    },
+
+    /** Aceita nomes variados vindos do PNCP / APIs. */
+    pickDataPrazo: function(raw){
+      if(!raw || typeof raw !== "object") return null;
+      var v =
+        raw.dataEncerramento ||
+        raw.dataEncerramentoProposta ||
+        raw.dataEncerramentoPropostas ||
+        raw.dataFinalProposta ||
+        raw.dataFimProposta ||
+        raw.dataLimiteProposta ||
+        null;
+      if(v == null || v === "") return null;
+      return String(v);
+    },
+
+    pickDataAbertura: function(raw){
+      if(!raw || typeof raw !== "object") return null;
+      var v = raw.dataAbertura || raw.dataAberturaProposta || null;
+      if(v == null || v === "") return null;
+      return String(v);
+    },
+
+    /** Atualiza alertas já salvos (sem prazo) com dados frescos do monitor. */
+    enrichAlertsFromRows: function(rows){
+      if(!rows || !rows.length) return 0;
+      var byKey = Object.create(null);
+      for(var i = 0; i < rows.length; i++){
+        var row = rows[i] || {};
+        var key = this.editalKey(row);
+        if(key) byKey[key] = row;
+        if(row.numeroControlePNCP) byKey[String(row.numeroControlePNCP)] = row;
+      }
+      var updated = 0;
+      for(var j = 0; j < this.alerts.length; j++){
+        var a = this.alerts[j];
+        var src = byKey[a.key] || byKey[a.id] || (a.numeroControlePNCP ? byKey[String(a.numeroControlePNCP)] : null);
+        if(!src) continue;
+        var changed = false;
+        var prazo = this.pickDataPrazo(src);
+        var abertura = this.pickDataAbertura(src);
+        if(prazo && String(a.dataEncerramento || "") !== String(prazo)){
+          a.dataEncerramento = prazo;
+          changed = true;
+        }
+        if(abertura && !a.dataAbertura){
+          a.dataAbertura = abertura;
+          changed = true;
+        }
+        if(src.link && !a.link){ a.link = src.link; changed = true; }
+        if(src.numeroCompra != null && !a.numeroCompra){
+          a.numeroCompra = String(src.numeroCompra).slice(0, 80);
+          changed = true;
+        }
+        if(src.modalidade && !a.modalidade){
+          a.modalidade = String(src.modalidade).slice(0, 80);
+          changed = true;
+        }
+        if(src.valorEstimado != null && a.valorEstimado == null){
+          a.valorEstimado = Number(src.valorEstimado);
+          changed = true;
+        }
+        if(changed) updated++;
+      }
+      return updated;
+    },
+
+    alertsMissingPrazo: function(){
+      var n = 0;
+      for(var i = 0; i < this.alerts.length; i++){
+        if(!this.alerts[i].dataEncerramento) n++;
+      }
+      return n;
     },
 
     applyWatches: function(arr, opts){
@@ -9047,8 +9135,8 @@
           objeto: row.objeto,
           modalidade: row.modalidade,
           valorEstimado: row.valorEstimado,
-          dataAbertura: row.dataAbertura,
-          dataEncerramento: row.dataEncerramento || null,
+          dataAbertura: this.pickDataAbertura(row),
+          dataEncerramento: this.pickDataPrazo(row),
           link: row.link,
           watchId: watch.id,
           watchLabel: watch.label,
@@ -9080,11 +9168,12 @@
         var novos = j.novos || [];
         /* baseline: marca tudo visto sem criar alerta */
         var added = self.addNovos(opts.baseline ? pack : novos, watch, opts);
+        var enriched = self.enrichAlertsFromRows(pack);
         watch.lastCheckedAt = Date.now();
         self.persistWatches({ immediate: true });
-        if(!opts.baseline) self.persistAlerts({ immediate: true });
+        if(!opts.baseline || enriched) self.persistAlerts({ immediate: true });
         else self.persistWatches({ immediate: true });
-        return { added: added, total: pack.length, watch: watch };
+        return { added: added, enriched: enriched, total: pack.length, watch: watch };
       });
     },
 
@@ -9093,12 +9182,13 @@
       var self = this;
       if(self._busy) return Promise.resolve({ skipped: true });
       var list = self.watches.filter(function(w){ return w.enabled !== false; });
-      if(!list.length) return Promise.resolve({ checked: 0, added: 0 });
+      if(!list.length) return Promise.resolve({ checked: 0, added: 0, enriched: 0 });
       self._busy = true;
       var btnIds = ["btnAlertasCheckNow", "btnBellCheck"];
       btnIds.forEach(function(id){ var b = el(id); if(b) b.disabled = true; });
 
       var addedTotal = 0;
+      var enrichedTotal = 0;
       var chain = Promise.resolve();
       /* API aceita até 4 watches por chamada */
       var chunks = [];
@@ -9126,6 +9216,7 @@
               var pack = (res && res.editais) || [];
               var novos = (j.novos || []).filter(function(n){ return n.watchId === w.id; });
               addedTotal += self.addNovos(opts.baseline ? pack : novos, w, opts);
+              enrichedTotal += self.enrichAlertsFromRows(pack);
               w.lastCheckedAt = Date.now();
             });
           });
@@ -9135,7 +9226,7 @@
       return chain.then(function(){
         self.persistWatches({ immediate: true });
         self.persistAlerts({ immediate: true });
-        return { checked: list.length, added: addedTotal };
+        return { checked: list.length, added: addedTotal, enriched: enrichedTotal };
       }).catch(function(err){
         console.warn("alertas.checkAll", err);
         throw err;
@@ -9273,9 +9364,11 @@
       this.load();
       this.startPolling();
       var self = this;
+      var missing = this.alertsMissingPrazo();
+      var delay = missing ? 1500 : 8000;
       setTimeout(function(){
         self.checkAll().catch(function(){});
-      }, 8000);
+      }, delay);
     },
 
     onLogout: function(){
@@ -9353,10 +9446,15 @@
       }
       function runCheck(){
         self.checkAll().then(function(r){
-          var msg = r && r.added
-            ? (r.added + " edital(is) novo(s) — veja os balões em Meus alertas.")
-            : "Verificação concluída. Nenhum edital novo.";
-          showAlert("pncpAlert", r && r.added ? "ok" : "info", msg);
+          var msg;
+          if(r && r.added){
+            msg = r.added + " edital(is) novo(s) — veja os balões em Meus alertas.";
+          } else if(r && r.enriched){
+            msg = "Prazos atualizados em " + r.enriched + " edital(is).";
+          } else {
+            msg = "Verificação concluída. Nenhum edital novo.";
+          }
+          showAlert("pncpAlert", (r && (r.added || r.enriched)) ? "ok" : "info", msg);
         }).catch(function(err){
           showAlert("pncpAlert", "error", (err && err.message) || "Falha ao verificar alertas");
         });
