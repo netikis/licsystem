@@ -288,6 +288,7 @@
   }
   .alerta-watch-row.off{opacity:.55}
   .alerta-watch-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .alertas-head-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex-shrink:0}
   .alertas-editais-head{
     display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px;
     margin:18px 0 10px;padding-top:14px;border-top:1px solid var(--ls-line);

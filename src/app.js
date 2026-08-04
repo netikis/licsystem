@@ -4672,6 +4672,7 @@
     collapseSummaryIdForKey: function (key) {
       if (key === "prox-editais") return "proxCollapseSummary";
       if (key === "radar-pncp") return "radarCollapseSummary";
+      if (key === "alertas-pncp") return "alertasCollapseSummary";
       return "chatCollapseSummary";
     },
 
@@ -4681,7 +4682,9 @@
           ? "proxCollapseSummary"
           : which === "radar"
             ? "radarCollapseSummary"
-            : "chatCollapseSummary";
+            : which === "alertas"
+              ? "alertasCollapseSummary"
+              : "chatCollapseSummary";
       var sum = el(id);
       if (!sum) return;
       sum.textContent = text || "";
@@ -4690,7 +4693,9 @@
           ? el("cardProxEditais")
           : which === "radar"
             ? el("cardRadarPncp")
-            : el("cardChatEditais");
+            : which === "alertas"
+              ? el("cardAlertasPncp")
+              : el("cardChatEditais");
       var collapsed = card && card.classList.contains("is-collapsed");
       sum.hidden = !collapsed || !text;
     },
@@ -8895,6 +8900,7 @@
       if(!box) return;
       if(!this.alerts.length){
         box.innerHTML = '<div class="small muted">Nenhum edital novo ainda. Quando o monitoramento achar algo, aparece aqui em balões.</div>';
+        this.updateCollapseSummary();
         return;
       }
       var sorted = this.sortByPrazo(this.alerts);
@@ -8904,6 +8910,21 @@
         html += self.balloonHtml(a, { mode: "alerta" });
       });
       box.innerHTML = html;
+      this.updateCollapseSummary();
+    },
+
+    updateCollapseSummary: function(){
+      var nWatch = this.watches.length;
+      var nEditais = this.alerts.length;
+      var parts = [];
+      if(nWatch) parts.push(nWatch + " monitoramento" + (nWatch === 1 ? "" : "s"));
+      if(nEditais) parts.push(nEditais + " edital" + (nEditais === 1 ? "" : "is"));
+      var text = parts.length ? parts.join(" · ") : "Nenhum alerta ativo";
+      try{
+        if(LICSYSTEM.captacao && LICSYSTEM.captacao.updateCollapseSummary){
+          LICSYSTEM.captacao.updateCollapseSummary("alertas", text);
+        }
+      }catch(e){}
     },
 
     renderInteressadosIa: function(){
@@ -8930,6 +8951,7 @@
       if(!box) return;
       if(!this.watches.length){
         box.innerHTML = '<div class="small muted">Nenhum alerta ativo. Use “Ativar alerta” em Editais próximos (recomendado), Radar ou Perguntar editais.</div>';
+        this.updateCollapseSummary();
         return;
       }
       var html = "";
@@ -8955,6 +8977,7 @@
         '</div>';
       });
       box.innerHTML = html;
+      this.updateCollapseSummary();
     },
 
     findWatch: function(id){
@@ -9380,6 +9403,29 @@
       if(this._wired) return;
       this._wired = true;
       var self = this;
+      try{
+        var card = el("cardAlertasPncp");
+        if(card && LICSYSTEM.captacao && LICSYSTEM.captacao.applyCardCollapse){
+          var stored = false;
+          try{
+            var map = JSON.parse(localStorage.getItem(LICSYSTEM.captacao.COLLAPSE_KEY) || "{}");
+            stored = !!(map && map["alertas-pncp"]);
+          }catch(e){}
+          LICSYSTEM.captacao.applyCardCollapse(card, stored, { skipPersist: true });
+          self.updateCollapseSummary();
+          var btnCollapse = el("btnCollapseAlertas");
+          if(btnCollapse && !btnCollapse._collapseWired){
+            btnCollapse._collapseWired = true;
+            btnCollapse.addEventListener("click", function(){
+              LICSYSTEM.captacao.applyCardCollapse(
+                card,
+                !card.classList.contains("is-collapsed")
+              );
+              self.updateCollapseSummary();
+            });
+          }
+        }
+      }catch(e){}
       var bell = el("bell");
       if(bell){
         bell.addEventListener("click", function(e){
