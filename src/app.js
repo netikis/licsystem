@@ -8259,13 +8259,168 @@
         }
         metaBox.innerHTML = bits.join("");
       }
+      LICSYSTEM.leiloesParticipo.renderParticipantesLoading();
       ov.classList.add("open");
       ov.setAttribute("aria-hidden", "false");
+      LICSYSTEM.leiloesParticipo.loadParticipantesAnalysis(draft);
+    },
+
+    renderParticipantesLoading: function(){
+      var box = el("participarEmpresasBody");
+      if(!box) return;
+      box.innerHTML =
+        '<div class="participar-empresas-loading muted small">' +
+          '<span class="spinner" style="width:14px;height:14px;border-width:2px;border-color:#ccc;border-top-color:#152642"></span>' +
+          " A IA está analisando quem pode disputar este leilão…" +
+        "</div>";
+    },
+
+    formatCnpj: function(cnpj){
+      var d = String(cnpj || "").replace(/\D/g, "");
+      if(d.length !== 14) return d || "";
+      return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+    },
+
+    renderParticipantesResult: function(data){
+      var box = el("participarEmpresasBody");
+      if(!box) return;
+      data = data || {};
+      var html = [];
+      if(data.exclusivoMeEpp === true){
+        html.push('<span class="participar-pill is-me">Exclusivo / prioridade ME·EPP</span>');
+      } else if(data.exclusivoMeEpp === false){
+        html.push('<span class="participar-pill">Aberto a qualquer porte (conforme edital)</span>');
+      }
+      if(data.resumo){
+        html.push('<p class="participar-empresas-resumo">' + utils.escapeHtml(data.resumo) + "</p>");
+      }
+      if(data.criterios && data.criterios.length){
+        html.push('<div class="participar-sub">Critérios de participação</div><ul class="participar-list">');
+        data.criterios.forEach(function(c){
+          html.push("<li>" + utils.escapeHtml(c) + "</li>");
+        });
+        html.push("</ul>");
+      }
+      if(data.restricoes && data.restricoes.length){
+        html.push('<div class="participar-sub">Restrições / barreiras</div><ul class="participar-list">');
+        data.restricoes.forEach(function(c){
+          html.push("<li>" + utils.escapeHtml(c) + "</li>");
+        });
+        html.push("</ul>");
+      }
+      if(data.perfisAptos && data.perfisAptos.length){
+        html.push('<div class="participar-sub">Perfis de empresas aptas</div>');
+        data.perfisAptos.forEach(function(p){
+          html.push(
+            '<div class="participar-empresa-item">' +
+              "<strong>" + utils.escapeHtml(p.perfil || "Perfil") +
+              (p.porte ? ' <span class="muted">· ' + utils.escapeHtml(p.porte) + "</span>" : "") +
+              "</strong>" +
+              (p.porQue ? '<div class="muted">' + utils.escapeHtml(p.porQue) + "</div>" : "") +
+            "</div>"
+          );
+        });
+      }
+      if(data.empresasPncp && data.empresasPncp.length){
+        html.push('<div class="participar-sub">Empresas com contratos semelhantes (PNCP)</div>');
+        data.empresasPncp.forEach(function(e){
+          var cnpjFmt = LICSYSTEM.leiloesParticipo.formatCnpj(e.cnpj);
+          html.push(
+            '<div class="participar-empresa-item">' +
+              "<strong>" + utils.escapeHtml(e.nome || "Fornecedor") + "</strong>" +
+              (cnpjFmt ? '<div class="muted">CNPJ ' + utils.escapeHtml(cnpjFmt) + "</div>" : "") +
+              (e.objeto ? '<div class="muted">' + utils.escapeHtml(e.objeto) + "</div>" : "") +
+              ((e.orgao || e.uf)
+                ? '<div class="muted">' + utils.escapeHtml([e.orgao, e.uf].filter(Boolean).join(" · ")) + "</div>"
+                : "") +
+            "</div>"
+          );
+        });
+      }
+      if(data.alertaConcorrencia){
+        html.push(
+          '<div class="participar-sub">Concorrência</div>' +
+          '<p class="participar-empresas-resumo" style="margin:0">' + utils.escapeHtml(data.alertaConcorrencia) + "</p>"
+        );
+      }
+      html.push(
+        '<div class="participar-empresas-aviso">' +
+          utils.escapeHtml(
+            data.aviso ||
+            "Não é lista oficial de inscritos — critérios do edital + perfis e, se houver, fornecedores do PNCP com objeto parecido."
+          ) +
+        "</div>"
+      );
+      if(!data.resumo && !(data.criterios && data.criterios.length) && !(data.perfisAptos && data.perfisAptos.length)){
+        box.innerHTML = '<div class="muted small">Não foi possível montar o perfil de participantes.</div>';
+        return;
+      }
+      box.innerHTML = html.join("");
+    },
+
+    loadParticipantesAnalysis: function(draft){
+      draft = draft || {};
+      var token = String(Date.now());
+      LICSYSTEM.leiloesParticipo._partToken = token;
+      var text =
+        String(LICSYSTEM.analiseIa && LICSYSTEM.analiseIa.relatorioMd || "") ||
+        String(LICSYSTEM.analiseIa && LICSYSTEM.analiseIa.text || "");
+      if(!text || text.length < 40){
+        var box = el("participarEmpresasBody");
+        if(box) box.innerHTML = '<div class="muted small">Sem texto de análise para estimar participantes.</div>';
+        return;
+      }
+      var uf = "";
+      var mun = String(draft.municipio || "");
+      var mUf = mun.match(/\/\s*([A-Za-z]{2})\b/);
+      if(mUf) uf = mUf[1].toUpperCase();
+
+      var objeto = String(draft.resumo || "").slice(0, 280);
+      var objM = text.match(/(?:^|\n)\s*(?:\d+\.\s*)?(?:\*\*)?objeto(?:\s+da\s+contrata[cç][aã]o)?(?:\*\*)?\s*[:\-–]\s*([^\n]{12,240})/i);
+      if(objM && objM[1]) objeto = objM[1].replace(/\*\*/g, "").trim().slice(0, 280);
+
+      fetch("/api/analyze-participantes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          text: text.slice(0, 60000),
+          orgao: draft.orgao || "",
+          municipio: draft.municipio || "",
+          uf: uf,
+          objeto: objeto || draft.titulo || ""
+        })
+      })
+        .then(function(res){
+          return res.text().then(function(raw){
+            var body = null;
+            try{ body = raw ? JSON.parse(raw) : null; }catch(e){}
+            if(!res.ok){
+              var msg = (body && (body.error || body.detail)) || ("Erro HTTP " + res.status);
+              throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+            }
+            return body;
+          });
+        })
+        .then(function(body){
+          if(LICSYSTEM.leiloesParticipo._partToken !== token) return;
+          LICSYSTEM.leiloesParticipo.renderParticipantesResult(body);
+        })
+        .catch(function(err){
+          if(LICSYSTEM.leiloesParticipo._partToken !== token) return;
+          var box = el("participarEmpresasBody");
+          if(box){
+            box.innerHTML =
+              '<div class="muted small">Não deu para analisar participantes agora' +
+              (err && err.message ? ": " + utils.escapeHtml(err.message) : ".") +
+              "</div>";
+          }
+        });
     },
 
     closeParticiparModal: function(){
       var ov = el("participarOverlay");
       if(!ov) return;
+      LICSYSTEM.leiloesParticipo._partToken = null;
       ov.classList.remove("open");
       ov.setAttribute("aria-hidden", "true");
     },

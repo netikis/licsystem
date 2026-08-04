@@ -1285,7 +1285,7 @@
     display:none;align-items:center;justify-content:center;padding:18px;
   }
   #participarOverlay.open{display:flex}
-  .participar-modal-card{max-width:480px;text-align:left}
+  .participar-modal-card{max-width:560px;text-align:left;max-height:min(92vh,820px);overflow:auto}
   .participar-meta{
     display:flex;flex-direction:column;gap:6px;padding:12px 14px;margin-bottom:4px;
     border-radius:12px;background:#f7f9fc;border:1px solid var(--ls-line);font-size:13px;color:var(--ls-navy);
@@ -1294,7 +1294,36 @@
     margin-top:6px;padding-top:8px;border-top:1px dashed var(--ls-line);
     font-size:12.5px;color:var(--ls-muted);line-height:1.45;
   }
-  .participar-actions{justify-content:center!important;gap:12px;margin-top:18px}
+  .participar-empresas{
+    margin-top:12px;padding:12px 14px;border-radius:12px;
+    border:1px solid #d7e3f4;background:linear-gradient(180deg,#f4f8ff,#eef4fc);
+  }
+  .participar-empresas-head{
+    font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;
+    color:var(--ls-navy);margin-bottom:8px;
+  }
+  .participar-empresas-body{font-size:13px;color:var(--ls-navy);line-height:1.45}
+  .participar-empresas-loading{
+    display:flex;align-items:center;gap:8px;padding:4px 0;
+  }
+  .participar-empresas-resumo{margin:0 0 10px;font-size:12.5px;color:var(--ls-muted)}
+  .participar-pill{
+    display:inline-flex;align-items:center;gap:4px;margin:0 6px 8px 0;padding:3px 9px;
+    border-radius:999px;font-size:11px;font-weight:700;background:#fff;border:1px solid #c8d6ea;color:var(--ls-navy);
+  }
+  .participar-pill.is-me{background:#e8f7ee;border-color:#9fd4b0;color:#1b6b3a}
+  .participar-list{margin:0;padding:0 0 0 18px}
+  .participar-list li{margin:0 0 5px}
+  .participar-sub{margin:12px 0 6px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.35px;color:var(--ls-muted)}
+  .participar-empresa-item{
+    padding:8px 10px;margin:0 0 6px;border-radius:10px;background:#fff;border:1px solid var(--ls-line);
+  }
+  .participar-empresa-item strong{display:block;font-size:12.5px;color:var(--ls-navy)}
+  .participar-empresa-item .muted{font-size:11.5px;margin-top:2px}
+  .participar-empresas-aviso{
+    margin-top:10px;font-size:11px;color:var(--ls-muted);line-height:1.4;
+  }
+  .participar-actions{justify-content:center!important;gap:12px;margin-top:18px;position:sticky;bottom:0;padding-top:8px;background:linear-gradient(180deg,transparent,#fff 40%)}
   .participar-actions .btn{min-width:110px;font-weight:800;letter-spacing:.3px}
 
   /* Lista Leilão que Participo */
