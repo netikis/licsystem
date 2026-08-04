@@ -1346,9 +1346,21 @@
           return { updatedAt: this.metaTs("entregas"), data: Array.isArray(ent) ? ent : [] };
         }
         if(key === "histEntregas"){
-          var hist = JSON.parse(localStorage.getItem("licsystem_hist_entregas_v1") || "null");
-          if(hist == null) return null;
-          return { updatedAt: this.metaTs("histEntregas"), data: Array.isArray(hist) ? hist : [] };
+          var histRaw = JSON.parse(localStorage.getItem("licsystem_hist_entregas_v1") || "null");
+          if(histRaw == null) return null;
+          var histData = Array.isArray(histRaw)
+            ? histRaw
+            : (histRaw && Array.isArray(histRaw.items) ? histRaw.items : []);
+          var histTs = Number(
+            (histRaw && !Array.isArray(histRaw) && (histRaw.updatedAt || histRaw.savedAt)) ||
+            this.metaTs("histEntregas") ||
+            0
+          );
+          return {
+            updatedAt: histTs,
+            cleared: !!(histRaw && !Array.isArray(histRaw) && histRaw.cleared) || (Array.isArray(histData) && !histData.length && histTs > 0),
+            data: histData
+          };
         }
       }catch(e){}
       return null;
@@ -1479,7 +1491,14 @@
       if(key === "histEntregas"){
         LICSYSTEM.histEntregas.items = Array.isArray(data) ? data : [];
         LICSYSTEM.histEntregas._loaded = true;
-        try{ localStorage.setItem("licsystem_hist_entregas_v1", JSON.stringify(LICSYSTEM.histEntregas.items)); }catch(e){}
+        try{
+          localStorage.setItem("licsystem_hist_entregas_v1", JSON.stringify({
+            v: 1,
+            updatedAt: ts,
+            cleared: !!env.cleared || !LICSYSTEM.histEntregas.items.length,
+            items: LICSYSTEM.histEntregas.items
+          }));
+        }catch(e){}
         this.touchMeta("histEntregas", ts);
         try{ if(LICSYSTEM.histEntregas.render) LICSYSTEM.histEntregas.render(); }catch(e){}
       }
@@ -1599,8 +1618,16 @@
         return { source: "cleared" };
       }
 
-      // Local empty + cloud has data → take cloud (even if local ts missing/0).
+      // Local empty + cloud has data:
+      // - intentional clear / newer local empty → keep local and push clear
+      // - otherwise take cloud (fresh browser with no local work)
       if(this.isEnvelopeEmpty(key, localEnv) && cloudEnv && !this.isEnvelopeEmpty(key, cloudEnv)){
+        var ltEmpty = Number(localEnv.updatedAt || 0);
+        var ctFull = Number(cloudEnv.updatedAt || 0);
+        if(localEnv.cleared || (ltEmpty > 0 && ltEmpty >= ctFull)){
+          this.pushKey(key, { env: localEnv, forceClear: true, immediate: true });
+          return { source: "local" };
+        }
         this.applyEnvelope(key, cloudEnv);
         return { source: "cloud" };
       }
@@ -5147,23 +5174,42 @@
           updatedAt: now
         };
         if(opts.forceClear) payload.cleared = true;
-        // Com edital ativo: grava no workspace do leilão (independente).
-        // Sem edital ativo: mantém o orçamento global do app.
+        // Sempre grava rascunho global + nuvem (para não sumir ao atualizar).
+        try{ localStorage.setItem(ORC_KEY, JSON.stringify(payload)); }catch(e){}
+        if(!opts.skipCloud && LICSYSTEM.cloudSync){
+          LICSYSTEM.cloudSync.notifyLocalChange("orcamento", {
+            updatedAt: now,
+            forceClear: !!opts.forceClear,
+            immediate: !!opts.immediate
+          });
+        }
+        // Com edital ativo, espelha também no workspace do leilão.
         if(LICSYSTEM.state.activeLeilaoId && LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.syncActiveOrcamento){
-          LICSYSTEM.leiloesParticipo.syncActiveOrcamento(payload);
-        } else {
-          localStorage.setItem(ORC_KEY, JSON.stringify(payload));
-          if(!opts.skipCloud && LICSYSTEM.cloudSync){
-            LICSYSTEM.cloudSync.notifyLocalChange("orcamento", {
-              updatedAt: now,
-              forceClear: !!opts.forceClear,
-              immediate: !!opts.immediate
-            });
-          }
+          LICSYSTEM.leiloesParticipo.syncActiveOrcamento(Object.assign({}, payload, { immediate: !!opts.immediate }));
         }
       }catch(e){
         console.warn("Orçamento: não foi possível salvar tudo no navegador (limite de armazenamento).", e);
       }
+    },
+    /** Salva na hora (estilo Word) e sincroniza com o banco — sem ir ao catálogo. */
+    salvarAgora:function(){
+      try{ LICSYSTEM.orcamento.syncFromDom(); }catch(e){}
+      LICSYSTEM.orcamento.flushSave({ immediate: true });
+      LICSYSTEM.state._orcDirty = false;
+      var n = (LICSYSTEM.state.orcItems || []).filter(function(it){
+        return LICSYSTEM.orcamento && !LICSYSTEM.orcamento.isEmptyRow(it);
+      }).length;
+      var onde = LICSYSTEM.state.activeLeilaoId ? "neste edital e na nuvem" : "neste aparelho e na nuvem";
+      showAlert(
+        "orcAlert",
+        "ok",
+        "Orçamento salvo (" + n + " item" + (n === 1 ? "" : "s") + ") — " + onde + ". Pode fechar e continuar depois."
+      );
+      try{
+        if(LICSYSTEM.cloudSync && LICSYSTEM.cloudSync.setStatus){
+          LICSYSTEM.cloudSync.setStatus("ok", "Sincronizado");
+        }
+      }catch(e){}
     },
     scheduleSave:function(){
       clearTimeout(LICSYSTEM.orcamento._saveTimer);
@@ -5192,8 +5238,10 @@
         var f = inp.getAttribute("data-f");
         var it = LICSYSTEM.state.orcItems[i];
         if(!it || !f) continue;
-        if(f === "produto" || f === "link" || f === "lote") it[f] = inp.value;
-        else it[f] = Number(inp.value) || 0;
+        if(f === "produto" || f === "link" || f === "lote"){
+          if(f === "produto") continue; /* descrição bloqueada */
+          it[f] = inp.value;
+        } else it[f] = Number(inp.value) || 0;
         if(f === "qtd" || f === "editalVunit"){
           if(Number(it.editalVunit) > 0){
             it.editalTotal = (Number(it.qtd) || 0) * (Number(it.editalVunit) || 0);
@@ -9723,6 +9771,7 @@
     on("btnPropostaOrcExcel","click", LICSYSTEM.orcamento.gerarPropostaExcel);
     on("btnExportOrcExcel","click", LICSYSTEM.orcamento.exportarExcel);
     on("btnExportOrcPdf","click", LICSYSTEM.orcamento.exportarPdf);
+    on("btnSalvarOrcamento","click", function(){ LICSYSTEM.orcamento.salvarAgora(); });
     on("btnSalvarOrcCatalogo","click", LICSYSTEM.orcamento.abrirModalSalvarCatalogo);
     on("btnOrcSaveCancel","click", LICSYSTEM.orcamento.fecharModalSalvarCatalogo);
     on("btnOrcSaveConfirm","click", LICSYSTEM.orcamento.confirmarSalvarCatalogo);
@@ -11363,24 +11412,44 @@
         var raw = localStorage.getItem(HIST_ENTREGAS_KEY);
         if(raw != null){
           var saved = JSON.parse(raw);
-          LICSYSTEM.histEntregas.items = Array.isArray(saved) ? saved : [];
+          if(Array.isArray(saved)){
+            LICSYSTEM.histEntregas.items = saved;
+          } else if(saved && typeof saved === "object" && Array.isArray(saved.items)){
+            LICSYSTEM.histEntregas.items = saved.items;
+          } else {
+            LICSYSTEM.histEntregas.items = [];
+          }
         } else {
-          LICSYSTEM.histEntregas.items = LICSYSTEM.histEntregas.exemplos();
-          LICSYSTEM.histEntregas.saveLocal();
+          /* Sem dados locais: começa vazio (não reinsere exemplos ao atualizar). */
+          LICSYSTEM.histEntregas.items = [];
         }
       }catch(e){
-        LICSYSTEM.histEntregas.items = LICSYSTEM.histEntregas.exemplos();
+        LICSYSTEM.histEntregas.items = [];
       }
       LICSYSTEM.histEntregas._loaded = true;
       return LICSYSTEM.histEntregas.items;
     },
 
-    saveLocal: function(){
+    saveLocal: function(opts){
+      opts = opts || {};
+      var now = Date.now();
+      var items = LICSYSTEM.histEntregas.items || [];
+      var empty = !items.length;
       try{
-        localStorage.setItem(HIST_ENTREGAS_KEY, JSON.stringify(LICSYSTEM.histEntregas.items || []));
-        if(LICSYSTEM.cloudSync) LICSYSTEM.cloudSync.notifyLocalChange("histEntregas");
+        localStorage.setItem(HIST_ENTREGAS_KEY, JSON.stringify({
+          v: 1,
+          updatedAt: now,
+          cleared: empty,
+          items: items
+        }));
+        if(LICSYSTEM.cloudSync){
+          LICSYSTEM.cloudSync.notifyLocalChange("histEntregas", {
+            updatedAt: now,
+            immediate: opts.immediate !== false,
+            forceClear: empty
+          });
+        }
       }catch(e){}
-      // TODO Firestore: collection('historico_entregas').doc(id).set(item, { merge:true })
     },
 
     carregarExemplos: function(force){
@@ -11476,9 +11545,9 @@
       if(!confirm("Remover este item do histórico?")) return;
       LICSYSTEM.histEntregas.load();
       LICSYSTEM.histEntregas.items = LICSYSTEM.histEntregas.items.filter(function(it){ return it.id !== id; });
-      LICSYSTEM.histEntregas.saveLocal();
+      LICSYSTEM.histEntregas.saveLocal({ immediate: true });
       LICSYSTEM.histEntregas.render();
-      showAlert("histEntregasAlert","ok","Item removido.");
+      showAlert("histEntregasAlert","ok","Item removido e sincronizado.");
     },
 
     render: function(){
