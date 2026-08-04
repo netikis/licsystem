@@ -76,18 +76,7 @@
       </div>
 
       <button data-view="analiseIa"><span class="ico">🤖</span> <span data-i18n="nav.analiseIa">Análise IA</span></button>
-
-      <div class="nav-group" data-nav-group="leilao">
-        <button type="button" class="nav-parent" data-view="leiloesParticipo" data-nav-toggle="leilao" aria-expanded="false">
-          <span class="ico">🏆</span><span class="nav-label" data-i18n="nav.leiloesParticipo">Leilão que Participo</span><span class="nav-chevron" aria-hidden="true"></span>
-        </button>
-        <div class="nav-children" role="group" data-i18n-aria="nav.leiloesParticipo" aria-label="Leilão que Participo" hidden>
-          <button type="button" data-view="docsChecklist"><span class="ico">✅</span> <span data-i18n="nav.docsChecklist">Docs do Edital</span></button>
-          <button type="button" data-view="importarEdital"><span class="ico">📥</span> <span data-i18n="nav.importarEdital">Importar Edital (PDF)</span></button>
-          <button type="button" data-view="orcamento"><span class="ico">🧮</span> <span data-i18n="nav.orcamento">Orçamento</span></button>
-          <button type="button" data-view="cruzamento"><span class="ico">🔀</span> <span data-i18n="nav.cruzamento">Cruzamento ML</span></button>
-        </div>
-      </div>
+      <button data-view="leiloesParticipo"><span class="ico">🏆</span> <span data-i18n="nav.leiloesParticipo">Leilão que Participo</span></button>
 
       <div class="nav-group" data-nav-group="entrega">
         <button type="button" class="nav-parent" data-view="entregas" data-nav-toggle="entrega" aria-expanded="false">
@@ -218,26 +207,32 @@
       <!-- ===================== PESQUISAS DE EDITAIS ===================== -->
       <section id="view-pesquisas" class="view">
         <!-- Monitoramentos salvos (alertas automáticos) -->
-        <div class="card" id="cardAlertasPncp">
+        <div class="card" id="cardAlertasPncp" data-collapse-key="alertas-pncp">
           <div class="card-head">
             <div class="card-head-main">
               <h2>🔔 Meus alertas</h2>
               <span class="tag">automático</span>
+              <span class="card-collapse-summary muted small" id="alertasCollapseSummary" hidden></span>
             </div>
-            <button type="button" class="btn btn-ghost btn-sm" id="btnAlertasCheckNow">Verificar agora</button>
+            <div class="alertas-head-actions">
+              <button type="button" class="btn btn-ghost btn-sm" id="btnAlertasCheckNow">Verificar agora</button>
+              <button type="button" class="btn btn-ghost btn-sm card-collapse-btn" id="btnCollapseAlertas" aria-expanded="true" aria-controls="alertasCardBody" title="Minimizar painel">▾ Minimizar</button>
+            </div>
           </div>
-          <div class="desc">
-            Salve um monitoramento — o mais importante é <b>Editais próximos</b> (cidade + raio / vizinhos). Também dá no Radar (UF + palavras) e em Perguntar editais. Os editais novos aparecem em <b>balões</b> abaixo, ordenados pelo prazo: <b>Há interesse</b> envia para a Análise IA; <b>Não há interesse</b> exclui do sistema.
-          </div>
-          <div id="alertasWatchList" class="alertas-watch-list">
-            <div class="small muted">Nenhum alerta ativo. Use “Ativar alerta” em Editais próximos (recomendado), Radar ou Perguntar editais.</div>
-          </div>
-          <div class="alertas-editais-head">
-            <h3>Editais encontrados</h3>
-            <span class="small muted">Ordenados pelo prazo de encerramento · decida edital a edital</span>
-          </div>
-          <div id="alertasEditaisList" class="alertas-editais-list">
-            <div class="small muted">Nenhum edital novo ainda. Quando o monitoramento achar algo, aparece aqui em balões.</div>
+          <div class="card-collapsible-body" id="alertasCardBody">
+            <div class="desc">
+              Salve um monitoramento — o mais importante é <b>Editais próximos</b> (cidade + raio / vizinhos). Também dá no Radar (UF + palavras) e em Perguntar editais. Os editais novos aparecem em <b>balões</b> abaixo, ordenados pelo prazo: <b>Há interesse</b> envia para a Análise IA; <b>Não há interesse</b> exclui do sistema.
+            </div>
+            <div id="alertasWatchList" class="alertas-watch-list">
+              <div class="small muted">Nenhum alerta ativo. Use “Ativar alerta” em Editais próximos (recomendado), Radar ou Perguntar editais.</div>
+            </div>
+            <div class="alertas-editais-head">
+              <h3>Editais encontrados</h3>
+              <span class="small muted">Ordenados pelo prazo de encerramento · decida edital a edital</span>
+            </div>
+            <div id="alertasEditaisList" class="alertas-editais-list">
+              <div class="small muted">Nenhum edital novo ainda. Quando o monitoramento achar algo, aparece aqui em balões.</div>
+            </div>
           </div>
         </div>
 
