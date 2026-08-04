@@ -9077,6 +9077,7 @@
         actions =
           '<div class="alerta-balloon-actions">'+
             '<button type="button" class="btn btn-gold btn-sm" data-interessado-analisar="'+utils.escapeHtml(a.id)+'">✨ Analisar com IA</button>'+
+            '<button type="button" class="btn btn-ghost btn-sm" data-interessado-pdf="'+utils.escapeHtml(a.id)+'"'+(a.link ? "" : " disabled title=\"Sem link PNCP\"")+'>Baixar PDF</button>'+
             (a.link
               ? '<a class="btn btn-ghost btn-sm" href="'+utils.escapeHtml(a.link)+'" target="_blank" rel="noopener">Abrir no PNCP</a>'
               : '')+
@@ -9691,16 +9692,27 @@
       var iaPending = el("iaPendingEditais");
       if(iaPending){
         iaPending.addEventListener("click", function(e){
+          function findInteressado(id){
+            for(var i = 0; i < self.interessados.length; i++){
+              if(self.interessados[i].id === id) return self.interessados[i];
+            }
+            return null;
+          }
           var an = e.target.closest("[data-interessado-analisar]");
           if(an){
             e.preventDefault();
-            var aid = an.getAttribute("data-interessado-analisar");
-            var ed = null;
-            for(var i = 0; i < self.interessados.length; i++){
-              if(self.interessados[i].id === aid){ ed = self.interessados[i]; break; }
-            }
+            var ed = findInteressado(an.getAttribute("data-interessado-analisar"));
             if(ed && LICSYSTEM.analiseIa && LICSYSTEM.analiseIa.analisarDeInteresse){
               LICSYSTEM.analiseIa.analisarDeInteresse(ed);
+            }
+            return;
+          }
+          var pdfBtn = e.target.closest("[data-interessado-pdf]");
+          if(pdfBtn){
+            e.preventDefault();
+            var edPdf = findInteressado(pdfBtn.getAttribute("data-interessado-pdf"));
+            if(edPdf && LICSYSTEM.analiseIa && LICSYSTEM.analiseIa.baixarPdfDeInteresse){
+              LICSYSTEM.analiseIa.baixarPdfDeInteresse(edPdf);
             }
             return;
           }
@@ -12009,12 +12021,130 @@
       return lines.join("\n");
     },
 
-    analisarDeInteresse: function(ed){
-      if(LICSYSTEM.analiseIa.busy) return;
+    /** Extrai cnpj/ano/seq do link PNCP ou do número de controle. */
+    parsePncpRef: function(ed){
+      ed = ed || {};
+      var link = String(ed.link || "");
+      var m = link.match(/\/editais\/([^/]+)\/(\d{4})\/(\d+)/i);
+      if(m){
+        return {
+          cnpj: String(m[1] || "").replace(/\D/g, ""),
+          ano: String(m[2] || ""),
+          sequencial: String(Number(m[3]) || m[3])
+        };
+      }
+      var nc = String(ed.numeroControlePNCP || "");
+      m = nc.match(/^(\d{14})-\d+-(\d+)\/(\d{4})$/);
+      if(m){
+        return {
+          cnpj: m[1],
+          ano: m[3],
+          sequencial: String(Number(m[2]) || m[2])
+        };
+      }
+      return null;
+    },
+
+    pncpPdfApiUrl: function(ed, download){
+      var ref = LICSYSTEM.analiseIa.parsePncpRef(ed);
+      if(ref && ref.cnpj && ref.ano && ref.sequencial){
+        return (
+          "/api/pncp-edital-pdf?cnpj=" +
+          encodeURIComponent(ref.cnpj) +
+          "&ano=" +
+          encodeURIComponent(ref.ano) +
+          "&sequencial=" +
+          encodeURIComponent(ref.sequencial) +
+          (download ? "&download=1" : "")
+        );
+      }
+      if(ed && ed.link){
+        return (
+          "/api/pncp-edital-pdf?link=" +
+          encodeURIComponent(ed.link) +
+          (download ? "&download=1" : "")
+        );
+      }
+      return null;
+    },
+
+    /** Baixa o PDF oficial do PNCP como File (mesmo conteúdo da análise completa). */
+    fetchPdfFileDeInteresse: function(ed){
+      var url = LICSYSTEM.analiseIa.pncpPdfApiUrl(ed, true);
+      if(!url){
+        return Promise.reject(new Error("Este edital não tem link PNCP para baixar o PDF."));
+      }
+      return fetch(url, { method: "GET", headers: { Accept: "application/pdf,application/json" } })
+        .then(function(res){
+          var ctype = String(res.headers.get("content-type") || "");
+          if(ctype.indexOf("application/json") !== -1 || !res.ok){
+            return res.text().then(function(raw){
+              var body = null;
+              try{ body = raw ? JSON.parse(raw) : null; }catch(e){}
+              var msg =
+                (body && (body.error || body.detail || body.message)) ||
+                ("Não foi possível baixar o PDF (HTTP " + res.status + ").");
+              throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+            });
+          }
+          return res.blob().then(function(blob){
+            var titulo = "";
+            try{
+              titulo = decodeURIComponent(res.headers.get("X-Pncp-Titulo") || "");
+            }catch(e){ titulo = ""; }
+            if(!titulo){
+              titulo =
+                (ed.orgao || "edital") +
+                (ed.numeroCompra ? "-" + ed.numeroCompra : "") +
+                ".pdf";
+            }
+            if(!/\.pdf$/i.test(titulo)) titulo += ".pdf";
+            if(!blob || !blob.size){
+              throw new Error("PDF vazio retornado pelo PNCP.");
+            }
+            return new File([blob], titulo.slice(0, 180), {
+              type: blob.type || "application/pdf"
+            });
+          });
+        });
+    },
+
+    baixarPdfDeInteresse: function(ed){
       if(!ed){
         showAlert("iaAlert","warn","Edital não encontrado.");
         return;
       }
+      showAlert(
+        "iaAlert",
+        "info",
+        '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Baixando PDF do PNCP…'
+      );
+      LICSYSTEM.analiseIa.fetchPdfFileDeInteresse(ed).then(function(file){
+        var a = document.createElement("a");
+        var objUrl = URL.createObjectURL(file);
+        a.href = objUrl;
+        a.download = file.name || "edital.pdf";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function(){
+          try{ URL.revokeObjectURL(objUrl); }catch(e){}
+          try{ a.remove(); }catch(e){}
+        }, 1500);
+        showAlert("iaAlert","ok","PDF baixado: " + utils.escapeHtml(file.name) + " (" + (file.size/1024).toFixed(0) + " KB).");
+        try{ LICSYSTEM.analiseIa.onFile(file); }catch(e){}
+      }).catch(function(err){
+        showAlert(
+          "iaAlert",
+          "error",
+          utils.escapeHtml(LICSYSTEM.analiseIa.errMsg(err)) +
+            (ed.link
+              ? ' <a href="'+utils.escapeHtml(ed.link)+'" target="_blank" rel="noopener">Abrir no PNCP</a>'
+              : "")
+        );
+      });
+    },
+
+    analisarDeInteresseRapido: function(ed){
       var text = LICSYSTEM.analiseIa.textoFromInteresse(ed);
       var nome =
         (ed.orgao || "Edital") +
@@ -12028,12 +12158,80 @@
       showAlert(
         "iaAlert",
         "info",
-        '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Analisando dados do PNCP com a IA (sem PDF)…'
+        '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> PDF indisponível — analisando só os dados do PNCP…'
       );
       LICSYSTEM.analiseIa.analisarTexto(text, {
         filename: nome.slice(0, 180) + ".txt",
         editalNome: nome.slice(0, 220),
         fromInteresse: true
+      });
+    },
+
+    /**
+     * Preferência: baixar PDF do PNCP e analisar igual ao upload.
+     * Fallback: análise rápida só com metadados se o PDF não existir.
+     */
+    analisarDeInteresse: function(ed){
+      if(LICSYSTEM.analiseIa.busy) return;
+      if(!ed){
+        showAlert("iaAlert","warn","Edital não encontrado.");
+        return;
+      }
+      if(!LICSYSTEM.analiseIa.pncpPdfApiUrl(ed, true)){
+        LICSYSTEM.analiseIa.analisarDeInteresseRapido(ed);
+        return;
+      }
+
+      LICSYSTEM.analiseIa.setBusy(true);
+      LICSYSTEM.analiseIa.limparRelatorio();
+      showAlert(
+        "iaAlert",
+        "info",
+        '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Baixando PDF oficial do PNCP…'
+      );
+
+      LICSYSTEM.analiseIa.fetchPdfFileDeInteresse(ed).then(function(file){
+        LICSYSTEM.analiseIa.file = file;
+        var meta = el("iaFileMeta");
+        if(meta){
+          meta.className = "ia-file-meta show";
+          meta.textContent =
+            "Arquivo (PNCP): " + file.name + " (" + (file.size / 1024).toFixed(1) + " KB)";
+        }
+        showAlert(
+          "iaAlert",
+          "info",
+          '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> PDF baixado. Extraindo texto…'
+        );
+        return LICSYSTEM.analiseIa.extrairTextoPdf(file).then(function(text){
+          text = String(text || "").replace(/\s+/g, " ").trim();
+          if(!text || text.length < 40){
+            throw new Error("Não foi possível extrair texto suficiente deste PDF (pode ser imagem escaneada).");
+          }
+          showAlert(
+            "iaAlert",
+            "info",
+            '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Texto extraído ('+text.length+' caracteres). Gerando relatório com a IA…'
+          );
+          return LICSYSTEM.analiseIa.analisarTexto(text, {
+            filename: file.name || "edital.pdf",
+            editalNome: (file.name || "edital").replace(/\.pdf$/i, ""),
+            alreadyBusy: true,
+            keepReport: true,
+            silentProgress: true
+          });
+        });
+      }).catch(function(err){
+        LICSYSTEM.analiseIa.setBusy(false);
+        var msg = LICSYSTEM.analiseIa.errMsg(err);
+        showAlert(
+          "iaAlert",
+          "warn",
+          "Não deu para usar o PDF (" + utils.escapeHtml(msg) + "). Tentando análise rápida…"
+        );
+        setTimeout(function(){
+          LICSYSTEM.analiseIa.analisarDeInteresseRapido(ed);
+        }, 400);
       });
     },
 
