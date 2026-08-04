@@ -5501,12 +5501,34 @@
     },
     compensaBadgeHtml:function(compensa){
       if(compensa === true){
-        return '<span class="orc-compensa-badge is-ok" data-compensa-badge>Compensa</span>';
+        return '<span class="orc-compensa-badge is-ok" data-compensa-badge style="background:#1e9e5a;color:#fff">Compensa</span>';
       }
       if(compensa === false){
-        return '<span class="orc-compensa-badge is-bad" data-compensa-badge>Não compensa</span>';
+        return '<span class="orc-compensa-badge is-bad" data-compensa-badge style="background:#d23b3b;color:#fff">Não compensa</span>';
       }
       return '<span class="orc-compensa-badge is-empty" data-compensa-badge></span>';
+    },
+    applyCompensaBadge:function(badge, compensa){
+      if(!badge) return;
+      if(compensa === true){
+        badge.className = "orc-compensa-badge is-ok";
+        badge.textContent = "Compensa";
+        badge.style.background = "#1e9e5a";
+        badge.style.color = "#fff";
+        badge.style.display = "";
+      } else if(compensa === false){
+        badge.className = "orc-compensa-badge is-bad";
+        badge.textContent = "Não compensa";
+        badge.style.background = "#d23b3b";
+        badge.style.color = "#fff";
+        badge.style.display = "";
+      } else {
+        badge.className = "orc-compensa-badge is-empty";
+        badge.textContent = "";
+        badge.style.background = "";
+        badge.style.color = "";
+        badge.style.display = "none";
+      }
     },
     pageCount:function(){
       var n = LICSYSTEM.state.orcItems.length;
@@ -6232,8 +6254,7 @@
         row.classList.toggle("orc-row-compensa", compensa === true);
         row.classList.toggle("orc-row-nao-compensa", compensa === false);
         if(badge){
-          badge.className = "orc-compensa-badge"+(compensa === true ? " is-ok" : (compensa === false ? " is-bad" : " is-empty"));
-          badge.textContent = compensa === true ? "Compensa" : (compensa === false ? "Não compensa" : "");
+          LICSYSTEM.orcamento.applyCompensaBadge(badge, compensa);
         }
         if(f==="pct" && vendaInp){
           vendaInp.value = String(Number(it.valorVenda) || 0);
