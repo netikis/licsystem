@@ -815,32 +815,6 @@
     });
   };
 
-  /**
-   * Firebase RTDB often returns dense arrays as arrays, but sparse / holey lists
-   * come back as objects `{ "0":..., "2":... }`. Always coerce before .map/.length.
-   */
-  utils.fbToArray = function(val){
-    if(val == null) return [];
-    if(Array.isArray(val)) return val;
-    if(typeof val !== "object") return [];
-    return Object.keys(val)
-      .filter(function(k){ return /^\d+$/.test(k); })
-      .sort(function(a, b){ return Number(a) - Number(b); })
-      .map(function(k){ return val[k]; })
-      .filter(function(row){ return row != null; });
-  };
-
-  /** UTF-8 byte length of JSON (for RTDB write-size guards). */
-  utils.jsonByteLength = function(obj){
-    try{
-      var s = JSON.stringify(obj);
-      if(typeof TextEncoder !== "undefined") return new TextEncoder().encode(s).length;
-      return unescape(encodeURIComponent(s)).length;
-    }catch(e){
-      return 0;
-    }
-  };
-
   /* ------- Mercado Livre via proxy backend (nunca direto no browser) ------- */
   utils.mlProxyBase = function(){
     // Frete e utilidades legadas
@@ -1018,14 +992,14 @@
   utils.mlSearchFailMessage = function(j){
     if(j && (j.need_search_keys || j.need_serper)){
       return String(j.error || "") ||
-        "Configure as chaves de busca deste projeto na Vercel (SERPER_API_KEY ou Google CSE) e faça Redeploy.";
+        "Configure na Vercel: ML_APP_ID + ML_CLIENT_SECRET e/ou SERPER_API_KEY — depois Redeploy.";
     }
     if(j && j.error && !/forbidden|UNAUTHORIZED|sites\/MLB\/search/i.test(String(j.error))){
       return String(j.error);
     }
     return (
       "Busca no Mercado Livre indisponível no momento. " +
-      "Quem administra este sistema deve colocar as chaves DELE na Vercel (serper.dev grátis ou Google CSE) e fazer Redeploy."
+      "Confira na Vercel se ML_APP_ID + ML_CLIENT_SECRET (ou SERPER_API_KEY) estão configurados e faça Redeploy."
     );
   };
 
@@ -1109,8 +1083,6 @@
   LICSYSTEM.state = {
     authUser: null,
     _orcDirty: true,
-    _orcTyping: false,
-    _orcLastEditAt: 0,
     _orcRendered: false,
     _dashReady: false,
     _cofreRendered: false,
@@ -1139,7 +1111,7 @@
     orcCatalogId: null,
     orcMetaNome: "",
     orcMetaNumero: "",
-    /** Edital ao qual o orçamento em memória pertence (evita copiar planilha entre editais). */
+    /** Edital ao qual a planilha em memória pertence (evita copiar MEUS PREÇOS entre editais). */
     orcBoundLeilaoId: null,
     activeLeilaoId: null
   };
@@ -1153,6 +1125,7 @@
   var ACTIVE_LEILAO_KEY = "licsystem_active_leilao_v1";
   var PNCP_WATCHES_KEY = "licsystem_pncp_watches_v1";
   var PNCP_ALERTS_KEY = "licsystem_pncp_alerts_v1";
+  var PNCP_INTERESSADOS_KEY = "licsystem_pncp_interessados_v1";
   var CLOUD_META_KEY = "licsystem_cloud_meta_v1";
   var LAST_VIEW_KEY = "licsystem_last_view_v1";
   var LEILAO_SCOPED_VIEWS = {
@@ -1167,12 +1140,8 @@
   /* ============================ CLOUD SYNC (Firebase RTDB per uid) ============================
    * Paths: users/{uid}/orcamento|catalogo|cofre|docsChecklist|leiloesParticipo|arp|entregas|histEntregas|pncpWatches|pncpAlerts
    * Envelope: { updatedAt:ms, cleared?:bool, writeId?:string, data:... }
-   * Orçamento: mirrored to users/{uid}/orcamento with leilaoId when an edital is active.
-   * Per-edital copy lives in leiloesParticipo[].workspace.orcamento — never cross-apply between editais.
-   * Leilão workspace also keeps a copy; cloud leiloes payload slims relatorioMd if oversized.
    * Merge: newest updatedAt wins; empty local never overwrites cloud unless Limpar (cleared).
    * Live: after login, onValue listeners apply newer remote envelopes without re-login.
-   * RTDB may return arrays as object maps — utils.fbToArray coerces on read.
    *
    * Suggested RTDB rules (optional; open "auth != null" still works):
    *   { "rules": { "users": {
@@ -1184,10 +1153,6 @@
   LICSYSTEM.cloudSync = {
     DEBOUNCE_MS: 900,
     REMOTE_DEFER_MS: 700,
-    /** Longer defer while orçamento cells may still be mid-edit. */
-    ORC_REMOTE_DEFER_MS: 2500,
-    /** Soft cap under RTDB single-write limit (~16MB); warn/slim before hard fail. */
-    RTDB_SOFT_MAX_BYTES: 900 * 1024,
     KEYS: ["orcamento", "catalogo", "cofre", "docsChecklist", "leiloesParticipo", "arp", "entregas", "histEntregas", "pncpWatches", "pncpAlerts"],
     _uid: null,
     _onlineWired: false,
@@ -1262,40 +1227,10 @@
       catch(e){ return obj; }
     },
 
-    /** Strip nulls (RTDB drops them) but keep 0 / false / "". */
-    stripNulls: function(val){
-      if(val == null) return undefined;
-      if(Array.isArray(val)){
-        return val.map(function(v){ return LICSYSTEM.cloudSync.stripNulls(v); });
-      }
-      if(typeof val === "object"){
-        var out = {};
-        Object.keys(val).forEach(function(k){
-          var v = LICSYSTEM.cloudSync.stripNulls(val[k]);
-          if(v !== undefined) out[k] = v;
-        });
-        return out;
-      }
-      return val;
-    },
-
-    /** Shrink leiloesParticipo cloud payload so orçamento rows are never dropped. */
-    slimLeiloesForCloud: function(list){
-      var arr = utils.fbToArray(list);
-      return arr.map(function(it, idx){
-        var row = LICSYSTEM.leiloesParticipo.normalizeItem(it, idx);
-        if(row.workspace && row.workspace.relatorioMd){
-          // Keep a short snippet only — full report stays in localStorage / Análise IA.
-          row.workspace.relatorioMd = String(row.workspace.relatorioMd || "").slice(0, 8000);
-        }
-        return row;
-      });
-    },
-
     isOrcDataEmpty: function(data){
       if(!data) return true;
-      var items = utils.fbToArray(Array.isArray(data) ? data : data.items);
-      if(!items.length) return true;
+      var items = Array.isArray(data) ? data : data.items;
+      if(!items || !items.length) return true;
       var meta = (!Array.isArray(data) && data.meta) ? data.meta : {};
       var hasMeta = !!(meta && (String(meta.nome||"").trim() || String(meta.numero||"").trim() || meta.catalogId));
       var hasRow = false;
@@ -1324,24 +1259,13 @@
           catalogId: LICSYSTEM.state.orcCatalogId || null
         },
         page: LICSYSTEM.state.orcPage || 1,
-        leilaoId: LICSYSTEM.state.orcBoundLeilaoId || LICSYSTEM.state.activeLeilaoId || null,
         savedAt: Date.now()
       };
     },
 
-    /** Global orçamento must not overwrite the open edital's sheet when it belongs to another edital. */
-    orcEnvelopeMatchesActive: function(data){
-      var active = LICSYSTEM.state.activeLeilaoId;
-      if(!active) return true;
-      if(!data || Array.isArray(data)) return false;
-      var lid = data.leilaoId != null ? String(data.leilaoId) : "";
-      if(!lid) return false;
-      return lid === String(active);
-    },
-
     applyOrcData: function(data){
       if(!data) return;
-      var items = utils.fbToArray(Array.isArray(data) ? data : data.items);
+      var items = Array.isArray(data) ? data : (data.items || []);
       var meta = (!Array.isArray(data) && data.meta) ? data.meta : {};
       LICSYSTEM.state.orcItems = (items.length ? items : [LICSYSTEM.orcamento.emptyItem()])
         .map(function(it){ return LICSYSTEM.orcamento.normalizeItem(it); });
@@ -1352,11 +1276,6 @@
       if(!Array.isArray(data) && data.page != null){
         LICSYSTEM.state.orcPage = Math.max(1, Number(data.page) || 1);
       }
-      if(!Array.isArray(data) && data.leilaoId != null){
-        LICSYSTEM.state.orcBoundLeilaoId = String(data.leilaoId);
-      } else if(!LICSYSTEM.state.activeLeilaoId){
-        LICSYSTEM.state.orcBoundLeilaoId = null;
-      }
       var payload = {
         v: 2,
         items: LICSYSTEM.state.orcItems.map(function(it){ return LICSYSTEM.orcamento.normalizeItem(it); }),
@@ -1366,16 +1285,14 @@
           catalogId: LICSYSTEM.state.orcCatalogId || null
         },
         page: LICSYSTEM.state.orcPage || 1,
-        leilaoId: LICSYSTEM.state.orcBoundLeilaoId || null,
         savedAt: Number((!Array.isArray(data) && (data.updatedAt || data.savedAt)) || Date.now()),
         updatedAt: Number((!Array.isArray(data) && (data.updatedAt || data.savedAt)) || Date.now())
       };
       try{ localStorage.setItem(ORC_KEY, JSON.stringify(payload)); }catch(e){}
       LICSYSTEM.state._orcRendered = false;
       try{ LICSYSTEM.orcamento.updateMeta(); }catch(e){}
-      // Always remount sheet when visible so % / vunit inputs match state.
       if(LICSYSTEM.state.currentView === "orcamento"){
-        try{ LICSYSTEM.orcamento.render({ save:false, sync:false }); }catch(e){}
+        try{ LICSYSTEM.orcamento.render({ save:false }); }catch(e){}
       }
     },
 
@@ -1387,14 +1304,13 @@
           var data = Array.isArray(raw)
             ? { v:2, items: raw, meta:{}, page:1, savedAt: this.metaTs("orcamento") }
             : raw;
-          if(data && data.items != null) data.items = utils.fbToArray(data.items);
           var ts = Number(data.updatedAt || data.savedAt || this.metaTs("orcamento") || 0);
           return { updatedAt: ts, cleared: !!data.cleared, data: data };
         }
         if(key === "catalogo"){
           var cat = JSON.parse(localStorage.getItem("licsystem_catalogo_v1") || "null");
           if(cat == null) return null;
-          return { updatedAt: this.metaTs("catalogo"), data: utils.fbToArray(cat) };
+          return { updatedAt: this.metaTs("catalogo"), data: Array.isArray(cat) ? cat : [] };
         }
         if(key === "cofre"){
           var cof = JSON.parse(localStorage.getItem(COFRE_KEY) || "null");
@@ -1409,32 +1325,44 @@
         if(key === "leiloesParticipo"){
           var lp = JSON.parse(localStorage.getItem(LEILOES_PARTICIPO_KEY) || "null");
           if(lp == null) return null;
-          return { updatedAt: this.metaTs("leiloesParticipo"), data: utils.fbToArray(lp) };
+          return { updatedAt: this.metaTs("leiloesParticipo"), data: Array.isArray(lp) ? lp : [] };
         }
         if(key === "pncpWatches"){
           var pw = JSON.parse(localStorage.getItem(PNCP_WATCHES_KEY) || "null");
           if(pw == null) return null;
-          return { updatedAt: this.metaTs("pncpWatches"), data: utils.fbToArray(pw) };
+          return { updatedAt: this.metaTs("pncpWatches"), data: Array.isArray(pw) ? pw : [] };
         }
         if(key === "pncpAlerts"){
           var pa = JSON.parse(localStorage.getItem(PNCP_ALERTS_KEY) || "null");
           if(pa == null) return null;
-          return { updatedAt: this.metaTs("pncpAlerts"), data: utils.fbToArray(pa) };
+          return { updatedAt: this.metaTs("pncpAlerts"), data: Array.isArray(pa) ? pa : [] };
         }
         if(key === "arp"){
           var arp = JSON.parse(localStorage.getItem("licsystem_arp_v1") || "null");
           if(arp == null) return null;
-          return { updatedAt: this.metaTs("arp"), data: utils.fbToArray(arp) };
+          return { updatedAt: this.metaTs("arp"), data: Array.isArray(arp) ? arp : [] };
         }
         if(key === "entregas"){
           var ent = JSON.parse(localStorage.getItem("licsystem_entregas_v1") || "null");
           if(ent == null) return null;
-          return { updatedAt: this.metaTs("entregas"), data: utils.fbToArray(ent) };
+          return { updatedAt: this.metaTs("entregas"), data: Array.isArray(ent) ? ent : [] };
         }
         if(key === "histEntregas"){
-          var hist = JSON.parse(localStorage.getItem("licsystem_hist_entregas_v1") || "null");
-          if(hist == null) return null;
-          return { updatedAt: this.metaTs("histEntregas"), data: utils.fbToArray(hist) };
+          var histRaw = JSON.parse(localStorage.getItem("licsystem_hist_entregas_v1") || "null");
+          if(histRaw == null) return null;
+          var histData = Array.isArray(histRaw)
+            ? histRaw
+            : (histRaw && Array.isArray(histRaw.items) ? histRaw.items : []);
+          var histTs = Number(
+            (histRaw && !Array.isArray(histRaw) && (histRaw.updatedAt || histRaw.savedAt)) ||
+            this.metaTs("histEntregas") ||
+            0
+          );
+          return {
+            updatedAt: histTs,
+            cleared: !!(histRaw && !Array.isArray(histRaw) && histRaw.cleared) || (Array.isArray(histData) && !histData.length && histTs > 0),
+            data: histData
+          };
         }
       }catch(e){}
       return null;
@@ -1462,28 +1390,12 @@
       var data = env.data;
       var ts = Number(env.updatedAt || Date.now());
       if(key === "orcamento"){
-        // Com edital aberto, a fonte da planilha é o workspace do edital — não a cópia global.
-        if(LICSYSTEM.state.activeLeilaoId && !this.orcEnvelopeMatchesActive(data) && !env.cleared){
-          try{
-            if(data && typeof data === "object"){
-              var mirror = Object.assign({}, data, { updatedAt: ts, savedAt: ts });
-              localStorage.setItem(ORC_KEY, JSON.stringify(mirror));
-            }
-          }catch(e){}
-          this.touchMeta("orcamento", ts);
-          return;
-        }
         if(env.cleared || this.isOrcDataEmpty(data)){
-          if(LICSYSTEM.state.activeLeilaoId && !env.cleared){
-            this.touchMeta("orcamento", ts);
-            return;
-          }
           LICSYSTEM.state.orcItems = [LICSYSTEM.orcamento.emptyItem()];
           LICSYSTEM.state.orcPage = 1;
           LICSYSTEM.state.orcCatalogId = null;
           LICSYSTEM.state.orcMetaNome = "";
           LICSYSTEM.state.orcMetaNumero = "";
-          if(!LICSYSTEM.state.activeLeilaoId) LICSYSTEM.state.orcBoundLeilaoId = null;
           var emptyPayload = this.buildOrcData();
           emptyPayload.savedAt = ts;
           emptyPayload.updatedAt = ts;
@@ -1493,7 +1405,7 @@
           LICSYSTEM.state._orcDirty = false;
           try{ LICSYSTEM.orcamento.updateMeta(); }catch(e){}
           if(LICSYSTEM.state.currentView === "orcamento"){
-            try{ LICSYSTEM.orcamento.render({ save:false, sync:false }); }catch(e){}
+            try{ LICSYSTEM.orcamento.render({ save:false }); }catch(e){}
           }
         } else {
           if(data && typeof data === "object" && !Array.isArray(data)){
@@ -1507,7 +1419,7 @@
         return;
       }
       if(key === "catalogo"){
-        LICSYSTEM.catalogo.items = utils.fbToArray(data);
+        LICSYSTEM.catalogo.items = Array.isArray(data) ? data : [];
         try{ localStorage.setItem("licsystem_catalogo_v1", JSON.stringify(LICSYSTEM.catalogo.items)); }catch(e){}
         this.touchMeta("catalogo", ts);
         try{ if(typeof listarProdutos === "function") listarProdutos(); }catch(e){}
@@ -1535,54 +1447,40 @@
       }
       if(key === "leiloesParticipo"){
         if(LICSYSTEM.leiloesParticipo){
-          LICSYSTEM.leiloesParticipo.applyData(utils.fbToArray(data), { skipPersist: false });
-          // Refresh open edital sheet, but never clobber cells while the user is typing.
-          try{
-            if(LICSYSTEM.state.activeLeilaoId && LICSYSTEM.leiloesParticipo.findById(LICSYSTEM.state.activeLeilaoId)){
-              var orcTs = this.metaTs("orcamento");
-              if(this.isOrcBusy() || orcTs > ts + 500){
-                // Keep in-memory orçamento; workspace list already updated above.
-              } else {
-                LICSYSTEM.leiloesParticipo.loadActiveWorkspace({ docs: false, analise: false });
-                if(LICSYSTEM.state.currentView === "orcamento"){
-                  LICSYSTEM.orcamento.render({ save:false, sync:false });
-                }
-              }
-            }
-          }catch(e){}
+          LICSYSTEM.leiloesParticipo.applyData(Array.isArray(data) ? data : [], { skipPersist: false });
         } else {
-          try{ localStorage.setItem(LEILOES_PARTICIPO_KEY, JSON.stringify(utils.fbToArray(data))); }catch(e){}
+          try{ localStorage.setItem(LEILOES_PARTICIPO_KEY, JSON.stringify(Array.isArray(data) ? data : [])); }catch(e){}
         }
         this.touchMeta("leiloesParticipo", ts);
         return;
       }
       if(key === "pncpWatches"){
         if(LICSYSTEM.alertas){
-          LICSYSTEM.alertas.applyWatches(utils.fbToArray(data), { skipPersist: false, skipCloud: true });
+          LICSYSTEM.alertas.applyWatches(Array.isArray(data) ? data : [], { skipPersist: false, skipCloud: true });
         } else {
-          try{ localStorage.setItem(PNCP_WATCHES_KEY, JSON.stringify(utils.fbToArray(data))); }catch(e){}
+          try{ localStorage.setItem(PNCP_WATCHES_KEY, JSON.stringify(Array.isArray(data) ? data : [])); }catch(e){}
         }
         this.touchMeta("pncpWatches", ts);
         return;
       }
       if(key === "pncpAlerts"){
         if(LICSYSTEM.alertas){
-          LICSYSTEM.alertas.applyAlerts(utils.fbToArray(data), { skipPersist: false, skipCloud: true });
+          LICSYSTEM.alertas.applyAlerts(Array.isArray(data) ? data : [], { skipPersist: false, skipCloud: true });
         } else {
-          try{ localStorage.setItem(PNCP_ALERTS_KEY, JSON.stringify(utils.fbToArray(data))); }catch(e){}
+          try{ localStorage.setItem(PNCP_ALERTS_KEY, JSON.stringify(Array.isArray(data) ? data : [])); }catch(e){}
         }
         this.touchMeta("pncpAlerts", ts);
         return;
       }
       if(key === "arp"){
-        LICSYSTEM.arp.atas = utils.fbToArray(data);
+        LICSYSTEM.arp.atas = Array.isArray(data) ? data : [];
         try{ localStorage.setItem("licsystem_arp_v1", JSON.stringify(LICSYSTEM.arp.atas)); }catch(e){}
         this.touchMeta("arp", ts);
         try{ if(LICSYSTEM.arp.renderAll) LICSYSTEM.arp.renderAll(); }catch(e){}
         return;
       }
       if(key === "entregas"){
-        LICSYSTEM.entregas.items = utils.fbToArray(data);
+        LICSYSTEM.entregas.items = Array.isArray(data) ? data : [];
         try{ localStorage.setItem("licsystem_entregas_v1", JSON.stringify(LICSYSTEM.entregas.items)); }catch(e){}
         this.touchMeta("entregas", ts);
         try{
@@ -1593,9 +1491,16 @@
         return;
       }
       if(key === "histEntregas"){
-        LICSYSTEM.histEntregas.items = utils.fbToArray(data);
+        LICSYSTEM.histEntregas.items = Array.isArray(data) ? data : [];
         LICSYSTEM.histEntregas._loaded = true;
-        try{ localStorage.setItem("licsystem_hist_entregas_v1", JSON.stringify(LICSYSTEM.histEntregas.items)); }catch(e){}
+        try{
+          localStorage.setItem("licsystem_hist_entregas_v1", JSON.stringify({
+            v: 1,
+            updatedAt: ts,
+            cleared: !!env.cleared || !LICSYSTEM.histEntregas.items.length,
+            items: LICSYSTEM.histEntregas.items
+          }));
+        }catch(e){}
         this.touchMeta("histEntregas", ts);
         try{ if(LICSYSTEM.histEntregas.render) LICSYSTEM.histEntregas.render(); }catch(e){}
       }
@@ -1647,56 +1552,13 @@
       if(!env.updatedAt) env.updatedAt = Date.now();
       if(!env.writeId) env.writeId = self.newWriteId();
 
-      var dataForCloud = env.data;
-      if(key === "leiloesParticipo"){
-        dataForCloud = self.slimLeiloesForCloud(env.data);
-      } else if(key === "orcamento" && dataForCloud && typeof dataForCloud === "object" && !Array.isArray(dataForCloud)){
-        // Ensure items is a dense array with normalized fields (incl. pct + leilaoId).
-        dataForCloud = {
-          v: 2,
-          items: utils.fbToArray(dataForCloud.items).map(function(it){
-            return LICSYSTEM.orcamento.normalizeItem(it);
-          }),
-          meta: dataForCloud.meta || { nome: "", numero: "", catalogId: null },
-          page: Math.max(1, Number(dataForCloud.page) || 1),
-          leilaoId: dataForCloud.leilaoId != null && dataForCloud.leilaoId !== ""
-            ? String(dataForCloud.leilaoId)
-            : (LICSYSTEM.state.orcBoundLeilaoId || LICSYSTEM.state.activeLeilaoId || ""),
-          savedAt: Number(dataForCloud.savedAt || env.updatedAt || Date.now()),
-          updatedAt: Number(dataForCloud.updatedAt || env.updatedAt || Date.now()),
-          cleared: !!dataForCloud.cleared
-        };
-      }
-
       self.setStatus("syncing", "Sincronizando…");
-      var payload = self.stripNulls(self.toFb({
+      var payload = self.toFb({
         updatedAt: env.updatedAt,
         cleared: !!env.cleared,
         writeId: env.writeId,
-        data: dataForCloud
-      }));
-      var bytes = utils.jsonByteLength(payload);
-      if(bytes > self.RTDB_SOFT_MAX_BYTES){
-        // Last resort for leiloes: drop report text entirely, keep orçamento rows.
-        if(key === "leiloesParticipo"){
-          dataForCloud = self.slimLeiloesForCloud(env.data).map(function(row){
-            if(row.workspace) row.workspace.relatorioMd = "";
-            return row;
-          });
-          payload = self.stripNulls(self.toFb({
-            updatedAt: env.updatedAt,
-            cleared: !!env.cleared,
-            writeId: env.writeId,
-            data: dataForCloud
-          }));
-          bytes = utils.jsonByteLength(payload);
-        }
-      }
-      if(bytes > self.RTDB_SOFT_MAX_BYTES){
-        console.warn("cloudSync push "+key+" too large ("+bytes+" bytes)");
-        self.setStatus("error", "Sync falhou (dados grandes)");
-        return Promise.resolve({ ok: false, error: new Error("payload-too-large"), bytes: bytes });
-      }
+        data: env.data
+      });
       self._echoAt[key] = Number(env.updatedAt) || 0;
       self._echoWriteId[key] = env.writeId;
       return utils.firebaseSet(path, payload).then(function(){
@@ -1705,12 +1567,7 @@
         return { ok: true };
       }).catch(function(err){
         console.warn("cloudSync push "+key, err);
-        var msg = (err && err.message) ? String(err.message) : "";
-        if(/too large|PAYLOAD|size|MAX_|Permission/i.test(msg)){
-          self.setStatus("error", "Sync falhou (limite nuvem)");
-        } else {
-          self.setStatus("error", "Sync falhou");
-        }
+        self.setStatus("error", "Sync falhou");
         return { ok: false, error: err };
       });
     },
@@ -1763,8 +1620,16 @@
         return { source: "cleared" };
       }
 
-      // Local empty + cloud has data → take cloud (even if local ts missing/0).
+      // Local empty + cloud has data:
+      // - intentional clear / newer local empty → keep local and push clear
+      // - otherwise take cloud (fresh browser with no local work)
       if(this.isEnvelopeEmpty(key, localEnv) && cloudEnv && !this.isEnvelopeEmpty(key, cloudEnv)){
+        var ltEmpty = Number(localEnv.updatedAt || 0);
+        var ctFull = Number(cloudEnv.updatedAt || 0);
+        if(localEnv.cleared || (ltEmpty > 0 && ltEmpty >= ctFull)){
+          this.pushKey(key, { env: localEnv, forceClear: true, immediate: true });
+          return { source: "local" };
+        }
         this.applyEnvelope(key, cloudEnv);
         return { source: "cloud" };
       }
@@ -1786,34 +1651,20 @@
 
     parseCloudEnv: function(raw){
       if(!raw || typeof raw !== "object") return null;
-      var data = raw.data !== undefined ? raw.data : raw;
-      if(data && typeof data === "object" && !Array.isArray(data)){
-        if(data.items != null){
-          data = Object.assign({}, data, { items: utils.fbToArray(data.items) });
-        } else {
-          var keys = Object.keys(data);
-          if(keys.length && keys.every(function(k){ return /^\d+$/.test(k); })){
-            data = utils.fbToArray(data);
-          }
-        }
-      }
       return {
         updatedAt: Number(raw.updatedAt || 0),
         cleared: !!raw.cleared,
         writeId: raw.writeId ? String(raw.writeId) : "",
-        data: data
+        data: raw.data !== undefined ? raw.data : raw
       };
     },
 
     isOrcBusy: function(){
-      if(LICSYSTEM.state._orcTyping) return true;
       if(LICSYSTEM.state._orcDirty) return true;
       if(LICSYSTEM.orcamento && LICSYSTEM.orcamento._saveTimer) return true;
-      // Grace window: ignore remote apply shortly after last keystroke even if focus left the cell.
-      if(LICSYSTEM.state._orcLastEditAt && (Date.now() - LICSYSTEM.state._orcLastEditAt) < 2500) return true;
       try{
         var ae = document.activeElement;
-        if(ae && ae.closest && ae.closest("#orcBody, #orcTable, #orcMetaNome, #orcMetaNumero")) return true;
+        if(ae && ae.closest && ae.closest("#orcBody, #orcMetaNome, #orcMetaNumero")) return true;
       }catch(e){}
       return false;
     },
@@ -1851,14 +1702,11 @@
     schedulePendingRemote: function(key){
       var self = this;
       clearTimeout(self._pendingRemoteTimers[key]);
-      var delay = (key === "orcamento" || key === "leiloesParticipo")
-        ? self.ORC_REMOTE_DEFER_MS
-        : self.REMOTE_DEFER_MS;
       self._pendingRemoteTimers[key] = setTimeout(function(){
         self._pendingRemoteTimers[key] = null;
         var env = self._pendingRemote[key];
         if(!env) return;
-        if((key === "orcamento" || key === "leiloesParticipo") && self.isOrcBusy()){
+        if(key === "orcamento" && self.isOrcBusy()){
           // Keep deferring while typing; local saves will win via newer updatedAt.
           self.schedulePendingRemote(key);
           return;
@@ -1866,7 +1714,7 @@
         delete self._pendingRemote[key];
         if(self.isEcho(key, env)) return;
         self.applyRemoteEnvelope(key, env);
-      }, delay);
+      }, self.REMOTE_DEFER_MS);
     },
 
     onRemoteSnap: function(key, snap){
@@ -1877,7 +1725,7 @@
       if(!cloudEnv) return;
       if(self.isEcho(key, cloudEnv)) return;
 
-      if((key === "orcamento" || key === "leiloesParticipo") && self.isOrcBusy()){
+      if(key === "orcamento" && self.isOrcBusy()){
         self._pendingRemote[key] = cloudEnv;
         self.schedulePendingRemote(key);
         self.setStatus("syncing", "Sync pendente…");
@@ -2106,7 +1954,7 @@
       var box = el("dashPncpList");
       if(!box) return;
       var arr = (LICSYSTEM.alertas && LICSYSTEM.alertas.alerts && LICSYSTEM.alertas.alerts.length)
-        ? LICSYSTEM.alertas.alerts
+        ? LICSYSTEM.alertas.sortByPrazo(LICSYSTEM.alertas.alerts)
         : (LICSYSTEM.state.pncpAlerts || []);
       if(!arr.length){
         box.innerHTML='<span class="muted">Nenhum alerta ainda. Ative um monitoramento em <b>Pesquisas de Editais</b> (botão “Ativar alerta”).</span>';
@@ -2117,10 +1965,14 @@
         var title = o.link
           ? '<a href="'+utils.escapeHtml(o.link)+'" target="_blank" rel="noopener" style="color:inherit;text-decoration:none"><b>'+utils.escapeHtml(o.orgao||"Órgão")+'</b></a>'
           : '<b>'+utils.escapeHtml(o.orgao||"Órgão")+'</b>';
+        var prazo = (LICSYSTEM.alertas && LICSYSTEM.alertas.formatPrazo)
+          ? LICSYSTEM.alertas.formatPrazo(o.dataEncerramento)
+          : "—";
         html+='<div style="padding:10px 12px;border:1px solid var(--ls-line);border-radius:10px'+(o.readAt?'':';background:#fffbeb')+'">'+
           title+' <span class="badge-status b-yellow">'+utils.escapeHtml(o.uf||"")+'</span>'+
           (o.watchLabel ? ' <span class="small muted">· '+utils.escapeHtml(o.watchLabel)+'</span>' : '')+'<br/>'+
-          '<span class="small muted">'+utils.escapeHtml((o.objeto||"").slice(0,180))+'</span></div>';
+          '<span class="small muted">'+utils.escapeHtml((o.objeto||"").slice(0,180))+'</span><br/>'+
+          '<span class="small" style="font-weight:700;color:var(--ls-navy)">Prazo: '+utils.escapeHtml(prazo)+'</span></div>';
       });
       html+='</div>';
       box.innerHTML=html;
@@ -4849,6 +4701,7 @@
     collapseSummaryIdForKey: function (key) {
       if (key === "prox-editais") return "proxCollapseSummary";
       if (key === "radar-pncp") return "radarCollapseSummary";
+      if (key === "alertas-pncp") return "alertasCollapseSummary";
       return "chatCollapseSummary";
     },
 
@@ -4858,7 +4711,9 @@
           ? "proxCollapseSummary"
           : which === "radar"
             ? "radarCollapseSummary"
-            : "chatCollapseSummary";
+            : which === "alertas"
+              ? "alertasCollapseSummary"
+              : "chatCollapseSummary";
       var sum = el(id);
       if (!sum) return;
       sum.textContent = text || "";
@@ -4867,7 +4722,9 @@
           ? el("cardProxEditais")
           : which === "radar"
             ? el("cardRadarPncp")
-            : el("cardChatEditais");
+            : which === "alertas"
+              ? el("cardAlertasPncp")
+              : el("cardChatEditais");
       var collapsed = card && card.classList.contains("is-collapsed");
       sum.hidden = !collapsed || !text;
     },
@@ -5242,20 +5099,7 @@
   /* ============================ ORÇAMENTO ============================ */
   LICSYSTEM.orcamento = {
     emptyItem:function(){
-      return {lote:"", qtd:1, qtdEstoque:0, produto:"", editalVunit:0, editalTotal:0, vunit:0, valorVenda:0, pct:0, pctManual:false, link:"", compensa:null};
-    },
-    /** Read % from pct / percentual / percent / "%" (legacy aliases). */
-    readPct:function(it){
-      it = it || {};
-      var raw = it.pct;
-      if(raw == null || raw === "") raw = it.percentual;
-      if(raw == null || raw === "") raw = it.percent;
-      if(raw == null || raw === "") raw = it["%"];
-      if(typeof raw === "string"){
-        raw = raw.replace(/%/g, "").replace(/\s/g, "").replace(",", ".");
-      }
-      var n = Number(raw);
-      return isFinite(n) ? n : 0;
+      return {lote:"", qtd:1, qtdEstoque:0, produto:"", editalVunit:0, editalTotal:0, vunit:0, vvenda:0, pct:0, link:"", compensa:null};
     },
     normalizeItem:function(it){
       it = it || {};
@@ -5266,30 +5110,103 @@
       var editalTotal = Number(it.editalTotal != null ? it.editalTotal : 0) || 0;
       if(!editalTotal && editalVunit) editalTotal = qtd * editalVunit;
       if(!editalVunit && editalTotal && qtd) editalVunit = editalTotal / qtd;
-      var pctManual = !!(it.pctManual === true || it.pctManual === "true");
-      var out = {
+      var vunit = Number(it.vunit) || 0;
+      var pct = Number(it.pct) || 0;
+      var vvenda = Number(it.vvenda != null ? it.vvenda : it.vVenda);
+      if(!isFinite(vvenda) || vvenda < 0) vvenda = 0;
+      if(!vvenda && vunit){
+        vvenda = pct ? (vunit * (1 + pct / 100)) : vunit;
+      }
+      if(vunit > 0 && vvenda > 0 && !pct){
+        pct = ((vvenda - vunit) / vunit) * 100;
+      }
+      var row = {
         lote: it.lote != null && it.lote !== "" ? String(it.lote) : "",
         qtd: qtd,
         qtdEstoque: qtdEstoque,
         produto: String(it.produto || it.descricao || ""),
         editalVunit: editalVunit,
         editalTotal: editalTotal,
-        vunit: Number(it.vunit) || 0,
-        valorVenda: Number(it.valorVenda != null ? it.valorVenda : (it.venda != null ? it.venda : 0)) || 0,
-        pct: 0,
-        pctManual: pctManual,
+        vunit: vunit,
+        vvenda: Math.round(vvenda * 10000) / 10000,
+        pct: Math.round(pct * 1000) / 1000,
         link: String(it.link || ""),
         compensa: null
       };
-      out.pct = pctManual
-        ? LICSYSTEM.orcamento.readPct(it)
-        : LICSYSTEM.orcamento.calcPctAuto(out);
-      out.compensa = LICSYSTEM.orcamento.autoCompensa(out);
-      return out;
+      row.compensa = LICSYSTEM.orcamento.evalCompensa(row);
+      return row;
+    },
+
+    /** Margem % a partir do custo (vunit) e do V. Venda. */
+    calcPctFromVenda:function(vunit, vvenda){
+      vunit = Number(vunit) || 0;
+      vvenda = Number(vvenda) || 0;
+      if(vunit <= 0) return 0;
+      return Math.round((((vvenda - vunit) / vunit) * 100) * 1000) / 1000;
+    },
+
+    /** V. Venda a partir do custo e da %. */
+    calcVendaFromPct:function(vunit, pct){
+      vunit = Number(vunit) || 0;
+      pct = Number(pct) || 0;
+      return Math.round((vunit * (1 + pct / 100)) * 10000) / 10000;
+    },
+
+    /**
+     * Mantém vunit ↔ vvenda ↔ % sincronizados.
+     * changed: "vunit" | "vvenda" | "pct"
+     */
+    syncPricing:function(it, changed){
+      if(!it) return;
+      var vunit = Number(it.vunit) || 0;
+      var vvenda = Number(it.vvenda) || 0;
+      var pct = Number(it.pct) || 0;
+      if(changed === "pct"){
+        it.vvenda = LICSYSTEM.orcamento.calcVendaFromPct(vunit, pct);
+      } else if(changed === "vvenda"){
+        it.pct = LICSYSTEM.orcamento.calcPctFromVenda(vunit, vvenda);
+      } else if(changed === "vunit"){
+        if(pct){
+          it.vvenda = LICSYSTEM.orcamento.calcVendaFromPct(vunit, pct);
+        } else if(vvenda > 0 && vunit > 0){
+          it.pct = LICSYSTEM.orcamento.calcPctFromVenda(vunit, vvenda);
+        } else if(vunit > 0 && !vvenda){
+          it.vvenda = vunit;
+          it.pct = 0;
+        }
+      }
+      it.compensa = LICSYSTEM.orcamento.evalCompensa(it);
+    },
+
+    /** COMPENSA se meu V. Final < V. Final do edital; NÃO COMPENSA se maior. */
+    evalCompensa:function(it){
+      var meus = LICSYSTEM.orcamento.calcTotal(it);
+      var edital = LICSYSTEM.orcamento.calcEditalTotal(it);
+      if(!(meus > 0) || !(edital > 0)) return null;
+      if(meus < edital) return true;
+      if(meus > edital) return false;
+      return true;
+    },
+
+    calcEditalTotal:function(it){
+      var stored = Number(it.editalTotal)||0;
+      if(stored > 0) return stored;
+      return (Number(it.qtd)||0) * (Number(it.editalVunit)||0);
+    },
+    /** MEUS PREÇOS V. Final = Qtd do edital × V. Venda */
+    calcTotal:function(it){
+      var q = Number(it.qtd) || 0;
+      var vv = Number(it.vvenda);
+      if(!isFinite(vv) || vv <= 0){
+        var v = Number(it.vunit) || 0;
+        var p = Number(it.pct) || 0;
+        vv = v * (1 + p / 100);
+      }
+      return q * vv;
     },
     isEmptyRow:function(it){
       if(!it) return true;
-      return !String(it.produto||"").trim() && !Number(it.vunit) && !Number(it.valorVenda) && !Number(it.editalVunit) && !String(it.lote||"").trim();
+      return !String(it.produto||"").trim() && !Number(it.vunit) && !Number(it.editalVunit) && !String(it.lote||"").trim();
     },
     load:function(){
       try{
@@ -5308,12 +5225,9 @@
           LICSYSTEM.state.orcMetaNumero = meta.numero != null ? String(meta.numero) : (LICSYSTEM.state.orcMetaNumero || "");
           LICSYSTEM.state.orcCatalogId = meta.catalogId != null ? meta.catalogId : (LICSYSTEM.state.orcCatalogId || null);
           if(raw.page != null) LICSYSTEM.state.orcPage = Math.max(1, Number(raw.page) || 1);
-          if(raw.leilaoId != null && raw.leilaoId !== ""){
-            LICSYSTEM.state.orcBoundLeilaoId = String(raw.leilaoId);
-          }
         }
         if(items){
-          LICSYSTEM.state.orcItems = utils.fbToArray(items).map(function(it){ return LICSYSTEM.orcamento.normalizeItem(it); });
+          LICSYSTEM.state.orcItems = items.map(function(it){ return LICSYSTEM.orcamento.normalizeItem(it); });
         }
       }catch(e){}
       if(!LICSYSTEM.state.orcItems.length){
@@ -5325,13 +5239,8 @@
       opts = opts || {};
       try{
         var now = Date.now();
-        // Só associa ao edital se a planilha já estiver vinculada a ele (evita copiar entre editais).
         var boundId = LICSYSTEM.state.orcBoundLeilaoId || null;
-        if(
-          !boundId &&
-          LICSYSTEM.state.activeLeilaoId &&
-          opts.bindActive
-        ){
+        if(!boundId && LICSYSTEM.state.activeLeilaoId && opts.bindActive){
           boundId = String(LICSYSTEM.state.activeLeilaoId);
           LICSYSTEM.state.orcBoundLeilaoId = boundId;
         }
@@ -5352,21 +5261,8 @@
           immediate: !!opts.immediate
         };
         if(opts.forceClear) payload.cleared = true;
-        // Sempre grava o orçamento global (fonte da nuvem users/{uid}/orcamento),
-        // inclusive com edital ativo — assim % / vunit / todos os campos sincronizam entre PCs.
-        try{ localStorage.setItem(ORC_KEY, JSON.stringify(payload)); }catch(eLs){
-          console.warn("Orçamento: falha ao gravar localStorage.", eLs);
-        }
-        // Só espelha no workspace do edital ao qual a planilha em memória pertence.
-        if(
-          boundId &&
-          LICSYSTEM.state.activeLeilaoId &&
-          String(boundId) === String(LICSYSTEM.state.activeLeilaoId) &&
-          LICSYSTEM.leiloesParticipo &&
-          LICSYSTEM.leiloesParticipo.syncActiveOrcamento
-        ){
-          LICSYSTEM.leiloesParticipo.syncActiveOrcamento(payload);
-        }
+        // Sempre grava rascunho global + nuvem (para não sumir ao atualizar).
+        try{ localStorage.setItem(ORC_KEY, JSON.stringify(payload)); }catch(e){}
         if(!opts.skipCloud && LICSYSTEM.cloudSync){
           LICSYSTEM.cloudSync.notifyLocalChange("orcamento", {
             updatedAt: now,
@@ -5374,52 +5270,25 @@
             immediate: !!opts.immediate
           });
         }
+        // Só espelha no workspace do edital ao qual a planilha pertence.
+        if(
+          boundId &&
+          LICSYSTEM.state.activeLeilaoId &&
+          String(boundId) === String(LICSYSTEM.state.activeLeilaoId) &&
+          LICSYSTEM.leiloesParticipo &&
+          LICSYSTEM.leiloesParticipo.syncActiveOrcamento
+        ){
+          LICSYSTEM.leiloesParticipo.syncActiveOrcamento(Object.assign({}, payload, { immediate: !!opts.immediate }));
+        }
       }catch(e){
         console.warn("Orçamento: não foi possível salvar tudo no navegador (limite de armazenamento).", e);
       }
     },
-    markTyping:function(){
-      LICSYSTEM.state._orcTyping = true;
-      LICSYSTEM.state._orcLastEditAt = Date.now();
-      clearTimeout(LICSYSTEM.orcamento._typingTimer);
-      LICSYSTEM.orcamento._typingTimer = setTimeout(function(){
-        LICSYSTEM.orcamento._typingTimer = null;
-        try{
-          var ae = document.activeElement;
-          if(ae && ae.closest && ae.closest("#orcBody, #orcTable")){
-            LICSYSTEM.state._orcTyping = true;
-            return;
-          }
-        }catch(e){}
-        LICSYSTEM.state._orcTyping = false;
-      }, 2500);
-    },
-    scheduleSave:function(){
-      clearTimeout(LICSYSTEM.orcamento._saveTimer);
-      LICSYSTEM.orcamento._saveTimer = setTimeout(function(){
-        LICSYSTEM.orcamento._saveTimer = null;
-        LICSYSTEM.orcamento.syncFromDom();
-        LICSYSTEM.orcamento.save();
-        // Keep dirty while still editing so cloud remote apply stays deferred.
-        if(!LICSYSTEM.cloudSync || !LICSYSTEM.cloudSync.isOrcBusy()){
-          LICSYSTEM.state._orcDirty = false;
-        }
-      }, 600);
-    },
-    flushSave:function(opts){
-      opts = opts || {};
-      clearTimeout(LICSYSTEM.orcamento._saveTimer);
-      LICSYSTEM.orcamento._saveTimer = null;
-      LICSYSTEM.orcamento.syncFromDom();
-      LICSYSTEM.orcamento.save(opts);
-      if(!opts.keepDirty) LICSYSTEM.state._orcDirty = false;
-    },
-    /** Explicit user save: local + cloud push + confirmation. */
+    /** Salva na hora (estilo Word) e sincroniza com o banco — sem ir ao catálogo. */
     salvarAgora:function(){
-      // Feedback IMEDIATO — antes de qualquer gravação (evita botão “morto” se o save travar).
-      function showSavedFeedback(okMsg){
+      function showSavedFeedback(msg){
         try{
-          showAlert("orcAlert", "ok", okMsg || "✅ <b>ORÇAMENTO SALVO</b>");
+          showAlert("orcAlert", "ok", msg || "✅ <b>ORÇAMENTO SALVO</b>");
           var alertEl = el("orcAlert");
           if(alertEl && alertEl.scrollIntoView){
             alertEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -5435,97 +5304,86 @@
           toast.textContent = "ORÇAMENTO SALVO";
           toast.className = "show";
           clearTimeout(LICSYSTEM.orcamento._toastTimer);
-          LICSYSTEM.orcamento._toastTimer = setTimeout(function(){
-            toast.className = "";
-          }, 2800);
+          LICSYSTEM.orcamento._toastTimer = setTimeout(function(){ toast.className = ""; }, 2800);
         }catch(e){}
         try{
           if(LICSYSTEM.cloudSync && LICSYSTEM.cloudSync.setStatus){
             LICSYSTEM.cloudSync.setStatus("ok", "ORÇAMENTO SALVO");
           }
         }catch(e){}
-        ["btnSalvarOrcamento", "btnSalvarOrc"].forEach(function(id){
-          var btn = el(id);
-          if(!btn) return;
-          if(!btn.getAttribute("data-prev-html")){
-            btn.setAttribute("data-prev-html", btn.innerHTML);
-          }
+        var btn = el("btnSalvarOrcamento") || el("btnSalvarOrc");
+        if(btn){
+          if(!btn.getAttribute("data-prev-html")) btn.setAttribute("data-prev-html", btn.innerHTML);
           btn.innerHTML = "✅ ORÇAMENTO SALVO";
           btn.disabled = true;
-        });
-        clearTimeout(LICSYSTEM.orcamento._salvarBtnTimer);
-        LICSYSTEM.orcamento._salvarBtnTimer = setTimeout(function(){
-          ["btnSalvarOrcamento", "btnSalvarOrc"].forEach(function(id){
-            var btn = el(id);
-            if(!btn) return;
+          clearTimeout(LICSYSTEM.orcamento._salvarBtnTimer);
+          LICSYSTEM.orcamento._salvarBtnTimer = setTimeout(function(){
             var prev = btn.getAttribute("data-prev-html");
             if(prev) btn.innerHTML = prev;
             btn.disabled = false;
             btn.removeAttribute("data-prev-html");
-          });
-        }, 2800);
+          }, 2800);
+        }
       }
 
+      // Feedback na hora — antes do save pesado (evita botão “morto”).
       showSavedFeedback("✅ <b>ORÇAMENTO SALVO</b> — gravando…");
 
-      try{
-        // Vincula a planilha ao edital aberto antes de gravar.
-        if(LICSYSTEM.state.activeLeilaoId && !LICSYSTEM.state.orcBoundLeilaoId){
-          LICSYSTEM.state.orcBoundLeilaoId = String(LICSYSTEM.state.activeLeilaoId);
+      setTimeout(function(){
+        try{
+          if(LICSYSTEM.state.activeLeilaoId && !LICSYSTEM.state.orcBoundLeilaoId){
+            LICSYSTEM.state.orcBoundLeilaoId = String(LICSYSTEM.state.activeLeilaoId);
+          }
+          try{ LICSYSTEM.orcamento.syncFromDom(); }catch(e){}
+          LICSYSTEM.orcamento.flushSave({ immediate: true, bindActive: true });
+          LICSYSTEM.state._orcDirty = false;
+          try{
+            if(LICSYSTEM.state.activeLeilaoId && LICSYSTEM.leiloesParticipo){
+              LICSYSTEM.leiloesParticipo.saveActiveWorkspace({ immediate: true });
+            }
+          }catch(e){}
+          try{
+            if(LICSYSTEM.cloudSync){
+              LICSYSTEM.cloudSync.flushPush("orcamento", { immediate: true });
+              LICSYSTEM.cloudSync.flushPush("leiloesParticipo", { immediate: true });
+            }
+          }catch(e){}
+
+          var n = (LICSYSTEM.state.orcItems || []).filter(function(it){
+            return LICSYSTEM.orcamento && !LICSYSTEM.orcamento.isEmptyRow(it);
+          }).length;
+          var editalNome = "";
+          try{
+            var active = LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.getActiveItem
+              ? LICSYSTEM.leiloesParticipo.getActiveItem() : null;
+            if(active) editalNome = active.titulo || active.filename || "";
+          }catch(e){}
+          showSavedFeedback(
+            "✅ <b>ORÇAMENTO SALVO</b>" +
+            (editalNome ? " — <b>" + utils.escapeHtml(String(editalNome).slice(0, 80)) + "</b>" : "") +
+            " · " + n + " item(ns) gravado(s) neste edital."
+          );
+        }catch(err){
+          console.warn("salvarAgora", err);
+          showAlert("orcAlert", "error", "❌ Falha ao salvar. Tente de novo (Ctrl+F5 se persistir).");
         }
-        LICSYSTEM.orcamento.markTyping();
-        LICSYSTEM.orcamento.flushSave({ immediate: true, bindActive: true });
-        LICSYSTEM.state._orcTyping = false;
+      }, 0);
+    },
+    scheduleSave:function(){
+      clearTimeout(LICSYSTEM.orcamento._saveTimer);
+      LICSYSTEM.orcamento._saveTimer = setTimeout(function(){
+        LICSYSTEM.orcamento._saveTimer = null;
+        LICSYSTEM.orcamento.save();
         LICSYSTEM.state._orcDirty = false;
-        try{
-          if(LICSYSTEM.state.activeLeilaoId && LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.saveActiveWorkspace){
-            LICSYSTEM.leiloesParticipo.saveActiveWorkspace({ immediate: true });
-          }
-        }catch(e){}
-
-        var cloudJobs = [];
-        try{
-          if(LICSYSTEM.cloudSync){
-            cloudJobs.push(LICSYSTEM.cloudSync.flushPush("orcamento", { immediate: true }));
-            cloudJobs.push(LICSYSTEM.cloudSync.flushPush("leiloesParticipo", { immediate: true }));
-          }
-        }catch(e){}
-
-        var n = (LICSYSTEM.state.orcItems || []).filter(function(it){
-          return !LICSYSTEM.orcamento.isEmptyRow(it);
-        }).length;
-        var editalNome = "";
-        try{
-          var active = LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.getActiveItem
-            ? LICSYSTEM.leiloesParticipo.getActiveItem()
-            : null;
-          if(active) editalNome = active.titulo || active.filename || "";
-        }catch(e){}
-        var msg =
-          "✅ <b>ORÇAMENTO SALVO</b>" +
-          (editalNome ? " — <b>"+utils.escapeHtml(String(editalNome).slice(0, 80))+"</b>" : "") +
-          " · "+n+" item(ns) gravado(s) neste edital.";
-        showSavedFeedback(msg);
-
-        Promise.all(cloudJobs.filter(Boolean)).then(function(results){
-          var failed = (results || []).some(function(r){ return r && r.ok === false; });
-          if(failed){
-            showAlert(
-              "orcAlert",
-              "warn",
-              "⚠️ Orçamento gravado neste PC, mas a nuvem falhou. Verifique a internet e clique em Salvar de novo."
-            );
-            try{ if(LICSYSTEM.cloudSync) LICSYSTEM.cloudSync.setStatus("error", "Sync falhou"); }catch(e){}
-          }
-        }).catch(function(){});
-      }catch(err){
-        console.warn("salvarAgora", err);
-        showAlert(
-          "orcAlert",
-          "error",
-          "❌ Falha ao salvar o orçamento. Tente de novo. Se persistir, atualize a página (Ctrl+F5)."
-        );
-      }
+      }, 400);
+    },
+    flushSave:function(opts){
+      opts = opts || {};
+      clearTimeout(LICSYSTEM.orcamento._saveTimer);
+      LICSYSTEM.orcamento._saveTimer = null;
+      LICSYSTEM.orcamento.syncFromDom();
+      LICSYSTEM.orcamento.save(opts);
+      LICSYSTEM.state._orcDirty = false;
     },
     /** Pull live input values into state (covers pending keystrokes before leave). */
     syncFromDom:function(){
@@ -5547,100 +5405,20 @@
         var f = inp.getAttribute("data-f");
         var it = LICSYSTEM.state.orcItems[i];
         if(!it || !f) continue;
-        if(f === "produto" || f === "link" || f === "lote") it[f] = inp.value;
-        else if(f === "pct"){
-          it.pct = LICSYSTEM.orcamento.readPct({ pct: inp.value });
-          it.pctManual = true;
-          it.valorVenda = LICSYSTEM.orcamento.calcValorVendaFromPct(it);
+        if(f === "produto" || f === "link" || f === "lote"){
+          if(f === "produto") continue; /* descrição bloqueada */
+          it[f] = inp.value;
         } else it[f] = Number(inp.value) || 0;
         if(f === "qtd" || f === "editalVunit"){
           if(Number(it.editalVunit) > 0){
             it.editalTotal = (Number(it.qtd) || 0) * (Number(it.editalVunit) || 0);
           }
         }
-        if(f === "valorVenda"){
-          it.pctManual = false;
-          it.pct = LICSYSTEM.orcamento.calcPctAuto(it);
+        if(f === "vunit" || f === "vvenda" || f === "pct"){
+          LICSYSTEM.orcamento.syncPricing(it, f);
+        } else if(f === "qtd" || f === "editalVunit"){
+          it.compensa = LICSYSTEM.orcamento.evalCompensa(it);
         }
-      }
-    },
-    calcEditalTotal:function(it){
-      var stored = Number(it.editalTotal)||0;
-      if(stored > 0) return stored;
-      return (Number(it.qtd)||0) * (Number(it.editalVunit)||0);
-    },
-    /** % lucro automática: (Valor de Venda − meu V.Unitário) / meu V.Unitário × 100 */
-    calcPctAuto:function(it){
-      var custo = Number(it && it.vunit) || 0;
-      var venda = Number(it && it.valorVenda) || 0;
-      if(!(custo > 0) || !(venda > 0)) return 0;
-      return Math.round(((venda - custo) / custo) * 1000) / 10;
-    },
-    /** Valor de Venda a partir da % desejada: custo × (1 + %/100) */
-    calcValorVendaFromPct:function(it){
-      var custo = Number(it && it.vunit) || 0;
-      var p = Number(it && it.pct) || 0;
-      if(!(custo > 0)) return 0;
-      return Math.round(custo * (1 + p / 100) * 100) / 100;
-    },
-    formatPctAuto:function(pct){
-      var n = Number(pct) || 0;
-      if(!isFinite(n)) n = 0;
-      var s = (Math.round(n * 10) / 10).toFixed(1).replace(".", ",");
-      return s;
-    },
-    /** MEUS PREÇOS V. Final: Qtd do edital × Valor de Venda */
-    calcTotal:function(it){
-      var q = Number(it.qtd) || 0;
-      var v = Number(it.valorVenda) || 0;
-      return q * v;
-    },
-    /**
-     * Compensa automático:
-     * - meu V.Final <= edital V.Final → true (verde)
-     * - meu V.Final > edital V.Final → false (vermelho)
-     * - sem valores → null
-     */
-    autoCompensa:function(it){
-      var meus = LICSYSTEM.orcamento.calcTotal(it);
-      var edital = LICSYSTEM.orcamento.calcEditalTotal(it);
-      if(!(meus > 0) || !(edital > 0)) return null;
-      return meus <= edital;
-    },
-    syncCompensa:function(it){
-      if(!it) return null;
-      it.compensa = LICSYSTEM.orcamento.autoCompensa(it);
-      return it.compensa;
-    },
-    compensaBadgeHtml:function(compensa){
-      if(compensa === true){
-        return '<span class="orc-compensa-badge is-ok" data-compensa-badge style="background:#1e9e5a;color:#fff">Compensa</span>';
-      }
-      if(compensa === false){
-        return '<span class="orc-compensa-badge is-bad" data-compensa-badge style="background:#d23b3b;color:#fff">Não compensa</span>';
-      }
-      return '<span class="orc-compensa-badge is-empty" data-compensa-badge></span>';
-    },
-    applyCompensaBadge:function(badge, compensa){
-      if(!badge) return;
-      if(compensa === true){
-        badge.className = "orc-compensa-badge is-ok";
-        badge.textContent = "Compensa";
-        badge.style.background = "#1e9e5a";
-        badge.style.color = "#fff";
-        badge.style.display = "";
-      } else if(compensa === false){
-        badge.className = "orc-compensa-badge is-bad";
-        badge.textContent = "Não compensa";
-        badge.style.background = "#d23b3b";
-        badge.style.color = "#fff";
-        badge.style.display = "";
-      } else {
-        badge.className = "orc-compensa-badge is-empty";
-        badge.textContent = "";
-        badge.style.background = "";
-        badge.style.color = "";
-        badge.style.display = "none";
       }
     },
     pageCount:function(){
@@ -5676,40 +5454,18 @@
       if(next) next.disabled = page >= pages;
     },
     goPage:function(delta){
-      LICSYSTEM.orcamento.syncFromDom();
       var pages = LICSYSTEM.orcamento.pageCount();
       var next = (LICSYSTEM.state.orcPage || 1) + delta;
       if(next < 1) next = 1;
       if(next > pages) next = pages;
       LICSYSTEM.state.orcPage = next;
       LICSYSTEM.state._orcDirty = true;
-      LICSYSTEM.orcamento.render({ save:false, sync:false });
+      LICSYSTEM.orcamento.render({ save:false });
     },
     render:function(opts){
       opts = opts || {};
       var body = el("orcBody");
       if(!body) return;
-      // Sync DOM→state only when a cell is focused (or caller asks). Never when applying remote data.
-      try{
-        var needSync = opts.sync === true;
-        if(opts.sync !== false && !needSync){
-          var ae0 = document.activeElement;
-          if(ae0 && body.contains(ae0) && ae0.getAttribute && ae0.getAttribute("data-f")) needSync = true;
-        }
-        if(needSync) LICSYSTEM.orcamento.syncFromDom();
-      }catch(e){}
-      var focusInfo = null;
-      try{
-        var ae = document.activeElement;
-        if(ae && body.contains(ae) && ae.getAttribute){
-          focusInfo = {
-            i: ae.getAttribute("data-i"),
-            f: ae.getAttribute("data-f"),
-            start: typeof ae.selectionStart === "number" ? ae.selectionStart : null,
-            end: typeof ae.selectionEnd === "number" ? ae.selectionEnd : null
-          };
-        }
-      }catch(e){}
       var items = LICSYSTEM.state.orcItems;
       var n = items.length;
       var size = LICSYSTEM.state.orcPageSize || 100;
@@ -5726,6 +5482,11 @@
       var buf = [];
       for(var i = start; i < end; i++){
         var it = items[i];
+        if(!(Number(it.vvenda) > 0) && Number(it.vunit) > 0){
+          LICSYSTEM.orcamento.syncPricing(it, Number(it.pct) ? "pct" : "vunit");
+        } else {
+          it.compensa = LICSYSTEM.orcamento.evalCompensa(it);
+        }
         var totalMeus = LICSYSTEM.orcamento.calcTotal(it);
         var totalEdital = LICSYSTEM.orcamento.calcEditalTotal(it);
         var editalUnitShow = Number(it.editalVunit)||0;
@@ -5734,33 +5495,34 @@
         }
         var risco = utils.riscoMatch(it.produto);
         var flag = risco.length ? '<span class="risk-flag" title="Risco: '+utils.escapeHtml(risco.join(", "))+'">⚠</span>' : "";
-        var compensa = LICSYSTEM.orcamento.syncCompensa(it);
         var rowCls = [];
         if(risco.length) rowCls.push("risk-row");
-        if(compensa === true) rowCls.push("orc-row-compensa");
-        else if(compensa === false) rowCls.push("orc-row-nao-compensa");
+        if(it.compensa === true) rowCls.push("orc-row-compensa");
+        else if(it.compensa === false) rowCls.push("orc-row-nao-compensa");
+        var statusBadge = "";
+        if(it.compensa === true){
+          statusBadge = '<span class="orc-status-badge is-ok" style="background:#1e9e5a;color:#fff" title="Meu V. Final abaixo do edital">COMPENSA</span>';
+        } else if(it.compensa === false){
+          statusBadge = '<span class="orc-status-badge is-bad" style="background:#d23b3b;color:#fff" title="Meu V. Final acima do edital">NÃO COMPENSA</span>';
+        }
         var hasLink = !!(String(it.link || "").trim());
         var btnLinkCls = "btn btn-ghost btn-sm orcOpenLink"+(hasLink ? " is-ready" : "");
-        if(!it.pctManual) it.pct = LICSYSTEM.orcamento.calcPctAuto(it);
-        var pctNow = Number(it.pct) || 0;
-        var pctCls = "orc-pct"+(pctNow > 0 ? " is-pos" : (pctNow < 0 ? " is-neg" : ""))+(it.pctManual ? " is-manual" : "");
+        var pctShow = Number(it.pct) || 0;
+        var vvendaShow = Number(it.vvenda) || 0;
         buf.push(
           '<tr class="'+rowCls.join(" ")+'" data-item-idx="'+i+'">'+
             '<td class="td-chk"><input type="checkbox" class="orcChk" data-i="'+i+'" aria-label="Selecionar lote '+(it.lote||(i+1))+'"></td>'+
             '<td class="td-lote"><input type="text" class="orc-lote" data-i="'+i+'" data-f="lote" value="'+utils.escapeHtml(it.lote)+'" placeholder="—" title="Lote ou Item do edital"></td>'+
             '<td class="td-qtd"><input type="number" class="orc-qtd" data-i="'+i+'" data-f="qtd" value="'+utils.escapeHtml(it.qtd)+'" step="1" min="0" title="Quantidade"></td>'+
-            '<td class="td-desc"><div class="orc-desc-wrap'+(risco.length?' risk-cell':'')+'">'+flag+
-              '<input type="text" data-i="'+i+'" data-f="produto" value="'+utils.escapeHtml(it.produto)+'" placeholder="Descrição do edital" title="'+utils.escapeHtml(it.produto)+'">'+
+            '<td><div class="orc-desc-wrap'+(risco.length?' risk-cell':'')+'">'+flag+
+              '<input type="text" class="orc-produto-locked" data-i="'+i+'" data-f="produto" value="'+utils.escapeHtml(it.produto)+'" placeholder="Descrição do edital" readonly tabindex="-1" title="Descrição bloqueada — vem do edital e não pode ser alterada">'+
             '</div></td>'+
             '<td class="td-money"><input type="number" data-i="'+i+'" data-f="editalVunit" value="'+utils.escapeHtml(editalUnitShow)+'" step="0.0001" min="0" title="Valor unitário do edital"></td>'+
             '<td class="td-money split-end"><span class="cell-ro" data-edital-total="'+i+'">'+utils.formatBrl(totalEdital)+'</span></td>'+
-            '<td class="td-money split-start"><input type="number" data-i="'+i+'" data-f="vunit" value="'+utils.escapeHtml(it.vunit)+'" step="0.01" min="0" title="Meu custo / preço de compra (unitário)"></td>'+
-            '<td class="td-money"><input type="number" data-i="'+i+'" data-f="valorVenda" value="'+utils.escapeHtml(it.valorVenda)+'" step="0.01" min="0" title="Valor de venda (unitário)"></td>'+
-            '<td class="td-pct"><input type="number" class="'+pctCls+'" data-i="'+i+'" data-f="pct" data-pct-field="'+i+'" value="'+(Math.round(pctNow*10)/10)+'" step="0.1" title="'+(it.pctManual?"% manual (ignora automático)":"% lucro automática — digite para definir manualmente")+'"></td>'+
-            '<td class="td-money td-meus-final"><div class="orc-meus-final" data-meus-final="'+i+'">'+
-              '<span class="cell-total" data-meus-total="'+i+'">'+utils.formatBrl(totalMeus)+'</span>'+
-              LICSYSTEM.orcamento.compensaBadgeHtml(compensa)+
-            '</div></td>'+
+            '<td class="td-money split-start"><input type="number" data-i="'+i+'" data-f="vunit" value="'+utils.escapeHtml(it.vunit)+'" step="0.01" min="0" title="Meu valor unitário (custo)"></td>'+
+            '<td class="td-money"><input type="number" data-i="'+i+'" data-f="vvenda" value="'+utils.escapeHtml(vvendaShow)+'" step="0.01" min="0" title="Valor de venda"></td>'+
+            '<td class="td-pct"><input type="number" class="orc-pct" data-i="'+i+'" data-f="pct" value="'+utils.escapeHtml(pctShow)+'" step="0.1" title="Margem % (automática)"></td>'+
+            '<td class="td-money"><div class="orc-final-cell"><span class="cell-total" data-meus-total="'+i+'">'+utils.formatBrl(totalMeus)+'</span>'+statusBadge+'</div></td>'+
             '<td class="td-link"><input type="text" data-i="'+i+'" data-f="link" value="'+utils.escapeHtml(it.link||"")+'" placeholder="Link"></td>'+
             '<td class="td-actions"><div class="orc-actions">'+
               '<button type="button" class="btn btn-ghost btn-sm orcGoogle" data-i="'+i+'" title="Google">G</button>'+
@@ -5780,24 +5542,10 @@
       if(el("orcTotalEdital")) el("orcTotalEdital").textContent = utils.formatBrl(geralEdital);
       var all = el("orcCheckAll");
       if(all) all.checked = false;
-      // Do not clear dirty here — remote sync may still need the busy flag.
+      LICSYSTEM.state._orcDirty = false;
       LICSYSTEM.state._orcRendered = true;
       LICSYSTEM.orcamento.updatePager();
       if(opts.save !== false) LICSYSTEM.orcamento.save();
-      if(focusInfo && focusInfo.i != null && focusInfo.f){
-        try{
-          var restore = body.querySelector('input[data-i="'+focusInfo.i+'"][data-f="'+focusInfo.f+'"]');
-          if(restore){
-            restore.focus();
-            if(focusInfo.start != null && typeof restore.setSelectionRange === "function"){
-              var len = String(restore.value || "").length;
-              var a = Math.min(focusInfo.start, len);
-              var b = Math.min(focusInfo.end != null ? focusInfo.end : focusInfo.start, len);
-              restore.setSelectionRange(a, b);
-            }
-          }
-        }catch(e){}
-      }
     },
     addLinha:function(){
       LICSYSTEM.state.orcItems.push(LICSYSTEM.orcamento.emptyItem());
@@ -5886,7 +5634,7 @@
         var rows = [[
           "Lote","Qtd","Descrição",
           "Edital V. Unitário","Edital V. Final",
-          "Meu V. Unitário","Valor de Venda","%","Meu V. Final","Link"
+          "Meu V. Unitário","%","Meu V. Final","Link"
         ]];
         items.forEach(function(it){
           rows.push([
@@ -5896,7 +5644,6 @@
             Number(it.editalVunit)||0,
             LICSYSTEM.orcamento.calcEditalTotal(it),
             Number(it.vunit)||0,
-            Number(it.valorVenda)||0,
             Number(it.pct)||0,
             LICSYSTEM.orcamento.calcTotal(it),
             it.link || ""
@@ -6325,67 +6072,63 @@
 
     onEdit:function(i,f,val){
       var it=LICSYSTEM.state.orcItems[i]; if(!it) return;
-      LICSYSTEM.orcamento.markTyping();
-      if(f==="produto"||f==="link"||f==="lote") it[f]=val;
-      else if(f==="pct"){
-        it.pct = LICSYSTEM.orcamento.readPct({ pct: val });
-        it.pctManual = true;
-        it.valorVenda = LICSYSTEM.orcamento.calcValorVendaFromPct(it);
-      } else {
-        // Preserve empty mid-edit so number inputs are not forced to 0 until committed.
-        if(val === "" || val == null){
-          it[f] = 0;
-        } else {
-          var num = Number(String(val).replace(",", "."));
-          it[f] = isFinite(num) ? num : (Number(it[f]) || 0);
-        }
-      }
+      /* Descrição do produto vem do edital e não pode ser alterada */
+      if(f === "produto") return;
+      if(f==="link"||f==="lote") it[f]=val;
+      else it[f]=Number(val)||0;
 
       if(f==="qtd" || f==="editalVunit"){
         if(Number(it.editalVunit) > 0){
           it.editalTotal = (Number(it.qtd)||0) * (Number(it.editalVunit)||0);
         }
       }
-      // % automática só ao preencher Valor de Venda (V. Unitário não dispara)
-      if(f==="valorVenda"){
-        it.pctManual = false;
-        it.pct = LICSYSTEM.orcamento.calcPctAuto(it);
+      if(f==="vunit" || f==="vvenda" || f==="pct"){
+        LICSYSTEM.orcamento.syncPricing(it, f);
+      } else {
+        it.compensa = LICSYSTEM.orcamento.evalCompensa(it);
       }
 
       LICSYSTEM.state._orcDirty = true;
-      // Update only totals / link button — never remount the whole table on each keystroke.
       var row = document.querySelector('#orcBody [data-item-idx="'+i+'"]');
       if(row){
         var edCell = row.querySelector('[data-edital-total="'+i+'"]');
         var meCell = row.querySelector('[data-meus-total="'+i+'"]');
-        var pctInp = row.querySelector('[data-pct-field="'+i+'"]');
-        var vendaInp = row.querySelector('input[data-i="'+i+'"][data-f="valorVenda"]');
-        var badge = row.querySelector("[data-compensa-badge]");
-        var compensa = LICSYSTEM.orcamento.syncCompensa(it);
         if(edCell) edCell.textContent = utils.formatBrl(LICSYSTEM.orcamento.calcEditalTotal(it));
         if(meCell) meCell.textContent = utils.formatBrl(LICSYSTEM.orcamento.calcTotal(it));
-        row.classList.toggle("orc-row-compensa", compensa === true);
-        row.classList.toggle("orc-row-nao-compensa", compensa === false);
-        if(badge){
-          LICSYSTEM.orcamento.applyCompensaBadge(badge, compensa);
-        }
-        if(f==="pct" && vendaInp){
-          vendaInp.value = String(Number(it.valorVenda) || 0);
-        }
-        if(pctInp && f!=="pct"){
-          var pctNow = Number(it.pct) || 0;
-          pctInp.value = String(Math.round(pctNow * 10) / 10);
-          pctInp.classList.toggle("is-pos", pctNow > 0);
-          pctInp.classList.toggle("is-neg", pctNow < 0);
-          pctInp.classList.toggle("is-manual", !!it.pctManual);
-          pctInp.title = it.pctManual
-            ? "% manual — Valor de Venda calculado a partir do custo"
-            : "% lucro automática — digite a % desejada para calcular o Valor de Venda";
-        } else if(pctInp && f==="pct"){
-          pctInp.classList.add("is-manual");
-          pctInp.classList.toggle("is-pos", Number(it.pct) > 0);
-          pctInp.classList.toggle("is-neg", Number(it.pct) < 0);
-          pctInp.title = "% manual — Valor de Venda calculado a partir do custo";
+        var pctInp = row.querySelector('input[data-f="pct"]');
+        var vvInp = row.querySelector('input[data-f="vvenda"]');
+        if(pctInp && document.activeElement !== pctInp) pctInp.value = Number(it.pct) || 0;
+        if(vvInp && document.activeElement !== vvInp) vvInp.value = Number(it.vvenda) || 0;
+        row.classList.toggle("orc-row-compensa", it.compensa === true);
+        row.classList.toggle("orc-row-nao-compensa", it.compensa === false);
+        var finalCell = row.querySelector(".orc-final-cell");
+        if(finalCell){
+          var badge = finalCell.querySelector(".orc-status-badge");
+          if(it.compensa === true){
+            if(!badge){
+              badge = document.createElement("span");
+              badge.className = "orc-status-badge is-ok";
+              finalCell.appendChild(badge);
+            }
+            badge.className = "orc-status-badge is-ok";
+            badge.style.background = "#1e9e5a";
+            badge.style.color = "#fff";
+            badge.title = "Meu V. Final abaixo do edital";
+            badge.textContent = "COMPENSA";
+          } else if(it.compensa === false){
+            if(!badge){
+              badge = document.createElement("span");
+              badge.className = "orc-status-badge is-bad";
+              finalCell.appendChild(badge);
+            }
+            badge.className = "orc-status-badge is-bad";
+            badge.style.background = "#d23b3b";
+            badge.style.color = "#fff";
+            badge.title = "Meu V. Final acima do edital";
+            badge.textContent = "NÃO COMPENSA";
+          } else if(badge){
+            badge.remove();
+          }
         }
         if(f==="link"){
           var linkBtn = row.querySelector(".orcOpenLink");
@@ -8078,7 +7821,7 @@
 
     applyData: function(list, opts){
       opts = opts || {};
-      var arr = utils.fbToArray(list);
+      var arr = Array.isArray(list) ? list : [];
       LICSYSTEM.leiloesParticipo.items = arr.map(function(it, i){
         return LICSYSTEM.leiloesParticipo.normalizeItem(it, i);
       });
@@ -8093,12 +7836,12 @@
     normalizeWorkspace: function(ws){
       ws = ws || {};
       var orc = ws.orcamento && typeof ws.orcamento === "object" ? ws.orcamento : {};
-      var items = utils.fbToArray(orc.items);
+      var items = Array.isArray(orc.items) ? orc.items : [];
       var meta = orc.meta && typeof orc.meta === "object" ? orc.meta : {};
       return {
         relatorioMd: String(ws.relatorioMd || "").slice(0, 100000),
         pdfKeywords: String(ws.pdfKeywords || "").slice(0, 300),
-        captacaoLines: utils.fbToArray(ws.captacaoLines).slice(0, 500),
+        captacaoLines: Array.isArray(ws.captacaoLines) ? ws.captacaoLines.slice(0, 500) : [],
         orcamento: {
           v: 2,
           items: items.slice(0, 500).map(function(row){
@@ -8111,7 +7854,7 @@
           },
           page: Math.max(1, Number(orc.page) || 1)
         },
-        cruzamentoAprovados: utils.fbToArray(ws.cruzamentoAprovados).slice(0, 300)
+        cruzamentoAprovados: Array.isArray(ws.cruzamentoAprovados) ? ws.cruzamentoAprovados.slice(0, 300) : []
       };
     },
 
@@ -8187,21 +7930,16 @@
 
     syncActiveOrcamento: function(payload){
       var bound = LICSYSTEM.state.orcBoundLeilaoId;
-      // Sem vínculo explícito, não grava no edital ativo (evita copiar planilha errada).
       var targetId = (payload && payload.leilaoId) || bound || null;
       if(!targetId) return;
       var item = LICSYSTEM.leiloesParticipo.findById(targetId);
       if(!item) return;
-      // Nunca gravar planilha de um edital no workspace de outro.
       if(payload && payload.leilaoId && String(payload.leilaoId) !== String(item.id)) return;
       if(bound && String(bound) !== String(item.id)) return;
       if(!item.workspace) item.workspace = LICSYSTEM.leiloesParticipo.emptyWorkspace();
-      var rows = utils.fbToArray(payload && payload.items).slice(0, 500).map(function(row){
-        return LICSYSTEM.orcamento.normalizeItem(row);
-      });
       item.workspace.orcamento = {
         v: 2,
-        items: rows,
+        items: Array.isArray(payload && payload.items) ? payload.items.slice(0, 500) : [],
         meta: (payload && payload.meta) || { nome: "", numero: "", catalogId: null },
         page: Math.max(1, Number(payload && payload.page) || 1)
       };
@@ -8215,29 +7953,24 @@
       if(!item) return;
       var bound = LICSYSTEM.state.orcBoundLeilaoId;
       var boundMatches = !!(bound && String(bound) === String(item.id));
-      var canSyncOrc = LICSYSTEM.state._orcRendered !== false && boundMatches;
-      if(canSyncOrc){
+      if(boundMatches && LICSYSTEM.state._orcRendered !== false){
         try{ if(LICSYSTEM.orcamento && LICSYSTEM.orcamento.syncFromDom) LICSYSTEM.orcamento.syncFromDom(); }catch(e){}
       }
       var prev = item.workspace || LICSYSTEM.leiloesParticipo.emptyWorkspace();
       var kwEl = el("pdfKeywords");
-      // Só sobrescreve o orçamento deste edital se a planilha em memória for DELE.
-      // Se bound estiver vazio ou for de outro edital, preserva o que já estava salvo.
-      var keepPrevOrc = !boundMatches;
-      var orcBlock = keepPrevOrc
-        ? (prev.orcamento || { v: 2, items: [], meta: { nome: "", numero: "", catalogId: null }, page: 1 })
-        : {
+      // Só sobrescreve orçamento se a planilha em memória for DESTE edital.
+      var orcBlock = boundMatches
+        ? {
             v: 2,
-            items: utils.fbToArray(LICSYSTEM.state.orcItems).map(function(row){
-              return LICSYSTEM.orcamento.normalizeItem(row);
-            }),
+            items: Array.isArray(LICSYSTEM.state.orcItems) ? LICSYSTEM.state.orcItems : [],
             meta: {
               nome: LICSYSTEM.state.orcMetaNome || "",
               numero: LICSYSTEM.state.orcMetaNumero || "",
               catalogId: LICSYSTEM.state.orcCatalogId || null
             },
             page: LICSYSTEM.state.orcPage || 1
-          };
+          }
+        : (prev.orcamento || { v: 2, items: [], meta: { nome: "", numero: "", catalogId: null }, page: 1 });
       item.workspace = LICSYSTEM.leiloesParticipo.normalizeWorkspace({
         relatorioMd: (LICSYSTEM.analiseIa && LICSYSTEM.analiseIa.relatorioMd) || prev.relatorioMd || "",
         pdfKeywords: kwEl ? String(kwEl.value || "") : (prev.pdfKeywords || ""),
@@ -8269,7 +8002,7 @@
 
       if(opts.orcamento !== false){
         var orc = ws.orcamento || {};
-        var rows = utils.fbToArray(orc.items);
+        var rows = Array.isArray(orc.items) ? orc.items : [];
         LICSYSTEM.state.orcItems = rows.length
           ? rows.map(function(row){ return LICSYSTEM.orcamento.normalizeItem(row); })
           : [LICSYSTEM.orcamento.emptyItem()];
@@ -8281,31 +8014,11 @@
         LICSYSTEM.state.orcBoundLeilaoId = String(item.id);
         LICSYSTEM.state._orcRendered = false;
         LICSYSTEM.state._orcDirty = false;
-        LICSYSTEM.state._orcTyping = false;
         try{
           clearTimeout(LICSYSTEM.orcamento._saveTimer);
           LICSYSTEM.orcamento._saveTimer = null;
         }catch(e){}
         try{ LICSYSTEM.orcamento.updateMeta(); }catch(e){}
-        // Espelha só a chave global (com leilaoId); não regrava o workspace nem a nuvem.
-        try{
-          var mirror = {
-            v: 2,
-            items: LICSYSTEM.state.orcItems.map(function(row){
-              return LICSYSTEM.orcamento.normalizeItem(row);
-            }),
-            meta: {
-              nome: LICSYSTEM.state.orcMetaNome || "",
-              numero: LICSYSTEM.state.orcMetaNumero || "",
-              catalogId: LICSYSTEM.state.orcCatalogId || null
-            },
-            page: LICSYSTEM.state.orcPage || 1,
-            leilaoId: String(item.id),
-            savedAt: Date.now(),
-            updatedAt: Date.now()
-          };
-          localStorage.setItem(ORC_KEY, JSON.stringify(mirror));
-        }catch(e){}
       }
 
       if(opts.importar !== false){
@@ -8400,11 +8113,10 @@
           clearTimeout(LICSYSTEM.orcamento._saveTimer);
           LICSYSTEM.orcamento._saveTimer = null;
         }catch(e){}
-        // Garante que o flush grave no edital que está saindo, não no próximo.
         if(!LICSYSTEM.state.orcBoundLeilaoId){
           LICSYSTEM.state.orcBoundLeilaoId = String(prevId);
         }
-        try{ LICSYSTEM.orcamento.flushSave({ keepDirty: false }); }catch(e){}
+        try{ LICSYSTEM.orcamento.flushSave({ immediate: true }); }catch(e){}
         try{ LICSYSTEM.leiloesParticipo.saveActiveWorkspace(); }catch(e){}
       }
       LICSYSTEM.leiloesParticipo.setActiveId(item.id);
@@ -8424,7 +8136,6 @@
         showAlert("leiloesAlert", "info", "Clique em um edital da lista para abrir as ferramentas dele.");
         return;
       }
-      // Só grava o workspace atual se a planilha em memória for deste edital.
       try{
         if(
           LICSYSTEM.state.orcBoundLeilaoId &&
@@ -8678,13 +8389,168 @@
         }
         metaBox.innerHTML = bits.join("");
       }
+      LICSYSTEM.leiloesParticipo.renderParticipantesLoading();
       ov.classList.add("open");
       ov.setAttribute("aria-hidden", "false");
+      LICSYSTEM.leiloesParticipo.loadParticipantesAnalysis(draft);
+    },
+
+    renderParticipantesLoading: function(){
+      var box = el("participarEmpresasBody");
+      if(!box) return;
+      box.innerHTML =
+        '<div class="participar-empresas-loading muted small">' +
+          '<span class="spinner" style="width:14px;height:14px;border-width:2px;border-color:#ccc;border-top-color:#152642"></span>' +
+          " A IA está analisando quem pode disputar este leilão…" +
+        "</div>";
+    },
+
+    formatCnpj: function(cnpj){
+      var d = String(cnpj || "").replace(/\D/g, "");
+      if(d.length !== 14) return d || "";
+      return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+    },
+
+    renderParticipantesResult: function(data){
+      var box = el("participarEmpresasBody");
+      if(!box) return;
+      data = data || {};
+      var html = [];
+      if(data.exclusivoMeEpp === true){
+        html.push('<span class="participar-pill is-me">Exclusivo / prioridade ME·EPP</span>');
+      } else if(data.exclusivoMeEpp === false){
+        html.push('<span class="participar-pill">Aberto a qualquer porte (conforme edital)</span>');
+      }
+      if(data.resumo){
+        html.push('<p class="participar-empresas-resumo">' + utils.escapeHtml(data.resumo) + "</p>");
+      }
+      if(data.criterios && data.criterios.length){
+        html.push('<div class="participar-sub">Critérios de participação</div><ul class="participar-list">');
+        data.criterios.forEach(function(c){
+          html.push("<li>" + utils.escapeHtml(c) + "</li>");
+        });
+        html.push("</ul>");
+      }
+      if(data.restricoes && data.restricoes.length){
+        html.push('<div class="participar-sub">Restrições / barreiras</div><ul class="participar-list">');
+        data.restricoes.forEach(function(c){
+          html.push("<li>" + utils.escapeHtml(c) + "</li>");
+        });
+        html.push("</ul>");
+      }
+      if(data.perfisAptos && data.perfisAptos.length){
+        html.push('<div class="participar-sub">Perfis de empresas aptas</div>');
+        data.perfisAptos.forEach(function(p){
+          html.push(
+            '<div class="participar-empresa-item">' +
+              "<strong>" + utils.escapeHtml(p.perfil || "Perfil") +
+              (p.porte ? ' <span class="muted">· ' + utils.escapeHtml(p.porte) + "</span>" : "") +
+              "</strong>" +
+              (p.porQue ? '<div class="muted">' + utils.escapeHtml(p.porQue) + "</div>" : "") +
+            "</div>"
+          );
+        });
+      }
+      if(data.empresasPncp && data.empresasPncp.length){
+        html.push('<div class="participar-sub">Empresas com contratos semelhantes (PNCP)</div>');
+        data.empresasPncp.forEach(function(e){
+          var cnpjFmt = LICSYSTEM.leiloesParticipo.formatCnpj(e.cnpj);
+          html.push(
+            '<div class="participar-empresa-item">' +
+              "<strong>" + utils.escapeHtml(e.nome || "Fornecedor") + "</strong>" +
+              (cnpjFmt ? '<div class="muted">CNPJ ' + utils.escapeHtml(cnpjFmt) + "</div>" : "") +
+              (e.objeto ? '<div class="muted">' + utils.escapeHtml(e.objeto) + "</div>" : "") +
+              ((e.orgao || e.uf)
+                ? '<div class="muted">' + utils.escapeHtml([e.orgao, e.uf].filter(Boolean).join(" · ")) + "</div>"
+                : "") +
+            "</div>"
+          );
+        });
+      }
+      if(data.alertaConcorrencia){
+        html.push(
+          '<div class="participar-sub">Concorrência</div>' +
+          '<p class="participar-empresas-resumo" style="margin:0">' + utils.escapeHtml(data.alertaConcorrencia) + "</p>"
+        );
+      }
+      html.push(
+        '<div class="participar-empresas-aviso">' +
+          utils.escapeHtml(
+            data.aviso ||
+            "Não é lista oficial de inscritos — critérios do edital + perfis e, se houver, fornecedores do PNCP com objeto parecido."
+          ) +
+        "</div>"
+      );
+      if(!data.resumo && !(data.criterios && data.criterios.length) && !(data.perfisAptos && data.perfisAptos.length)){
+        box.innerHTML = '<div class="muted small">Não foi possível montar o perfil de participantes.</div>';
+        return;
+      }
+      box.innerHTML = html.join("");
+    },
+
+    loadParticipantesAnalysis: function(draft){
+      draft = draft || {};
+      var token = String(Date.now());
+      LICSYSTEM.leiloesParticipo._partToken = token;
+      var text =
+        String(LICSYSTEM.analiseIa && LICSYSTEM.analiseIa.relatorioMd || "") ||
+        String(LICSYSTEM.analiseIa && LICSYSTEM.analiseIa.text || "");
+      if(!text || text.length < 40){
+        var box = el("participarEmpresasBody");
+        if(box) box.innerHTML = '<div class="muted small">Sem texto de análise para estimar participantes.</div>';
+        return;
+      }
+      var uf = "";
+      var mun = String(draft.municipio || "");
+      var mUf = mun.match(/\/\s*([A-Za-z]{2})\b/);
+      if(mUf) uf = mUf[1].toUpperCase();
+
+      var objeto = String(draft.resumo || "").slice(0, 280);
+      var objM = text.match(/(?:^|\n)\s*(?:\d+\.\s*)?(?:\*\*)?objeto(?:\s+da\s+contrata[cç][aã]o)?(?:\*\*)?\s*[:\-–]\s*([^\n]{12,240})/i);
+      if(objM && objM[1]) objeto = objM[1].replace(/\*\*/g, "").trim().slice(0, 280);
+
+      fetch("/api/analyze-participantes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          text: text.slice(0, 60000),
+          orgao: draft.orgao || "",
+          municipio: draft.municipio || "",
+          uf: uf,
+          objeto: objeto || draft.titulo || ""
+        })
+      })
+        .then(function(res){
+          return res.text().then(function(raw){
+            var body = null;
+            try{ body = raw ? JSON.parse(raw) : null; }catch(e){}
+            if(!res.ok){
+              var msg = (body && (body.error || body.detail)) || ("Erro HTTP " + res.status);
+              throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+            }
+            return body;
+          });
+        })
+        .then(function(body){
+          if(LICSYSTEM.leiloesParticipo._partToken !== token) return;
+          LICSYSTEM.leiloesParticipo.renderParticipantesResult(body);
+        })
+        .catch(function(err){
+          if(LICSYSTEM.leiloesParticipo._partToken !== token) return;
+          var box = el("participarEmpresasBody");
+          if(box){
+            box.innerHTML =
+              '<div class="muted small">Não deu para analisar participantes agora' +
+              (err && err.message ? ": " + utils.escapeHtml(err.message) : ".") +
+              "</div>";
+          }
+        });
     },
 
     closeParticiparModal: function(){
       var ov = el("participarOverlay");
       if(!ov) return;
+      LICSYSTEM.leiloesParticipo._partToken = null;
       ov.classList.remove("open");
       ov.setAttribute("aria-hidden", "true");
     },
@@ -8748,7 +8614,8 @@
               (it.resumo ? '<div class="leilao-resumo">' + utils.escapeHtml(it.resumo) + "</div>" : "") +
             "</div>" +
             '<div class="leilao-actions">' +
-              (!isArch ? '<button type="button" class="btn btn-gold btn-sm lpOpen" title="Abrir painel">Abrir</button>' : "") +
+              (!isArch ? '<button type="button" class="btn btn-gold btn-sm lpOrcar" title="Abrir orçamento deste edital">Orçar</button>' : "") +
+              (!isArch ? '<button type="button" class="btn btn-ghost btn-sm lpEncaminhar" title="Encaminhar para Entrega">Encaminhar</button>' : "") +
               (docsN ? '<button type="button" class="btn btn-ghost btn-sm lpDocs" title="Abrir checklist">📑 Docs</button>' : "") +
               (!isArch ? '<button type="button" class="btn btn-ghost btn-sm lpArchive" title="Arquivar">Arquivar</button>' : "") +
               '<button type="button" class="btn btn-ghost btn-sm lpRemove" title="Remover">✕</button>' +
@@ -8772,12 +8639,20 @@
           LICSYSTEM.leiloesParticipo.openWorkspace(id, "leilaoWorkspace");
         });
       });
-      box.querySelectorAll(".lpOpen").forEach(function(btn){
+      box.querySelectorAll(".lpOrcar").forEach(function(btn){
         btn.addEventListener("click", function(ev){
           ev.stopPropagation();
           var row = btn.closest(".leilao-item");
           var id = row && row.getAttribute("data-id");
-          LICSYSTEM.leiloesParticipo.openWorkspace(id, "leilaoWorkspace");
+          LICSYSTEM.leiloesParticipo.openWorkspace(id, "orcamento");
+        });
+      });
+      box.querySelectorAll(".lpEncaminhar").forEach(function(btn){
+        btn.addEventListener("click", function(ev){
+          ev.stopPropagation();
+          var row = btn.closest(".leilao-item");
+          var id = row && row.getAttribute("data-id");
+          LICSYSTEM.leiloesParticipo.encaminharParaEntrega(id);
         });
       });
       box.querySelectorAll(".lpDocs").forEach(function(btn){
@@ -8804,6 +8679,36 @@
           LICSYSTEM.leiloesParticipo.remove(id);
         });
       });
+    },
+
+    /** Encaminha o edital para o módulo Entrega, com dados pré-preenchidos. */
+    encaminharParaEntrega: function(id){
+      var item = LICSYSTEM.leiloesParticipo.findById(id);
+      if(!item){
+        showAlert("leiloesAlert", "warn", "Edital não encontrado.");
+        return;
+      }
+      if(window.__lsActivateView) window.__lsActivateView("entregas");
+      if(LICSYSTEM.entregas){
+        try{
+          LICSYSTEM.entregas.resetForm();
+          var nome = el("entregaNomeLicitacao");
+          if(nome) nome.value = String(item.titulo || "").slice(0, 220);
+          var obs = el("entregaObservacoes");
+          if(obs){
+            var bits = [];
+            if(item.orgao) bits.push("Órgão: " + item.orgao);
+            if(item.municipio) bits.push("Município: " + item.municipio);
+            if(item.filename) bits.push("Arquivo: " + item.filename);
+            if(item.resumo) bits.push(item.resumo);
+            obs.value = bits.join("\n").slice(0, 2000);
+          }
+          LICSYSTEM.entregas.open();
+          showAlert("entregaAlert", "ok", "Edital encaminhado — complete os dados da entrega e salve.");
+        }catch(e){
+          showAlert("leiloesAlert", "error", "Não foi possível abrir o formulário de entrega.");
+        }
+      }
     }
   };
 
@@ -9093,8 +8998,10 @@
     MAX_WATCHES: 12,
     MAX_ALERTS: 200,
     MAX_SEEN: 400,
+    MAX_INTERESSADOS: 40,
     watches: [],
     alerts: [],
+    interessados: [],
     _timer: null,
     _busy: false,
     _wired: false,
@@ -9109,11 +9016,31 @@
         var a = JSON.parse(localStorage.getItem(PNCP_ALERTS_KEY) || "[]");
         this.alerts = Array.isArray(a) ? a.map(function(x){ return LICSYSTEM.alertas.normalizeAlert(x); }) : [];
       }catch(e){ this.alerts = []; }
+      try{
+        var i = JSON.parse(localStorage.getItem(PNCP_INTERESSADOS_KEY) || "[]");
+        this.interessados = Array.isArray(i) ? i.map(function(x){ return LICSYSTEM.alertas.normalizeAlert(x); }) : [];
+      }catch(e){ this.interessados = []; }
       LICSYSTEM.state.pncpAlerts = this.alerts.filter(function(x){ return !x.readAt; });
       this.updateBell();
       this.renderWatches();
+      this.renderEditaisBalloons();
+      this.renderInteressadosIa();
       this.renderPanelList();
       try{ LICSYSTEM.dashboard.renderPncp(); }catch(e){}
+      /* Alertas antigos sem prazo: busca de novo no PNCP e preenche as datas */
+      if(this.alertsMissingPrazo() > 0 && this.watches.some(function(w){ return w.enabled !== false; })){
+        var self = this;
+        if(!this._prazoBackfillScheduled){
+          this._prazoBackfillScheduled = true;
+          setTimeout(function(){
+            self.checkAll().catch(function(){}).then(function(){
+              self._prazoBackfillScheduled = false;
+            }, function(){
+              self._prazoBackfillScheduled = false;
+            });
+          }, 1200);
+        }
+      }
     },
 
     normalizeWatch: function(raw){
@@ -9153,19 +9080,96 @@
         id: String(raw.id || key || ("a_" + Date.now())),
         key: key,
         numeroControlePNCP: raw.numeroControlePNCP || null,
+        numeroCompra: raw.numeroCompra != null ? String(raw.numeroCompra).slice(0, 80) : null,
         orgao: String(raw.orgao || "").slice(0, 200),
         municipio: String(raw.municipio || "").slice(0, 120),
         uf: String(raw.uf || "").slice(0, 2),
         objeto: String(raw.objeto || "").slice(0, 500),
         modalidade: String(raw.modalidade || "").slice(0, 80),
         valorEstimado: raw.valorEstimado != null ? Number(raw.valorEstimado) : null,
-        dataAbertura: raw.dataAbertura || null,
+        dataAbertura: LICSYSTEM.alertas.pickDataAbertura(raw),
+        dataEncerramento: LICSYSTEM.alertas.pickDataPrazo(raw),
         link: raw.link || null,
         watchId: String(raw.watchId || ""),
         watchLabel: String(raw.watchLabel || "").slice(0, 160),
         foundAt: Number(raw.foundAt || Date.now()),
-        readAt: raw.readAt != null ? Number(raw.readAt) || null : null
+        readAt: raw.readAt != null ? Number(raw.readAt) || null : null,
+        interessadoAt: raw.interessadoAt != null ? Number(raw.interessadoAt) || null : null
       };
+    },
+
+    /** Aceita nomes variados vindos do PNCP / APIs. */
+    pickDataPrazo: function(raw){
+      if(!raw || typeof raw !== "object") return null;
+      var v =
+        raw.dataEncerramento ||
+        raw.dataEncerramentoProposta ||
+        raw.dataEncerramentoPropostas ||
+        raw.dataFinalProposta ||
+        raw.dataFimProposta ||
+        raw.dataLimiteProposta ||
+        null;
+      if(v == null || v === "") return null;
+      return String(v);
+    },
+
+    pickDataAbertura: function(raw){
+      if(!raw || typeof raw !== "object") return null;
+      var v = raw.dataAbertura || raw.dataAberturaProposta || null;
+      if(v == null || v === "") return null;
+      return String(v);
+    },
+
+    /** Atualiza alertas já salvos (sem prazo) com dados frescos do monitor. */
+    enrichAlertsFromRows: function(rows){
+      if(!rows || !rows.length) return 0;
+      var byKey = Object.create(null);
+      for(var i = 0; i < rows.length; i++){
+        var row = rows[i] || {};
+        var key = this.editalKey(row);
+        if(key) byKey[key] = row;
+        if(row.numeroControlePNCP) byKey[String(row.numeroControlePNCP)] = row;
+      }
+      var updated = 0;
+      for(var j = 0; j < this.alerts.length; j++){
+        var a = this.alerts[j];
+        var src = byKey[a.key] || byKey[a.id] || (a.numeroControlePNCP ? byKey[String(a.numeroControlePNCP)] : null);
+        if(!src) continue;
+        var changed = false;
+        var prazo = this.pickDataPrazo(src);
+        var abertura = this.pickDataAbertura(src);
+        if(prazo && String(a.dataEncerramento || "") !== String(prazo)){
+          a.dataEncerramento = prazo;
+          changed = true;
+        }
+        if(abertura && !a.dataAbertura){
+          a.dataAbertura = abertura;
+          changed = true;
+        }
+        if(src.link && !a.link){ a.link = src.link; changed = true; }
+        if(src.numeroCompra != null && !a.numeroCompra){
+          a.numeroCompra = String(src.numeroCompra).slice(0, 80);
+          changed = true;
+        }
+        if(src.modalidade && !a.modalidade){
+          a.modalidade = String(src.modalidade).slice(0, 80);
+          changed = true;
+        }
+        if(src.valorEstimado != null && a.valorEstimado == null){
+          a.valorEstimado = Number(src.valorEstimado);
+          changed = true;
+        }
+        if(changed) updated++;
+      }
+      return updated;
+    },
+
+    alertsMissingPrazo: function(){
+      var n = 0;
+      for(var i = 0; i < this.alerts.length; i++){
+        if(!this.alerts[i].dataEncerramento) n++;
+      }
+      return n;
     },
 
     applyWatches: function(arr, opts){
@@ -9195,6 +9199,7 @@
       }
       LICSYSTEM.state.pncpAlerts = this.alerts.filter(function(x){ return !x.readAt; });
       this.updateBell();
+      this.renderEditaisBalloons();
       this.renderPanelList();
       try{ LICSYSTEM.dashboard.renderPncp(); }catch(e){}
     },
@@ -9216,8 +9221,14 @@
       }
       LICSYSTEM.state.pncpAlerts = this.alerts.filter(function(x){ return !x.readAt; });
       this.updateBell();
+      this.renderEditaisBalloons();
       this.renderPanelList();
       try{ LICSYSTEM.dashboard.renderPncp(); }catch(e){}
+    },
+
+    persistInteressados: function(){
+      try{ localStorage.setItem(PNCP_INTERESSADOS_KEY, JSON.stringify(this.interessados)); }catch(e){}
+      this.renderInteressadosIa();
     },
 
     editalKey: function(o){
@@ -9270,10 +9281,9 @@
         box.innerHTML = '<div class="small muted">Nenhum alerta ainda. Ative um monitoramento em <b>Pesquisas de Editais</b>.</div>';
         return;
       }
-      var sorted = this.alerts.slice().sort(function(a, b){
-        return Number(b.foundAt || 0) - Number(a.foundAt || 0);
-      });
+      var sorted = this.sortByPrazo(this.alerts);
       var html = "";
+      var self = this;
       sorted.slice(0, 40).forEach(function(a){
         var unread = !a.readAt;
         var title = a.link
@@ -9284,8 +9294,148 @@
           ' <span class="badge-status b-yellow">'+utils.escapeHtml(a.uf || "")+'</span>'+
           (a.watchLabel ? ' <span class="small muted">· '+utils.escapeHtml(a.watchLabel)+'</span>' : '')+
           '<div class="small muted" style="margin-top:4px">'+utils.escapeHtml((a.objeto || "").slice(0, 160))+'</div>'+
+          '<div class="small" style="margin-top:4px;font-weight:700;color:var(--ls-navy)">Prazo: '+utils.escapeHtml(self.formatPrazo(a.dataEncerramento))+'</div>'+
           (a.municipio ? '<div class="small muted">'+utils.escapeHtml(a.municipio)+'</div>' : '')+
           '</div>';
+      });
+      box.innerHTML = html;
+    },
+
+    prazoTs: function(iso){
+      if(!iso) return Number.POSITIVE_INFINITY;
+      var t = new Date(iso).getTime();
+      return isNaN(t) ? Number.POSITIVE_INFINITY : t;
+    },
+
+    formatPrazo: function(iso){
+      try{
+        if(LICSYSTEM.captacao && LICSYSTEM.captacao.formatProxDate){
+          return LICSYSTEM.captacao.formatProxDate(iso);
+        }
+      }catch(e){}
+      if(!iso) return "—";
+      try{
+        var d = new Date(iso);
+        if(isNaN(d.getTime())) return String(iso);
+        return d.toLocaleString("pt-BR", {
+          day: "2-digit", month: "2-digit", year: "numeric",
+          hour: "2-digit", minute: "2-digit"
+        });
+      }catch(e){ return String(iso); }
+    },
+
+    sortByPrazo: function(list){
+      var self = this;
+      return (list || []).slice().sort(function(a, b){
+        var da = self.prazoTs(a && a.dataEncerramento);
+        var db = self.prazoTs(b && b.dataEncerramento);
+        if(da !== db) return da - db;
+        return Number((b && b.foundAt) || 0) - Number((a && a.foundAt) || 0);
+      });
+    },
+
+    isPrazoUrgente: function(iso){
+      var t = this.prazoTs(iso);
+      if(!isFinite(t)) return false;
+      var diff = t - Date.now();
+      return diff >= 0 && diff <= 3 * 24 * 60 * 60 * 1000;
+    },
+
+    balloonHtml: function(a, opts){
+      opts = opts || {};
+      var self = this;
+      var unread = !a.readAt;
+      var urgente = self.isPrazoUrgente(a.dataEncerramento);
+      var nome = a.orgao || "Órgão";
+      var nomeHtml = a.link
+        ? '<a href="'+utils.escapeHtml(a.link)+'" target="_blank" rel="noopener">'+utils.escapeHtml(nome)+'</a>'
+        : utils.escapeHtml(nome);
+      var editalLabel = a.numeroCompra
+        ? ("Nº " + a.numeroCompra)
+        : (a.numeroControlePNCP || a.modalidade || "Edital PNCP");
+      var meta = [];
+      if(a.municipio) meta.push(a.municipio);
+      if(a.uf) meta.push(a.uf);
+      if(a.watchLabel) meta.push(a.watchLabel);
+      var actions = "";
+      if(opts.mode === "interessado"){
+        actions =
+          '<div class="alerta-balloon-actions">'+
+            '<button type="button" class="btn btn-gold btn-sm" data-interessado-analisar="'+utils.escapeHtml(a.id)+'">✨ Analisar com IA</button>'+
+            '<button type="button" class="btn btn-ghost btn-sm" data-interessado-pdf="'+utils.escapeHtml(a.id)+'"'+(a.link ? "" : " disabled title=\"Sem link PNCP\"")+'>Baixar PDF</button>'+
+            (a.link
+              ? '<a class="btn btn-ghost btn-sm" href="'+utils.escapeHtml(a.link)+'" target="_blank" rel="noopener">Abrir no PNCP</a>'
+              : '')+
+            '<button type="button" class="btn btn-ghost btn-sm" data-interessado-rm="'+utils.escapeHtml(a.id)+'">Remover</button>'+
+          '</div>';
+      } else {
+        actions =
+          '<div class="alerta-balloon-actions">'+
+            '<button type="button" class="btn btn-gold btn-sm" data-alert-interesse="'+utils.escapeHtml(a.id)+'">Há interesse</button>'+
+            '<button type="button" class="btn btn-ghost btn-sm" data-alert-dismiss="'+utils.escapeHtml(a.id)+'">Não há interesse</button>'+
+          '</div>';
+      }
+      return (
+        '<div class="alerta-balloon'+(unread && opts.mode !== "interessado" ? " is-unread" : "")+(urgente ? " is-urgente" : "")+'" data-alert-id="'+utils.escapeHtml(a.id)+'">'+
+          '<div class="alerta-balloon-prazo">'+(urgente ? "Prazo próximo · " : "Prazo · ")+utils.escapeHtml(self.formatPrazo(a.dataEncerramento))+'</div>'+
+          '<div class="alerta-balloon-nome">'+nomeHtml+'</div>'+
+          (meta.length ? '<div class="alerta-balloon-meta">'+utils.escapeHtml(meta.join(" · "))+'</div>' : '')+
+          '<div class="alerta-balloon-edital"><b>Edital:</b> '+utils.escapeHtml(editalLabel)+
+            (a.objeto ? ' — '+utils.escapeHtml(a.objeto) : '')+
+          '</div>'+
+          '<div class="alerta-balloon-prazo-line"><span class="label">Prazo</span> '+utils.escapeHtml(self.formatPrazo(a.dataEncerramento))+'</div>'+
+          actions+
+        '</div>'
+      );
+    },
+
+    renderEditaisBalloons: function(){
+      var box = el("alertasEditaisList");
+      if(!box) return;
+      if(!this.alerts.length){
+        box.innerHTML = '<div class="small muted">Nenhum edital novo ainda. Quando o monitoramento achar algo, aparece aqui em balões.</div>';
+        this.updateCollapseSummary();
+        return;
+      }
+      var sorted = this.sortByPrazo(this.alerts);
+      var html = "";
+      var self = this;
+      sorted.forEach(function(a){
+        html += self.balloonHtml(a, { mode: "alerta" });
+      });
+      box.innerHTML = html;
+      this.updateCollapseSummary();
+    },
+
+    updateCollapseSummary: function(){
+      var nWatch = this.watches.length;
+      var nEditais = this.alerts.length;
+      var parts = [];
+      if(nWatch) parts.push(nWatch + " monitoramento" + (nWatch === 1 ? "" : "s"));
+      if(nEditais) parts.push(nEditais + " edital" + (nEditais === 1 ? "" : "is"));
+      var text = parts.length ? parts.join(" · ") : "Nenhum alerta ativo";
+      try{
+        if(LICSYSTEM.captacao && LICSYSTEM.captacao.updateCollapseSummary){
+          LICSYSTEM.captacao.updateCollapseSummary("alertas", text);
+        }
+      }catch(e){}
+    },
+
+    renderInteressadosIa: function(){
+      var wrap = el("iaPendingEditaisWrap");
+      var box = el("iaPendingEditais");
+      if(!box) return;
+      if(!this.interessados.length){
+        if(wrap) wrap.hidden = true;
+        box.innerHTML = "";
+        return;
+      }
+      if(wrap) wrap.hidden = false;
+      var sorted = this.sortByPrazo(this.interessados);
+      var html = "";
+      var self = this;
+      sorted.forEach(function(a){
+        html += self.balloonHtml(a, { mode: "interessado" });
       });
       box.innerHTML = html;
     },
@@ -9295,6 +9445,7 @@
       if(!box) return;
       if(!this.watches.length){
         box.innerHTML = '<div class="small muted">Nenhum alerta ativo. Use “Ativar alerta” em Editais próximos (recomendado), Radar ou Perguntar editais.</div>';
+        this.updateCollapseSummary();
         return;
       }
       var html = "";
@@ -9320,6 +9471,7 @@
         '</div>';
       });
       box.innerHTML = html;
+      this.updateCollapseSummary();
     },
 
     findWatch: function(id){
@@ -9405,6 +9557,64 @@
       if(changed) this.persistAlerts({ immediate: true });
     },
 
+    findAlert: function(id){
+      id = String(id || "");
+      for(var i = 0; i < this.alerts.length; i++){
+        if(this.alerts[i].id === id) return this.alerts[i];
+      }
+      return null;
+    },
+
+    removeAlert: function(id){
+      id = String(id || "");
+      var before = this.alerts.length;
+      this.alerts = this.alerts.filter(function(a){ return a.id !== id; });
+      if(this.alerts.length !== before){
+        this.persistAlerts({ immediate: true });
+      }
+    },
+
+    /** Não há interesse: remove o edital dos alertas do sistema. */
+    dismissAlert: function(id){
+      this.removeAlert(id);
+    },
+
+    /** Há interesse: envia o balão ao Painel de Análise IA e tira dos alertas. */
+    markInteresse: function(id){
+      var a = this.findAlert(id);
+      if(!a) return null;
+      var item = this.normalizeAlert(Object.assign({}, a, {
+        interessadoAt: Date.now(),
+        readAt: a.readAt || Date.now()
+      }));
+      this.interessados = this.interessados.filter(function(x){
+        return x.id !== item.id && x.key !== item.key;
+      });
+      this.interessados.unshift(item);
+      if(this.interessados.length > this.MAX_INTERESSADOS){
+        this.interessados = this.interessados.slice(0, this.MAX_INTERESSADOS);
+      }
+      this.removeAlert(id);
+      this.persistInteressados();
+      if(window.__lsActivateView){
+        window.__lsActivateView("analiseIa");
+      }
+      try{
+        showAlert(
+          "iaAlert",
+          "ok",
+          "Edital com interesse adicionado ao painel. Use <b>Analisar com IA</b> no balão (sem PDF) ou envie o PDF para análise completa."
+        );
+      }catch(e){}
+      return item;
+    },
+
+    removeInteressado: function(id){
+      id = String(id || "");
+      this.interessados = this.interessados.filter(function(a){ return a.id !== id; });
+      this.persistInteressados();
+    },
+
     trimSeen: function(watch){
       var keys = Object.keys(watch.seenIds || {});
       if(keys.length <= this.MAX_SEEN) return;
@@ -9435,13 +9645,15 @@
           id: key,
           key: key,
           numeroControlePNCP: row.numeroControlePNCP || null,
+          numeroCompra: row.numeroCompra || null,
           orgao: row.orgao,
           municipio: row.municipio,
           uf: row.uf,
           objeto: row.objeto,
           modalidade: row.modalidade,
           valorEstimado: row.valorEstimado,
-          dataAbertura: row.dataAbertura,
+          dataAbertura: this.pickDataAbertura(row),
+          dataEncerramento: this.pickDataPrazo(row),
           link: row.link,
           watchId: watch.id,
           watchLabel: watch.label,
@@ -9473,11 +9685,12 @@
         var novos = j.novos || [];
         /* baseline: marca tudo visto sem criar alerta */
         var added = self.addNovos(opts.baseline ? pack : novos, watch, opts);
+        var enriched = self.enrichAlertsFromRows(pack);
         watch.lastCheckedAt = Date.now();
         self.persistWatches({ immediate: true });
-        if(!opts.baseline) self.persistAlerts({ immediate: true });
+        if(!opts.baseline || enriched) self.persistAlerts({ immediate: true });
         else self.persistWatches({ immediate: true });
-        return { added: added, total: pack.length, watch: watch };
+        return { added: added, enriched: enriched, total: pack.length, watch: watch };
       });
     },
 
@@ -9486,12 +9699,13 @@
       var self = this;
       if(self._busy) return Promise.resolve({ skipped: true });
       var list = self.watches.filter(function(w){ return w.enabled !== false; });
-      if(!list.length) return Promise.resolve({ checked: 0, added: 0 });
+      if(!list.length) return Promise.resolve({ checked: 0, added: 0, enriched: 0 });
       self._busy = true;
       var btnIds = ["btnAlertasCheckNow", "btnBellCheck"];
       btnIds.forEach(function(id){ var b = el(id); if(b) b.disabled = true; });
 
       var addedTotal = 0;
+      var enrichedTotal = 0;
       var chain = Promise.resolve();
       /* API aceita até 4 watches por chamada */
       var chunks = [];
@@ -9519,6 +9733,7 @@
               var pack = (res && res.editais) || [];
               var novos = (j.novos || []).filter(function(n){ return n.watchId === w.id; });
               addedTotal += self.addNovos(opts.baseline ? pack : novos, w, opts);
+              enrichedTotal += self.enrichAlertsFromRows(pack);
               w.lastCheckedAt = Date.now();
             });
           });
@@ -9528,7 +9743,7 @@
       return chain.then(function(){
         self.persistWatches({ immediate: true });
         self.persistAlerts({ immediate: true });
-        return { checked: list.length, added: addedTotal };
+        return { checked: list.length, added: addedTotal, enriched: enrichedTotal };
       }).catch(function(err){
         console.warn("alertas.checkAll", err);
         throw err;
@@ -9666,9 +9881,11 @@
       this.load();
       this.startPolling();
       var self = this;
+      var missing = this.alertsMissingPrazo();
+      var delay = missing ? 1500 : 8000;
       setTimeout(function(){
         self.checkAll().catch(function(){});
-      }, 8000);
+      }, delay);
     },
 
     onLogout: function(){
@@ -9680,6 +9897,29 @@
       if(this._wired) return;
       this._wired = true;
       var self = this;
+      try{
+        var card = el("cardAlertasPncp");
+        if(card && LICSYSTEM.captacao && LICSYSTEM.captacao.applyCardCollapse){
+          var stored = false;
+          try{
+            var map = JSON.parse(localStorage.getItem(LICSYSTEM.captacao.COLLAPSE_KEY) || "{}");
+            stored = !!(map && map["alertas-pncp"]);
+          }catch(e){}
+          LICSYSTEM.captacao.applyCardCollapse(card, stored, { skipPersist: true });
+          self.updateCollapseSummary();
+          var btnCollapse = el("btnCollapseAlertas");
+          if(btnCollapse && !btnCollapse._collapseWired){
+            btnCollapse._collapseWired = true;
+            btnCollapse.addEventListener("click", function(){
+              LICSYSTEM.captacao.applyCardCollapse(
+                card,
+                !card.classList.contains("is-collapsed")
+              );
+              self.updateCollapseSummary();
+            });
+          }
+        }
+      }catch(e){}
       var bell = el("bell");
       if(bell){
         bell.addEventListener("click", function(e){
@@ -9710,12 +9950,75 @@
           }
         });
       }
+      var editaisBox = el("alertasEditaisList");
+      if(editaisBox){
+        editaisBox.addEventListener("click", function(e){
+          var interesse = e.target.closest("[data-alert-interesse]");
+          if(interesse){
+            e.preventDefault();
+            self.markInteresse(interesse.getAttribute("data-alert-interesse"));
+            return;
+          }
+          var dismiss = e.target.closest("[data-alert-dismiss]");
+          if(dismiss){
+            e.preventDefault();
+            var did = dismiss.getAttribute("data-alert-dismiss");
+            if(confirm("Não há interesse neste edital? Ele será excluído dos alertas.")){
+              self.dismissAlert(did);
+            }
+            return;
+          }
+          var item = e.target.closest("[data-alert-id]");
+          if(item && !e.target.closest("a,button")){
+            self.markRead(item.getAttribute("data-alert-id"));
+          }
+        });
+      }
+      var iaPending = el("iaPendingEditais");
+      if(iaPending){
+        iaPending.addEventListener("click", function(e){
+          function findInteressado(id){
+            for(var i = 0; i < self.interessados.length; i++){
+              if(self.interessados[i].id === id) return self.interessados[i];
+            }
+            return null;
+          }
+          var an = e.target.closest("[data-interessado-analisar]");
+          if(an){
+            e.preventDefault();
+            var ed = findInteressado(an.getAttribute("data-interessado-analisar"));
+            if(ed && LICSYSTEM.analiseIa && LICSYSTEM.analiseIa.analisarDeInteresse){
+              LICSYSTEM.analiseIa.analisarDeInteresse(ed);
+            }
+            return;
+          }
+          var pdfBtn = e.target.closest("[data-interessado-pdf]");
+          if(pdfBtn){
+            e.preventDefault();
+            var edPdf = findInteressado(pdfBtn.getAttribute("data-interessado-pdf"));
+            if(edPdf && LICSYSTEM.analiseIa && LICSYSTEM.analiseIa.baixarPdfDeInteresse){
+              LICSYSTEM.analiseIa.baixarPdfDeInteresse(edPdf);
+            }
+            return;
+          }
+          var rm = e.target.closest("[data-interessado-rm]");
+          if(rm){
+            e.preventDefault();
+            self.removeInteressado(rm.getAttribute("data-interessado-rm"));
+          }
+        });
+      }
       function runCheck(){
         self.checkAll().then(function(r){
-          var msg = r && r.added
-            ? (r.added + " edital(is) novo(s) encontrado(s). Veja o sino.")
-            : "Verificação concluída. Nenhum edital novo.";
-          showAlert("pncpAlert", r && r.added ? "ok" : "info", msg);
+          var msg;
+          if(r && r.added){
+            msg = r.added + " edital(is) novo(s) — veja os balões em Meus alertas.";
+          } else if(r && r.enriched){
+            msg = "Prazos atualizados em " + r.enriched + " edital(is).";
+          } else {
+            msg = "Verificação concluída. Nenhum edital novo.";
+          }
+          showAlert("pncpAlert", (r && (r.added || r.enriched)) ? "ok" : "info", msg);
         }).catch(function(err){
           showAlert("pncpAlert", "error", (err && err.message) || "Falha ao verificar alertas");
         });
@@ -9890,15 +10193,14 @@
       }
     });
 
-    // Orçamento — liga os dois IDs (produção usa btnSalvarOrcamento; legado btnSalvarOrc)
+    // Orçamento
     on("btnAddLinha","click", LICSYSTEM.orcamento.addLinha);
     on("btnLimparOrc","click", LICSYSTEM.orcamento.limpar);
-    on("btnSalvarOrcamento","click", function(){ LICSYSTEM.orcamento.salvarAgora(); });
-    on("btnSalvarOrc","click", function(){ LICSYSTEM.orcamento.salvarAgora(); });
     on("btnPropostaOrc","click", LICSYSTEM.orcamento.gerarProposta);
     on("btnPropostaOrcExcel","click", LICSYSTEM.orcamento.gerarPropostaExcel);
     on("btnExportOrcExcel","click", LICSYSTEM.orcamento.exportarExcel);
     on("btnExportOrcPdf","click", LICSYSTEM.orcamento.exportarPdf);
+    on("btnSalvarOrcamento","click", function(){ LICSYSTEM.orcamento.salvarAgora(); });
     on("btnSalvarOrcCatalogo","click", LICSYSTEM.orcamento.abrirModalSalvarCatalogo);
     on("btnOrcSaveCancel","click", LICSYSTEM.orcamento.fecharModalSalvarCatalogo);
     on("btnOrcSaveConfirm","click", LICSYSTEM.orcamento.confirmarSalvarCatalogo);
@@ -9925,38 +10227,15 @@
       var onChk = this.checked;
       document.querySelectorAll(".orcChk").forEach(function(c){ c.checked = onChk; });
     });
-    on("orcBody","focusin", function(e){
-      if(e.target && e.target.matches && e.target.matches("input[data-i][data-f]")){
-        LICSYSTEM.orcamento.markTyping();
-      }
-    });
-    on("orcBody","focusout", function(){
-      // Grace period handled inside markTyping timer — keep dirty until idle.
-      clearTimeout(LICSYSTEM.orcamento._blurSaveTimer);
-      LICSYSTEM.orcamento._blurSaveTimer = setTimeout(function(){
-        try{
-          var ae = document.activeElement;
-          if(ae && ae.closest && ae.closest("#orcBody")) return;
-          LICSYSTEM.orcamento.syncFromDom();
-          LICSYSTEM.orcamento.scheduleSave();
-        }catch(e){}
-      }, 200);
-    });
     on("orcBody","input", function(e){
       var inp = e.target.closest("input[data-i]");
       if(!inp) return;
+      if(inp.getAttribute("data-f") === "produto" || inp.readOnly) return;
       LICSYSTEM.orcamento.onEdit(Number(inp.getAttribute("data-i")), inp.getAttribute("data-f"), inp.value);
     });
     on("orcBody","click", function(e){
       var del = e.target.closest(".orcDel");
-      if(del){
-        LICSYSTEM.orcamento.syncFromDom();
-        var i=Number(del.getAttribute("data-i"));
-        LICSYSTEM.state.orcItems.splice(i,1);
-        if(!LICSYSTEM.state.orcItems.length) LICSYSTEM.state.orcItems.push(LICSYSTEM.orcamento.emptyItem());
-        LICSYSTEM.orcamento.render({ sync:false });
-        return;
-      }
+      if(del){ var i=Number(del.getAttribute("data-i")); LICSYSTEM.state.orcItems.splice(i,1); if(!LICSYSTEM.state.orcItems.length) LICSYSTEM.state.orcItems.push(LICSYSTEM.orcamento.emptyItem()); LICSYSTEM.orcamento.render(); return; }
       var g = e.target.closest(".orcGoogle");
       if(g){ var it=LICSYSTEM.state.orcItems[Number(g.getAttribute("data-i"))]; if(it&&it.produto) window.open("https://www.google.com/search?q="+encodeURIComponent(it.produto),"_blank"); return; }
       var ml = e.target.closest(".orcMl");
@@ -10166,25 +10445,11 @@
     }
 
     // Entrando em ferramenta com edital ativo: carrega dados dele
-    // Só mantém a planilha em memória se for do mesmo edital e ainda estiver editando.
     if(
       LICSYSTEM.state.activeLeilaoId &&
       (LEILAO_SCOPED_VIEWS[view] || (view === "analiseIa" && LICSYSTEM.state._lwAnaliseContext))
     ){
-      try{
-        var sameBound =
-          LICSYSTEM.state.orcBoundLeilaoId &&
-          String(LICSYSTEM.state.orcBoundLeilaoId) === String(LICSYSTEM.state.activeLeilaoId);
-        var skipOrcReload =
-          view === "orcamento" &&
-          sameBound &&
-          LICSYSTEM.cloudSync &&
-          LICSYSTEM.cloudSync.isOrcBusy() &&
-          LICSYSTEM.state._orcRendered !== false;
-        LICSYSTEM.leiloesParticipo.loadActiveWorkspace(
-          skipOrcReload ? { orcamento: false } : {}
-        );
-      }catch(e){}
+      try{ LICSYSTEM.leiloesParticipo.loadActiveWorkspace(); }catch(e){}
     }
 
     if(view !== "analiseIa" && !LEILAO_SCOPED_VIEWS[view]){
@@ -10212,7 +10477,7 @@
     }
     if(view==="orcamento"){
       // Remonta a partir do estado em memória (não zera orcItems; garante tabela após troca de aba)
-      LICSYSTEM.orcamento.render({ save:false, sync:false });
+      LICSYSTEM.orcamento.render({ save:false });
       LICSYSTEM.orcamento.updateMeta();
     }
     if(view==="cofre"){
@@ -10277,6 +10542,7 @@
       // --- Identificação ---
       nomeLicitacao: val("entregaNomeLicitacao"),
       numeroEmpenho: val("entregaNumeroEmpenho"),
+      preenchidoPor: val("entregaPreenchidoPor"),
 
       // --- Faturamento / anexos ---
       statusNota: statusNota, // "FEITO" | "NAO_FEITO"
@@ -10326,6 +10592,9 @@
     if(!dados.nomeLicitacao){
       return { ok:false, erro:"Informe o Nome da Licitação." };
     }
+    if(!dados.preenchidoPor){
+      return { ok:false, erro:"Informe o nome de quem preencheu (obrigatório)." };
+    }
     if(tipoDestino === "MINHA_LOJA" && !(dados.minhaLoja && dados.minhaLoja.transporte)){
       return { ok:false, erro:"Selecione o transporte para envio futuro." };
     }
@@ -10369,7 +10638,17 @@
       }
       document.body.classList.add("entrega-open");
       hideAlert("entregaFormAlert");
-      setTimeout(function(){ var f = el("entregaNomeLicitacao"); if(f) f.focus(); }, 200);
+      try{
+        var last = localStorage.getItem("licsystem_entrega_preenchido_por") || "";
+        var por = el("entregaPreenchidoPor");
+        if(por && !por.value && last) por.value = last;
+      }catch(e){}
+      setTimeout(function(){
+        var f = el("entregaPreenchidoPor");
+        if(f && !String(f.value||"").trim()){ f.focus(); return; }
+        f = el("entregaNomeLicitacao");
+        if(f) f.focus();
+      }, 200);
     },
 
     close:function(){
@@ -10388,7 +10667,7 @@
 
     resetForm:function(){
       [
-        "entregaNomeLicitacao","entregaNumeroEmpenho","entregaObservacoes","entregaMaterialOrigem",
+        "entregaNomeLicitacao","entregaNumeroEmpenho","entregaPreenchidoPor","entregaObservacoes","entregaMaterialOrigem",
         "entregaLocalResponsavel","entregaCep","entregaEndereco","entregaNumero","entregaComplemento",
         "entregaBairro","entregaCidade","entregaUf"
       ].forEach(function(id){ if(el(id)) el(id).value = ""; });
@@ -10477,6 +10756,7 @@
             '<div class="ei-title">'+utils.escapeHtml(it.nomeLicitacao||"Sem nome")+'</div>'+
             '<div class="ei-meta">Empenho: '+utils.escapeHtml(it.numeroEmpenho||"—")+
               ' · '+utils.escapeHtml(dest)+
+              (it.preenchidoPor ? ' · Preenchido por: '+utils.escapeHtml(it.preenchidoPor) : '')+
               (it.anexo && it.anexo.nome ? ' · 📎 '+utils.escapeHtml(it.anexo.nome) : '')+
             '</div>'+
           '</div>'+badge+
@@ -10495,6 +10775,11 @@
       // TODO: integrar Storage + Firestore aqui usando pack.dados + pack.arquivo
       var registro = pack.dados;
       registro.id = "ent_"+Date.now();
+      try{
+        if(registro.preenchidoPor){
+          localStorage.setItem("licsystem_entrega_preenchido_por", registro.preenchidoPor);
+        }
+      }catch(e){}
       LICSYSTEM.entregas.load();
       LICSYSTEM.entregas.items.push(registro);
       LICSYSTEM.entregas.saveLocal();
@@ -11536,24 +11821,44 @@
         var raw = localStorage.getItem(HIST_ENTREGAS_KEY);
         if(raw != null){
           var saved = JSON.parse(raw);
-          LICSYSTEM.histEntregas.items = Array.isArray(saved) ? saved : [];
+          if(Array.isArray(saved)){
+            LICSYSTEM.histEntregas.items = saved;
+          } else if(saved && typeof saved === "object" && Array.isArray(saved.items)){
+            LICSYSTEM.histEntregas.items = saved.items;
+          } else {
+            LICSYSTEM.histEntregas.items = [];
+          }
         } else {
-          LICSYSTEM.histEntregas.items = LICSYSTEM.histEntregas.exemplos();
-          LICSYSTEM.histEntregas.saveLocal();
+          /* Sem dados locais: começa vazio (não reinsere exemplos ao atualizar). */
+          LICSYSTEM.histEntregas.items = [];
         }
       }catch(e){
-        LICSYSTEM.histEntregas.items = LICSYSTEM.histEntregas.exemplos();
+        LICSYSTEM.histEntregas.items = [];
       }
       LICSYSTEM.histEntregas._loaded = true;
       return LICSYSTEM.histEntregas.items;
     },
 
-    saveLocal: function(){
+    saveLocal: function(opts){
+      opts = opts || {};
+      var now = Date.now();
+      var items = LICSYSTEM.histEntregas.items || [];
+      var empty = !items.length;
       try{
-        localStorage.setItem(HIST_ENTREGAS_KEY, JSON.stringify(LICSYSTEM.histEntregas.items || []));
-        if(LICSYSTEM.cloudSync) LICSYSTEM.cloudSync.notifyLocalChange("histEntregas");
+        localStorage.setItem(HIST_ENTREGAS_KEY, JSON.stringify({
+          v: 1,
+          updatedAt: now,
+          cleared: empty,
+          items: items
+        }));
+        if(LICSYSTEM.cloudSync){
+          LICSYSTEM.cloudSync.notifyLocalChange("histEntregas", {
+            updatedAt: now,
+            immediate: opts.immediate !== false,
+            forceClear: empty
+          });
+        }
       }catch(e){}
-      // TODO Firestore: collection('historico_entregas').doc(id).set(item, { merge:true })
     },
 
     carregarExemplos: function(force){
@@ -11649,9 +11954,9 @@
       if(!confirm("Remover este item do histórico?")) return;
       LICSYSTEM.histEntregas.load();
       LICSYSTEM.histEntregas.items = LICSYSTEM.histEntregas.items.filter(function(it){ return it.id !== id; });
-      LICSYSTEM.histEntregas.saveLocal();
+      LICSYSTEM.histEntregas.saveLocal({ immediate: true });
       LICSYSTEM.histEntregas.render();
-      showAlert("histEntregasAlert","ok","Item removido.");
+      showAlert("histEntregasAlert","ok","Item removido e sincronizado.");
     },
 
     render: function(){
@@ -11973,53 +12278,296 @@
       });
     },
 
-    analisar: function(){
+    /** Monta texto de análise a partir dos dados do alerta PNCP (sem PDF). */
+    textoFromInteresse: function(ed){
+      ed = ed || {};
+      var lines = [];
+      lines.push("RESUMO DO EDITAL (fonte: PNCP / alerta automático — sem PDF completo).");
+      lines.push("Analise com base nestes dados públicos e indique o que ainda precisa ser confirmado no PDF oficial.");
+      lines.push("");
+      lines.push("Órgão / Nome: " + (ed.orgao || "—"));
+      var munUf = [ed.municipio || "", ed.uf || ""].filter(Boolean).join("/");
+      lines.push("Município/UF: " + (munUf || "—"));
+      lines.push("Modalidade: " + (ed.modalidade || "—"));
+      lines.push("Número da compra / controle: " + (ed.numeroCompra || ed.numeroControlePNCP || "—"));
+      lines.push("Objeto / Edital: " + (ed.objeto || "—"));
+      if(ed.valorEstimado != null && isFinite(Number(ed.valorEstimado))){
+        lines.push("Valor estimado: R$ " + Number(ed.valorEstimado).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+      }
+      lines.push("Data de abertura: " + (ed.dataAbertura || "—"));
+      lines.push("Data de encerramento (prazo): " + (ed.dataEncerramento || "—"));
+      lines.push("Link PNCP: " + (ed.link || "—"));
+      if(ed.watchLabel) lines.push("Monitoramento: " + ed.watchLabel);
+      lines.push("");
+      lines.push("INSTRUÇÕES PARA O RELATÓRIO:");
+      lines.push("- Preencha os 11 tópicos com o que for possível a partir deste resumo.");
+      lines.push("- Deixe explícito o que é INFERÊNCIA e o que FALTA confirmar no PDF (habilitação, cronograma detalhado, documentos).");
+      lines.push("- No checklist de documentos, liste os mais prováveis para este tipo de objeto e marque a incerteza na obs.");
+      return lines.join("\n");
+    },
+
+    /** Extrai cnpj/ano/seq do link PNCP ou do número de controle. */
+    parsePncpRef: function(ed){
+      ed = ed || {};
+      var link = String(ed.link || "");
+      var m = link.match(/\/editais\/([^/]+)\/(\d{4})\/(\d+)/i);
+      if(m){
+        return {
+          cnpj: String(m[1] || "").replace(/\D/g, ""),
+          ano: String(m[2] || ""),
+          sequencial: String(Number(m[3]) || m[3])
+        };
+      }
+      var nc = String(ed.numeroControlePNCP || "");
+      m = nc.match(/^(\d{14})-\d+-(\d+)\/(\d{4})$/);
+      if(m){
+        return {
+          cnpj: m[1],
+          ano: m[3],
+          sequencial: String(Number(m[2]) || m[2])
+        };
+      }
+      return null;
+    },
+
+    pncpPdfApiUrl: function(ed, download){
+      var ref = LICSYSTEM.analiseIa.parsePncpRef(ed);
+      if(ref && ref.cnpj && ref.ano && ref.sequencial){
+        return (
+          "/api/pncp-edital-pdf?cnpj=" +
+          encodeURIComponent(ref.cnpj) +
+          "&ano=" +
+          encodeURIComponent(ref.ano) +
+          "&sequencial=" +
+          encodeURIComponent(ref.sequencial) +
+          (download ? "&download=1" : "")
+        );
+      }
+      if(ed && ed.link){
+        return (
+          "/api/pncp-edital-pdf?link=" +
+          encodeURIComponent(ed.link) +
+          (download ? "&download=1" : "")
+        );
+      }
+      return null;
+    },
+
+    /** Baixa o PDF oficial do PNCP como File (mesmo conteúdo da análise completa). */
+    fetchPdfFileDeInteresse: function(ed){
+      var url = LICSYSTEM.analiseIa.pncpPdfApiUrl(ed, true);
+      if(!url){
+        return Promise.reject(new Error("Este edital não tem link PNCP para baixar o PDF."));
+      }
+      return fetch(url, { method: "GET", headers: { Accept: "application/pdf,application/json" } })
+        .then(function(res){
+          var ctype = String(res.headers.get("content-type") || "");
+          if(ctype.indexOf("application/json") !== -1 || !res.ok){
+            return res.text().then(function(raw){
+              var body = null;
+              try{ body = raw ? JSON.parse(raw) : null; }catch(e){}
+              var msg =
+                (body && (body.error || body.detail || body.message)) ||
+                ("Não foi possível baixar o PDF (HTTP " + res.status + ").");
+              throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+            });
+          }
+          return res.blob().then(function(blob){
+            var titulo = "";
+            try{
+              titulo = decodeURIComponent(res.headers.get("X-Pncp-Titulo") || "");
+            }catch(e){ titulo = ""; }
+            if(!titulo){
+              titulo =
+                (ed.orgao || "edital") +
+                (ed.numeroCompra ? "-" + ed.numeroCompra : "") +
+                ".pdf";
+            }
+            if(!/\.pdf$/i.test(titulo)) titulo += ".pdf";
+            if(!blob || !blob.size){
+              throw new Error("PDF vazio retornado pelo PNCP.");
+            }
+            return new File([blob], titulo.slice(0, 180), {
+              type: blob.type || "application/pdf"
+            });
+          });
+        });
+    },
+
+    baixarPdfDeInteresse: function(ed){
+      if(!ed){
+        showAlert("iaAlert","warn","Edital não encontrado.");
+        return;
+      }
+      showAlert(
+        "iaAlert",
+        "info",
+        '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Baixando PDF do PNCP…'
+      );
+      LICSYSTEM.analiseIa.fetchPdfFileDeInteresse(ed).then(function(file){
+        var a = document.createElement("a");
+        var objUrl = URL.createObjectURL(file);
+        a.href = objUrl;
+        a.download = file.name || "edital.pdf";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function(){
+          try{ URL.revokeObjectURL(objUrl); }catch(e){}
+          try{ a.remove(); }catch(e){}
+        }, 1500);
+        showAlert("iaAlert","ok","PDF baixado: " + utils.escapeHtml(file.name) + " (" + (file.size/1024).toFixed(0) + " KB).");
+        try{ LICSYSTEM.analiseIa.onFile(file); }catch(e){}
+      }).catch(function(err){
+        showAlert(
+          "iaAlert",
+          "error",
+          utils.escapeHtml(LICSYSTEM.analiseIa.errMsg(err)) +
+            (ed.link
+              ? ' <a href="'+utils.escapeHtml(ed.link)+'" target="_blank" rel="noopener">Abrir no PNCP</a>'
+              : "")
+        );
+      });
+    },
+
+    analisarDeInteresseRapido: function(ed){
+      var text = LICSYSTEM.analiseIa.textoFromInteresse(ed);
+      var nome =
+        (ed.orgao || "Edital") +
+        (ed.numeroCompra || ed.numeroControlePNCP ? " — " + (ed.numeroCompra || ed.numeroControlePNCP) : "");
+      LICSYSTEM.analiseIa.file = null;
+      var metaEl = el("iaFileMeta");
+      if(metaEl){
+        metaEl.className = "ia-file-meta show";
+        metaEl.textContent = "Análise rápida (sem PDF): " + nome;
+      }
+      showAlert(
+        "iaAlert",
+        "info",
+        '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> PDF indisponível — analisando só os dados do PNCP…'
+      );
+      LICSYSTEM.analiseIa.analisarTexto(text, {
+        filename: nome.slice(0, 180) + ".txt",
+        editalNome: nome.slice(0, 220),
+        fromInteresse: true
+      });
+    },
+
+    /**
+     * Preferência: baixar PDF do PNCP e analisar igual ao upload.
+     * Fallback: análise rápida só com metadados se o PDF não existir.
+     */
+    analisarDeInteresse: function(ed){
       if(LICSYSTEM.analiseIa.busy) return;
-      var file = LICSYSTEM.analiseIa.file;
-      if(!file){
-        showAlert("iaAlert","warn","Selecione o PDF do edital primeiro.");
+      if(!ed){
+        showAlert("iaAlert","warn","Edital não encontrado.");
+        return;
+      }
+      if(!LICSYSTEM.analiseIa.pncpPdfApiUrl(ed, true)){
+        LICSYSTEM.analiseIa.analisarDeInteresseRapido(ed);
         return;
       }
 
       LICSYSTEM.analiseIa.setBusy(true);
       LICSYSTEM.analiseIa.limparRelatorio();
-      showAlert("iaAlert","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Carregando PDF e extraindo texto…');
+      showAlert(
+        "iaAlert",
+        "info",
+        '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Baixando PDF oficial do PNCP…'
+      );
 
-      LICSYSTEM.analiseIa.extrairTextoPdf(file).then(function(text){
-        text = String(text || "").replace(/\s+/g, " ").trim();
-        if(!text || text.length < 40){
-          throw new Error("Não foi possível extrair texto suficiente deste PDF (pode ser imagem escaneada).");
+      LICSYSTEM.analiseIa.fetchPdfFileDeInteresse(ed).then(function(file){
+        LICSYSTEM.analiseIa.file = file;
+        var meta = el("iaFileMeta");
+        if(meta){
+          meta.className = "ia-file-meta show";
+          meta.textContent =
+            "Arquivo (PNCP): " + file.name + " (" + (file.size / 1024).toFixed(1) + " KB)";
         }
-        LICSYSTEM.analiseIa.text = text;
         showAlert(
           "iaAlert",
           "info",
-          '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Texto extraído ('+text.length+' caracteres). Gerando relatório com a IA…'
+          '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> PDF baixado. Extraindo texto…'
         );
-
-        return fetch("/api/analyze-pdf", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({
-            text: text,
-            filename: file.name || "edital.pdf"
-          })
-        }).then(function(res){
-          return res.text().then(function(raw){
-            var body = null;
-            try{ body = raw ? JSON.parse(raw) : null; }catch(e){
-              throw new Error("Resposta inválida da API (HTTP "+res.status+").");
-            }
-            if(!res.ok){
-              var msg = (body && (body.detail || body.error)) || ("Erro HTTP " + res.status);
-              throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
-            }
-            return body;
+        return LICSYSTEM.analiseIa.extrairTextoPdf(file).then(function(text){
+          text = String(text || "").replace(/\s+/g, " ").trim();
+          if(!text || text.length < 40){
+            throw new Error("Não foi possível extrair texto suficiente deste PDF (pode ser imagem escaneada).");
+          }
+          showAlert(
+            "iaAlert",
+            "info",
+            '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Texto extraído ('+text.length+' caracteres). Gerando relatório com a IA…'
+          );
+          return LICSYSTEM.analiseIa.analisarTexto(text, {
+            filename: file.name || "edital.pdf",
+            editalNome: (file.name || "edital").replace(/\.pdf$/i, ""),
+            alreadyBusy: true,
+            keepReport: true,
+            silentProgress: true
           });
+        });
+      }).catch(function(err){
+        LICSYSTEM.analiseIa.setBusy(false);
+        var msg = LICSYSTEM.analiseIa.errMsg(err);
+        showAlert(
+          "iaAlert",
+          "warn",
+          "Não deu para usar o PDF (" + utils.escapeHtml(msg) + "). Tentando análise rápida…"
+        );
+        setTimeout(function(){
+          LICSYSTEM.analiseIa.analisarDeInteresseRapido(ed);
+        }, 400);
+      });
+    },
+
+    /** Envia texto já pronto para /api/analyze-pdf e renderiza o relatório. */
+    analisarTexto: function(text, meta){
+      meta = meta || {};
+      if(LICSYSTEM.analiseIa.busy && !meta.alreadyBusy) return Promise.resolve();
+      text = String(text || "").replace(/\s+/g, " ").trim();
+      if(!text || text.length < 40){
+        showAlert("iaAlert","warn","Texto insuficiente para análise.");
+        return Promise.resolve();
+      }
+
+      if(!meta.alreadyBusy) LICSYSTEM.analiseIa.setBusy(true);
+      if(!meta.keepReport) LICSYSTEM.analiseIa.limparRelatorio();
+      LICSYSTEM.analiseIa.text = text;
+      if(!meta.fromInteresse && !meta.silentProgress){
+        showAlert(
+          "iaAlert",
+          "info",
+          '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Gerando relatório com a IA…'
+        );
+      }
+
+      return fetch("/api/analyze-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          text: text,
+          filename: meta.filename || "edital.pdf"
+        })
+      }).then(function(res){
+        return res.text().then(function(raw){
+          var body = null;
+          try{ body = raw ? JSON.parse(raw) : null; }catch(e){
+            throw new Error("Resposta inválida da API (HTTP "+res.status+").");
+          }
+          if(!res.ok){
+            var msg = (body && (body.detail || body.error)) || ("Erro HTTP " + res.status);
+            throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+          }
+          return body;
         });
       }).then(function(body){
         var md = (body && body.relatorio) || "";
         if(!md) throw new Error("A API não retornou o campo relatorio.");
+        if(meta.fromInteresse){
+          md =
+            "> **Atenção:** análise gerada a partir dos dados públicos do PNCP (sem PDF completo). Confirme habilitação, cronograma e documentos no arquivo oficial.\n\n" +
+            md;
+        }
         var docs = LICSYSTEM.analiseIa.normDocsList(body && body.documentosExigidos);
         if(!docs.length){
           docs = LICSYSTEM.analiseIa.parseDocsFromMarkdown(md);
@@ -12030,19 +12578,20 @@
         showAlert(
           "iaAlert",
           "ok",
-          "✅ Relatório gerado com sucesso." +
-            (n ? (" " + n + " documento" + (n === 1 ? "" : "s") + " exigido" + (n === 1 ? "" : "s") + " identificado" + (n === 1 ? "" : "s") + ".") : "")
+          (meta.fromInteresse
+            ? "✅ Análise rápida concluída (sem PDF)."
+            : "✅ Relatório gerado com sucesso.") +
+            (n ? (" " + n + " documento" + (n === 1 ? "" : "s") + " identificado" + (n === 1 ? "" : "s") + ".") : "") +
+            (meta.fromInteresse ? " Para mais precisão, envie o PDF do edital." : "")
         );
-        var filename = (LICSYSTEM.analiseIa.file && LICSYSTEM.analiseIa.file.name) || "";
-        var meta = {
+        var filename = meta.filename || (LICSYSTEM.analiseIa.file && LICSYSTEM.analiseIa.file.name) || "";
+        var metaDocs = {
           filename: filename,
-          editalNome: filename ? filename.replace(/\.pdf$/i, "") : "Edital analisado"
+          editalNome: meta.editalNome || (filename ? filename.replace(/\.pdf$/i, "") : "Edital analisado")
         };
-        // Já grava o checklist (mesmo se o usuário fechar o modal)
         if(docs.length){
-          try{ LICSYSTEM.docsChecklist.setFromAnalysis(docs, meta); }catch(e){}
+          try{ LICSYSTEM.docsChecklist.setFromAnalysis(docs, metaDocs); }catch(e){}
         }
-        // Se estiver no painel de um edital, atualiza o relatório/docs dele
         if(LICSYSTEM.state.activeLeilaoId && LICSYSTEM.state._lwAnaliseContext){
           var act = LICSYSTEM.leiloesParticipo.getActiveItem();
           if(act){
@@ -12061,15 +12610,48 @@
             try{ LICSYSTEM.leiloesParticipo.persist({ immediate: true }); }catch(e){}
           }
         }
-        // Após fechar o modal de documentos, pergunta "Vamos participar?"
         LICSYSTEM.analiseIa._pendingParticiparAsk = true;
-        // Modal pós-análise com lista + atalho para marcar OK
         setTimeout(function(){
-          LICSYSTEM.docsChecklist.showModal(docs, meta);
+          LICSYSTEM.docsChecklist.showModal(docs, metaDocs);
         }, 120);
       }).catch(function(err){
         showAlert("iaAlert","error", utils.escapeHtml(LICSYSTEM.analiseIa.errMsg(err)));
       }).then(function(){
+        LICSYSTEM.analiseIa.setBusy(false);
+      });
+    },
+
+    analisar: function(){
+      if(LICSYSTEM.analiseIa.busy) return;
+      var file = LICSYSTEM.analiseIa.file;
+      if(!file){
+        showAlert("iaAlert","warn","Selecione o PDF do edital primeiro — ou use <b>Analisar com IA</b> em um balão de interesse.");
+        return;
+      }
+
+      LICSYSTEM.analiseIa.setBusy(true);
+      LICSYSTEM.analiseIa.limparRelatorio();
+      showAlert("iaAlert","info",'<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Carregando PDF e extraindo texto…');
+
+      LICSYSTEM.analiseIa.extrairTextoPdf(file).then(function(text){
+        text = String(text || "").replace(/\s+/g, " ").trim();
+        if(!text || text.length < 40){
+          throw new Error("Não foi possível extrair texto suficiente deste PDF (pode ser imagem escaneada).");
+        }
+        showAlert(
+          "iaAlert",
+          "info",
+          '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Texto extraído ('+text.length+' caracteres). Gerando relatório com a IA…'
+        );
+        return LICSYSTEM.analiseIa.analisarTexto(text, {
+          filename: file.name || "edital.pdf",
+          editalNome: (file.name || "edital").replace(/\.pdf$/i, ""),
+          alreadyBusy: true,
+          keepReport: true,
+          silentProgress: true
+        });
+      }).catch(function(err){
+        showAlert("iaAlert","error", utils.escapeHtml(LICSYSTEM.analiseIa.errMsg(err)));
         LICSYSTEM.analiseIa.setBusy(false);
       });
     },
@@ -12306,7 +12888,6 @@
     LICSYSTEM.captacao.initCardCollapse();
     LICSYSTEM.orcamento.load();
     try{ if(LICSYSTEM.alertas) LICSYSTEM.alertas.load(); }catch(e){}
-    // Não marcar dirty no boot — senão o reload do edital ativo é pulado e a planilha global vaza.
     LICSYSTEM.state._orcDirty = false;
     LICSYSTEM.state._orcRendered = false;
     LICSYSTEM.state._dashReady = false;
