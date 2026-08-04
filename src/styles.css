@@ -951,6 +951,22 @@
   .alert-warn{background:var(--ls-yellow-bg);color:#8a6410;border:1px solid #f0dca0}
   .alert-error{background:var(--ls-red-bg);color:#a12626;border:1px solid #f2c4c4}
   .alert-ok{background:var(--ls-green-bg);color:#136c3d;border:1px solid #b6e3ca}
+  #orcAlert.show{
+    position:sticky;top:8px;z-index:30;
+    box-shadow:0 8px 24px rgba(19,108,61,.18);
+    font-size:14px;padding:14px 16px;
+  }
+  #orcSaveToast{
+    display:none;position:fixed;top:72px;left:50%;transform:translateX(-50%);
+    z-index:1200;padding:14px 22px;border-radius:12px;
+    background:#1e9e5a;color:#fff;font-weight:800;font-size:15px;letter-spacing:.3px;
+    box-shadow:0 12px 32px rgba(21,38,66,.28);pointer-events:none;
+  }
+  #orcSaveToast.show{display:block;animation:orcToastIn .25s ease}
+  @keyframes orcToastIn{
+    from{opacity:0;transform:translateX(-50%) translateY(-8px)}
+    to{opacity:1;transform:translateX(-50%) translateY(0)}
+  }
   /* ---------------- Dropzone ---------------- */
   .dropzone{
     border:2px dashed var(--ls-line);border-radius:14px;padding:26px;text-align:center;

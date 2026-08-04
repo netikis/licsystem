@@ -1651,7 +1651,7 @@
       if(key === "leiloesParticipo"){
         dataForCloud = self.slimLeiloesForCloud(env.data);
       } else if(key === "orcamento" && dataForCloud && typeof dataForCloud === "object" && !Array.isArray(dataForCloud)){
-        // Ensure items is a dense array with normalized fields (incl. pct).
+        // Ensure items is a dense array with normalized fields (incl. pct + leilaoId).
         dataForCloud = {
           v: 2,
           items: utils.fbToArray(dataForCloud.items).map(function(it){
@@ -1659,6 +1659,9 @@
           }),
           meta: dataForCloud.meta || { nome: "", numero: "", catalogId: null },
           page: Math.max(1, Number(dataForCloud.page) || 1),
+          leilaoId: dataForCloud.leilaoId != null && dataForCloud.leilaoId !== ""
+            ? String(dataForCloud.leilaoId)
+            : (LICSYSTEM.state.orcBoundLeilaoId || LICSYSTEM.state.activeLeilaoId || ""),
           savedAt: Number(dataForCloud.savedAt || env.updatedAt || Date.now()),
           updatedAt: Number(dataForCloud.updatedAt || env.updatedAt || Date.now()),
           cleared: !!dataForCloud.cleared
@@ -5305,6 +5308,9 @@
           LICSYSTEM.state.orcMetaNumero = meta.numero != null ? String(meta.numero) : (LICSYSTEM.state.orcMetaNumero || "");
           LICSYSTEM.state.orcCatalogId = meta.catalogId != null ? meta.catalogId : (LICSYSTEM.state.orcCatalogId || null);
           if(raw.page != null) LICSYSTEM.state.orcPage = Math.max(1, Number(raw.page) || 1);
+          if(raw.leilaoId != null && raw.leilaoId !== ""){
+            LICSYSTEM.state.orcBoundLeilaoId = String(raw.leilaoId);
+          }
         }
         if(items){
           LICSYSTEM.state.orcItems = utils.fbToArray(items).map(function(it){ return LICSYSTEM.orcamento.normalizeItem(it); });
@@ -5319,7 +5325,16 @@
       opts = opts || {};
       try{
         var now = Date.now();
-        var boundId = LICSYSTEM.state.orcBoundLeilaoId || LICSYSTEM.state.activeLeilaoId || null;
+        // Só associa ao edital se a planilha já estiver vinculada a ele (evita copiar entre editais).
+        var boundId = LICSYSTEM.state.orcBoundLeilaoId || null;
+        if(
+          !boundId &&
+          LICSYSTEM.state.activeLeilaoId &&
+          opts.bindActive
+        ){
+          boundId = String(LICSYSTEM.state.activeLeilaoId);
+          LICSYSTEM.state.orcBoundLeilaoId = boundId;
+        }
         var payload = {
           v: 2,
           items: (LICSYSTEM.state.orcItems || []).map(function(it){
@@ -5331,9 +5346,10 @@
             catalogId: LICSYSTEM.state.orcCatalogId || null
           },
           page: LICSYSTEM.state.orcPage || 1,
-          leilaoId: boundId,
+          leilaoId: boundId || "",
           savedAt: now,
-          updatedAt: now
+          updatedAt: now,
+          immediate: !!opts.immediate
         };
         if(opts.forceClear) payload.cleared = true;
         // Sempre grava o orçamento global (fonte da nuvem users/{uid}/orcamento),
@@ -5400,19 +5416,68 @@
     },
     /** Explicit user save: local + cloud push + confirmation. */
     salvarAgora:function(){
+      // Vincula a planilha ao edital aberto antes de gravar.
+      if(LICSYSTEM.state.activeLeilaoId && !LICSYSTEM.state.orcBoundLeilaoId){
+        LICSYSTEM.state.orcBoundLeilaoId = String(LICSYSTEM.state.activeLeilaoId);
+      }
       LICSYSTEM.orcamento.markTyping();
-      LICSYSTEM.orcamento.flushSave({ immediate: true });
+      LICSYSTEM.orcamento.flushSave({ immediate: true, bindActive: true });
       LICSYSTEM.state._orcTyping = false;
       LICSYSTEM.state._orcDirty = false;
+      try{
+        if(LICSYSTEM.state.activeLeilaoId && LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.saveActiveWorkspace){
+          LICSYSTEM.leiloesParticipo.saveActiveWorkspace({ immediate: true });
+        }
+      }catch(e){}
+      // Garante push imediato dos dois caminhos (global + workspace do edital).
+      var cloudJobs = [];
+      try{
+        if(LICSYSTEM.cloudSync){
+          cloudJobs.push(LICSYSTEM.cloudSync.flushPush("orcamento", { immediate: true }));
+          cloudJobs.push(LICSYSTEM.cloudSync.flushPush("leiloesParticipo", { immediate: true }));
+        }
+      }catch(e){}
+
       var n = (LICSYSTEM.state.orcItems || []).filter(function(it){
         return !LICSYSTEM.orcamento.isEmptyRow(it);
       }).length;
-      var onde = utils.hasFirebaseConfig() ? "navegador e na nuvem" : "navegador";
-      showAlert(
-        "orcAlert",
-        "ok",
-        "✅ <b>ORÇAMENTO SALVO</b> — "+n+" item(ns) gravado(s) no "+onde+"."
-      );
+      var editalNome = "";
+      try{
+        var active = LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.getActiveItem
+          ? LICSYSTEM.leiloesParticipo.getActiveItem()
+          : null;
+        if(active) editalNome = active.titulo || active.filename || "";
+      }catch(e){}
+      var msg =
+        "✅ <b>ORÇAMENTO SALVO</b>" +
+        (editalNome ? " — <b>"+utils.escapeHtml(String(editalNome).slice(0, 80))+"</b>" : "") +
+        " · "+n+" item(ns) gravado(s) neste edital.";
+      showAlert("orcAlert", "ok", msg);
+      try{
+        var alertEl = el("orcAlert");
+        if(alertEl && alertEl.scrollIntoView){
+          alertEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      }catch(e){}
+      try{
+        var toast = el("orcSaveToast");
+        if(!toast){
+          toast = document.createElement("div");
+          toast.id = "orcSaveToast";
+          document.body.appendChild(toast);
+        }
+        toast.textContent = "ORÇAMENTO SALVO";
+        toast.className = "show";
+        clearTimeout(LICSYSTEM.orcamento._toastTimer);
+        LICSYSTEM.orcamento._toastTimer = setTimeout(function(){
+          toast.className = "";
+        }, 2800);
+      }catch(e){}
+      try{
+        if(LICSYSTEM.cloudSync && LICSYSTEM.cloudSync.setStatus){
+          LICSYSTEM.cloudSync.setStatus("ok", "ORÇAMENTO SALVO");
+        }
+      }catch(e){}
       var btn = el("btnSalvarOrc");
       if(btn){
         var prev = btn.innerHTML;
@@ -5422,13 +5487,19 @@
         LICSYSTEM.orcamento._salvarBtnTimer = setTimeout(function(){
           btn.innerHTML = prev;
           btn.disabled = false;
-        }, 2200);
+        }, 2800);
       }
-      try{
-        if(LICSYSTEM.state.activeLeilaoId && LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.saveActiveWorkspace){
-          LICSYSTEM.leiloesParticipo.saveActiveWorkspace();
+      Promise.all(cloudJobs.filter(Boolean)).then(function(results){
+        var failed = (results || []).some(function(r){ return r && r.ok === false; });
+        if(failed){
+          showAlert(
+            "orcAlert",
+            "warn",
+            "⚠️ Orçamento gravado neste PC, mas a nuvem falhou. Verifique a internet e clique em Salvar de novo."
+          );
+          try{ if(LICSYSTEM.cloudSync) LICSYSTEM.cloudSync.setStatus("error", "Sync falhou"); }catch(e){}
         }
-      }catch(e){}
+      }).catch(function(){});
     },
     /** Pull live input values into state (covers pending keystrokes before leave). */
     syncFromDom:function(){
@@ -8089,15 +8160,15 @@
     },
 
     syncActiveOrcamento: function(payload){
-      var targetId = (payload && payload.leilaoId) || LICSYSTEM.state.orcBoundLeilaoId || LICSYSTEM.state.activeLeilaoId;
+      var bound = LICSYSTEM.state.orcBoundLeilaoId;
+      // Sem vínculo explícito, não grava no edital ativo (evita copiar planilha errada).
+      var targetId = (payload && payload.leilaoId) || bound || null;
+      if(!targetId) return;
       var item = LICSYSTEM.leiloesParticipo.findById(targetId);
       if(!item) return;
       // Nunca gravar planilha de um edital no workspace de outro.
       if(payload && payload.leilaoId && String(payload.leilaoId) !== String(item.id)) return;
-      if(
-        LICSYSTEM.state.orcBoundLeilaoId &&
-        String(LICSYSTEM.state.orcBoundLeilaoId) !== String(item.id)
-      ) return;
+      if(bound && String(bound) !== String(item.id)) return;
       if(!item.workspace) item.workspace = LICSYSTEM.leiloesParticipo.emptyWorkspace();
       var rows = utils.fbToArray(payload && payload.items).slice(0, 500).map(function(row){
         return LICSYSTEM.orcamento.normalizeItem(row);
@@ -8112,20 +8183,21 @@
       LICSYSTEM.leiloesParticipo.persist({ immediate: !!payload && !!payload.immediate });
     },
 
-    saveActiveWorkspace: function(){
+    saveActiveWorkspace: function(opts){
+      opts = opts || {};
       var item = LICSYSTEM.leiloesParticipo.getActiveItem();
       if(!item) return;
       var bound = LICSYSTEM.state.orcBoundLeilaoId;
-      var canSyncOrc =
-        LICSYSTEM.state._orcRendered !== false &&
-        (!bound || String(bound) === String(item.id));
+      var boundMatches = !!(bound && String(bound) === String(item.id));
+      var canSyncOrc = LICSYSTEM.state._orcRendered !== false && boundMatches;
       if(canSyncOrc){
         try{ if(LICSYSTEM.orcamento && LICSYSTEM.orcamento.syncFromDom) LICSYSTEM.orcamento.syncFromDom(); }catch(e){}
       }
       var prev = item.workspace || LICSYSTEM.leiloesParticipo.emptyWorkspace();
       var kwEl = el("pdfKeywords");
-      // Se a planilha em memória é de outro edital, preserve o orçamento já salvo neste item.
-      var keepPrevOrc = !!(bound && String(bound) !== String(item.id));
+      // Só sobrescreve o orçamento deste edital se a planilha em memória for DELE.
+      // Se bound estiver vazio ou for de outro edital, preserva o que já estava salvo.
+      var keepPrevOrc = !boundMatches;
       var orcBlock = keepPrevOrc
         ? (prev.orcamento || { v: 2, items: [], meta: { nome: "", numero: "", catalogId: null }, page: 1 })
         : {
@@ -8150,7 +8222,7 @@
           : (prev.cruzamentoAprovados || [])
       });
       item.updatedAt = Date.now();
-      LICSYSTEM.leiloesParticipo.persist();
+      LICSYSTEM.leiloesParticipo.persist({ immediate: !!opts.immediate });
     },
 
     loadActiveWorkspace: function(opts){
@@ -8326,7 +8398,15 @@
         showAlert("leiloesAlert", "info", "Clique em um edital da lista para abrir as ferramentas dele.");
         return;
       }
-      try{ LICSYSTEM.leiloesParticipo.saveActiveWorkspace(); }catch(e){}
+      // Só grava o workspace atual se a planilha em memória for deste edital.
+      try{
+        if(
+          LICSYSTEM.state.orcBoundLeilaoId &&
+          String(LICSYSTEM.state.orcBoundLeilaoId) === String(LICSYSTEM.state.activeLeilaoId)
+        ){
+          LICSYSTEM.leiloesParticipo.saveActiveWorkspace();
+        }
+      }catch(e){}
       LICSYSTEM.leiloesParticipo.loadActiveWorkspace();
       if(tool === "analiseIa") LICSYSTEM.state._lwAnaliseContext = true;
       if(tool === "hub" || tool === "leilaoWorkspace"){
@@ -12210,19 +12290,23 @@
     // Flush orçamento ao fechar/ocultar a aba (debounce pendente não se perde)
     if(!LICSYSTEM._orcPersistWired){
       LICSYSTEM._orcPersistWired = true;
-      window.addEventListener("beforeunload", function(){
-        try{ LICSYSTEM.orcamento.flushSave(); }catch(e){}
+      function flushOrcOnLeave(){
+        try{ LICSYSTEM.orcamento.flushSave({ immediate: true }); }catch(e){}
         try{
-          if(LICSYSTEM.state.activeLeilaoId) LICSYSTEM.leiloesParticipo.saveActiveWorkspace();
+          if(LICSYSTEM.state.activeLeilaoId){
+            LICSYSTEM.leiloesParticipo.saveActiveWorkspace({ immediate: true });
+          }
         }catch(e2){}
-      });
+        try{
+          if(LICSYSTEM.cloudSync){
+            LICSYSTEM.cloudSync.flushPush("orcamento");
+            LICSYSTEM.cloudSync.flushPush("leiloesParticipo");
+          }
+        }catch(e3){}
+      }
+      window.addEventListener("beforeunload", flushOrcOnLeave);
       document.addEventListener("visibilitychange", function(){
-        if(document.visibilityState === "hidden"){
-          try{ LICSYSTEM.orcamento.flushSave(); }catch(e){}
-          try{
-            if(LICSYSTEM.state.activeLeilaoId) LICSYSTEM.leiloesParticipo.saveActiveWorkspace();
-          }catch(e2){}
-        }
+        if(document.visibilityState === "hidden") flushOrcOnLeave();
       });
     }
 
@@ -12236,6 +12320,14 @@
       LICSYSTEM.docsChecklist.load();
       LICSYSTEM.leiloesParticipo.load();
       LICSYSTEM.leiloesParticipo.restoreActiveId();
+      // Carrega a planilha do edital ativo (não a cópia global) antes de qualquer save.
+      try{
+        if(LICSYSTEM.state.activeLeilaoId){
+          LICSYSTEM.leiloesParticipo.loadActiveWorkspace();
+        } else {
+          LICSYSTEM.state.orcBoundLeilaoId = null;
+        }
+      }catch(e){}
       LICSYSTEM.leiloesParticipo.wireWorkspaceUi();
       LICSYSTEM.entregas.load();
       // Restaura última tela após F5 (localStorage)
