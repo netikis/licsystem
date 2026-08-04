@@ -288,6 +288,59 @@
   }
   .alerta-watch-row.off{opacity:.55}
   .alerta-watch-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .alertas-editais-head{
+    display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px;
+    margin:18px 0 10px;padding-top:14px;border-top:1px solid var(--ls-line);
+  }
+  .alertas-editais-head h3{
+    margin:0;font-size:15px;font-weight:800;color:var(--ls-navy);
+  }
+  .alertas-editais-list{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));
+    gap:14px;align-items:stretch;
+  }
+  .alertas-editais-list > .small.muted{grid-column:1/-1}
+  .alerta-balloon{
+    display:flex;flex-direction:column;gap:10px;
+    background:#fff;border:1px solid #e5e7eb;border-radius:18px;
+    box-shadow:0 4px 14px rgba(15,23,42,.07);padding:16px 16px 12px;
+    min-height:160px;box-sizing:border-box;
+  }
+  .alerta-balloon.is-unread{border-color:#f0c45a;box-shadow:0 4px 16px rgba(240,196,90,.22)}
+  .alerta-balloon.is-urgente{border-color:#f5a5a5}
+  .alerta-balloon-prazo{
+    display:inline-flex;align-items:center;gap:6px;align-self:flex-start;
+    font-size:11px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;
+    color:#9a6b00;background:#fff6db;border:1px solid #f0d48a;border-radius:999px;
+    padding:4px 10px;
+  }
+  .alerta-balloon.is-urgente .alerta-balloon-prazo{
+    color:#9b1c1c;background:#fee2e2;border-color:#fca5a5;
+  }
+  .alerta-balloon-nome{
+    font-size:15px;font-weight:800;color:var(--ls-navy);line-height:1.25;word-break:break-word;
+  }
+  .alerta-balloon-nome a{color:inherit;text-decoration:none}
+  .alerta-balloon-nome a:hover{text-decoration:underline}
+  .alerta-balloon-meta{
+    font-size:12px;color:var(--ls-muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+  }
+  .alerta-balloon-edital{
+    font-size:13px;color:#334155;line-height:1.4;word-break:break-word;
+    display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;
+    flex:1;
+  }
+  .alerta-balloon-edital b{color:var(--ls-navy)}
+  .alerta-balloon-prazo-line{
+    font-size:13px;font-weight:700;color:var(--ls-navy);
+    display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;
+  }
+  .alerta-balloon-prazo-line span.label{font-size:11px;font-weight:700;color:var(--ls-muted);text-transform:uppercase}
+  .alerta-balloon-actions{
+    display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:4px;
+  }
+  .alerta-balloon-actions .btn{flex:1;min-width:120px;justify-content:center}
+  .ia-pending-wrap{margin-bottom:18px}
   .content{padding:26px;max-width:1400px;width:100%;margin:0 auto;box-sizing:border-box}
   .view{display:none;animation:fade .25s ease;width:100%;max-width:100%}
   .view.active{display:block}
@@ -967,19 +1020,19 @@
     width:100%;max-width:100%;max-height:min(70vh,780px);
   }
   .orc-table{
-    width:100%;min-width:1420px;border-collapse:collapse;table-layout:fixed;
+    width:100%;min-width:1530px;border-collapse:collapse;table-layout:fixed;
     font-size:12.5px;
   }
   .orc-table col.c-chk{width:36px}
   .orc-table col.c-lote{width:72px}
   .orc-table col.c-qtd{width:76px}
-  .orc-table col.c-desc{width:182px;min-width:182px;max-width:182px}
+  .orc-table col.c-desc{width:auto;min-width:280px}
+  .orc-table col.c-qtd-estoque{width:72px}
   .orc-table col.c-money{width:120px}
   .orc-table col.c-money-meus{width:100px}
-  .orc-table col.c-money-venda{width:110px}
   .orc-table col.c-pct{width:76px}
   .orc-table col.c-link{width:96px}
-  .orc-table col.c-actions{width:150px}
+  .orc-table col.c-actions{width:220px}
 
   .orc-table thead th{
     position:static;z-index:auto;
@@ -1042,7 +1095,7 @@
   .orc-table tbody input.orc-qtd::-webkit-inner-spin-button{
     -webkit-appearance:none;margin:0;
   }
-  /* % lucro — automática pelo Valor de Venda; editável (manual ignora auto) */
+  /* % — coluna ~76px; input legível p/ 12,50 / 100; sem spinners */
   .orc-table tbody input.orc-pct{
     display:block;width:100%;min-width:56px;max-width:100%;
     margin:0 auto;text-align:center;
@@ -1050,20 +1103,10 @@
     border-radius:var(--ls-radius-balloon);line-height:1.2;
     -moz-appearance:textfield;
     appearance:textfield;
-    background:#f7f9fc;
   }
-  .orc-table tbody input.orc-pct.is-neg{color:var(--ls-red);background:var(--ls-red-bg)}
-  .orc-table tbody input.orc-pct.is-pos{color:var(--ls-green);background:var(--ls-green-bg)}
-  .orc-table tbody input.orc-pct.is-manual{background:#fff8e8;border-color:#e0c56a}
   .orc-table tbody input.orc-pct::-webkit-outer-spin-button,
   .orc-table tbody input.orc-pct::-webkit-inner-spin-button{
     -webkit-appearance:none;margin:0;
-  }
-  .orc-table tbody td.td-desc{
-    max-width:182px;overflow:hidden;
-  }
-  .orc-table tbody td.td-desc input{
-    max-width:100%;
   }
   .orc-table tbody input:focus{
     outline:0;border-color:var(--ls-gold);box-shadow:0 0 0 3px rgba(201,162,39,.15);
@@ -1095,7 +1138,9 @@
   .orc-actions .orcGoogle,
   .orc-actions .orcMl,
   .orc-actions .orcOpenLink,
-  .orc-actions .orcDel{padding:3px 5px;flex-shrink:0}
+  .orc-actions .orcDel,
+  .orc-actions .orcCompensa,
+  .orc-actions .orcNaoCompensa{padding:3px 5px;flex-shrink:0}
   .orc-actions .orcOpenLink{
     font-size:9.5px;font-weight:800;letter-spacing:.2px;text-transform:uppercase;
   }
@@ -1109,18 +1154,23 @@
   .orc-actions .orcOpenLink.is-ready:hover{
     background:#eef2f8;border-color:var(--ls-navy-3);
   }
+  .orc-actions .orcCompensa,
+  .orc-actions .orcNaoCompensa{
+    font-size:10px;letter-spacing:.15px;white-space:nowrap;line-height:1.15;
+    border:1px solid transparent;font-weight:700;min-width:22px;
+  }
+  .orc-actions .orcCompensa:not(.is-active){
+    background:var(--ls-green-bg);color:var(--ls-green);border-color:#b6e3ca;
+  }
+  .orc-actions .orcCompensa:not(.is-active):hover{background:#d4f0e2}
+  .orc-actions .orcCompensa.is-active{background:var(--ls-green);color:#fff;border-color:var(--ls-green)}
+  .orc-actions .orcNaoCompensa:not(.is-active){
+    background:var(--ls-red-bg);color:var(--ls-red);border-color:#f2c4c4;
+  }
+  .orc-actions .orcNaoCompensa:not(.is-active):hover{background:#f7d4d4}
+  .orc-actions .orcNaoCompensa.is-active{background:var(--ls-red);color:#fff;border-color:var(--ls-red)}
   .orc-actions .orcDel{opacity:.65}
   .orc-actions .orcDel:hover{opacity:1}
-  .orc-meus-final{
-    display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0;
-  }
-  .orc-compensa-badge{
-    display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.2px;
-    text-transform:uppercase;padding:2px 6px;border-radius:999px;line-height:1.2;
-  }
-  .orc-compensa-badge.is-ok{background:var(--ls-green);color:#fff}
-  .orc-compensa-badge.is-bad{background:var(--ls-red);color:#fff}
-  .orc-compensa-badge.is-empty{display:none}
   .orc-table tbody tr.orc-row-compensa td{background:#f0faf4}
   .orc-table tbody tr.orc-row-compensa:nth-child(even) td{background:#e8f6ee}
   .orc-table tbody tr.orc-row-compensa:hover td{background:#dff3e8}
