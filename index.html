@@ -619,7 +619,7 @@
               <button class="btn btn-gold" id="btnPropostaOrcExcel">📊 Proposta Excel</button>
             </div>
           </div>
-          <div class="desc">Espelho do edital: à esquerda os dados importados; à direita seus preços na mesma linha do lote. <b>Meu total</b> = Qtd × V. Unit × (1 + %/100).</div>
+          <div class="desc">Espelho do edital à esquerda; à direita seus preços. <b>V. Venda</b> e <b>%</b> se calculam juntos. <b>Meu V. Final</b> = Qtd do edital × V. Venda. Se ficar abaixo do edital → <b>COMPENSA</b> (verde); se ficar acima → <b>NÃO COMPENSA</b> (vermelho).</div>
           <div id="orcMeta" class="orc-meta" style="display:none"></div>
           <div id="orcAlert" class="alert"></div>
 
@@ -639,7 +639,7 @@
                 <col class="c-desc" />
                 <col class="c-money" />
                 <col class="c-money" />
-                <col class="c-qtd-estoque" />
+                <col class="c-money-meus" />
                 <col class="c-money-meus" />
                 <col class="c-pct" />
                 <col class="c-money" />
@@ -658,9 +658,9 @@
                   <th>Descrição</th>
                   <th>V. Unitário</th>
                   <th class="split-end">V. Final</th>
-                  <th class="col-qtd split-start" title="Quantidade em estoque / posso entregar">Qtd</th>
-                  <th>V. Unitário</th>
-                  <th class="col-pct">%</th>
+                  <th class="split-start" title="Seu custo / valor unitário de compra">V. Unitário</th>
+                  <th title="Valor que você quer vender">V. Venda</th>
+                  <th class="col-pct" title="Margem automática sobre o V. Unitário">%</th>
                   <th>V. Final</th>
                   <th>Link de Acesso</th>
                   <th>Ações</th>
