@@ -5407,7 +5407,23 @@
       var n = (LICSYSTEM.state.orcItems || []).filter(function(it){
         return !LICSYSTEM.orcamento.isEmptyRow(it);
       }).length;
-      showAlert("orcAlert", "ok", "Salvo — <b>"+n+"</b> item(ns) gravado(s) no navegador"+(utils.hasFirebaseConfig()?" e na nuvem":"")+".");
+      var onde = utils.hasFirebaseConfig() ? "navegador e na nuvem" : "navegador";
+      showAlert(
+        "orcAlert",
+        "ok",
+        "✅ <b>ORÇAMENTO SALVO</b> — "+n+" item(ns) gravado(s) no "+onde+"."
+      );
+      var btn = el("btnSalvarOrc");
+      if(btn){
+        var prev = btn.innerHTML;
+        btn.innerHTML = "✅ ORÇAMENTO SALVO";
+        btn.disabled = true;
+        clearTimeout(LICSYSTEM.orcamento._salvarBtnTimer);
+        LICSYSTEM.orcamento._salvarBtnTimer = setTimeout(function(){
+          btn.innerHTML = prev;
+          btn.disabled = false;
+        }, 2200);
+      }
       try{
         if(LICSYSTEM.state.activeLeilaoId && LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.saveActiveWorkspace){
           LICSYSTEM.leiloesParticipo.saveActiveWorkspace();
