@@ -288,6 +288,7 @@ function mapItem(o, distKm) {
     esfera: esfera,
     esferaNome: ESFERA_LABEL[esfera] || esfera || "—",
     modalidade: o.modalidadeNome || "",
+    numeroCompra: o.numeroCompra != null ? String(o.numeroCompra) : null,
     objeto: o.objetoCompra || o.objeto || "",
     dataAbertura: o.dataAberturaProposta || null,
     dataEncerramento: o.dataEncerramentoProposta || null,
