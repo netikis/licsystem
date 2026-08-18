@@ -13,6 +13,13 @@
     /^(item|lote|qtd|qtde|quant|und\.?|unid|descri|especif|valor|unit|total|c[oó]d|produto|ordem|n[ºo°]|max\.?)$/i;
   var SKIP_ROW_RE =
     /^(prefeitura|estado|munic[ií]pio|edital|p[aá]gina|cnpj|e-mail|processo|anexo|rela[cç][aã]o dos itens)\b/i;
+  var GROUP_LOTE_RE = /^lote\s+\d+\s*:/i;
+  var LEGEND_ROW_RE = /^(ptl|pum[aá]x|ptm[aá]x|und|qtd|abrevia[cç][oõ]es)\s*:/i;
+  var CLAUSE_HEAD_RE =
+    /^(da|do|dos|das)\s+(fase|recurso|disposi[cç]|penalidade|habilita|julgamento|objeto)\b/i;
+  var DOTACAO_RE = /^\d{2}\.\d{2,3}\.\d+/;
+  var SECTION_TITLE_RE =
+    /^(?:\d{1,2}\s+)?(objeto|requisitos da contrata[cç][aã]o|subcontrata[cç][aã]o|especifica[cç][aã]o do objeto)\b/i;
 
   function parseNum(utils, raw) {
     var s = String(raw || "").replace(/R\$/gi, "").trim();
@@ -46,7 +53,22 @@
 
   function isItemNum(t) {
     var s = String(t || "").trim();
-    return /^\d{1,4}(?:\.\d{1,2})?$/.test(s) && Number(s.replace(",", ".")) < 5000;
+    return /^\d{1,4}$/.test(s) && Number(s) >= 1 && Number(s) < 5000;
+  }
+
+  function splitLeadingItem(t) {
+    var s = String(t || "").trim();
+    var m = s.match(/^(\d{1,4})(?:\s+(.+))?$/);
+    if (!m) return null;
+    var n = Number(m[1]);
+    if (!(n >= 1 && n < 5000)) return null;
+    var rest = String(m[2] || "").trim();
+    if (rest && (UND_RE.test(rest) || isMoneyText(rest) || isQtyText(rest))) return null;
+    return { lote: String(n), rest: rest };
+  }
+
+  function isClauseFirstCell(t) {
+    return /^\d{1,2}\.\d{1,2}\b/.test(String(t || "").trim());
   }
 
   function mergeRsCells(cells) {
@@ -165,13 +187,46 @@
     var cells = mergeRsCells((row && row.cells) || []);
     var text = rowText({ cells: cells });
     if (!text || SKIP_ROW_RE.test(text)) return { skip: true };
+    if (GROUP_LOTE_RE.test(text) || LEGEND_ROW_RE.test(text) || CLAUSE_HEAD_RE.test(text)) {
+      return { skip: true };
+    }
+    if (SECTION_TITLE_RE.test(text) || DOTACAO_RE.test(text)) return { skip: true };
+    if (cells.length && isClauseFirstCell(cells[0].text)) {
+      var clauseHasUnd = false;
+      for (var ci = 0; ci < cells.length; ci++) {
+        if (UND_RE.test(String(cells[ci].text || "").trim())) {
+          clauseHasUnd = true;
+          break;
+        }
+      }
+      if (!clauseHasUnd) return { skip: true };
+    }
     if (isHeaderRow(cells)) return { skip: true, header: true };
+
+    var used = {};
+    var lote = "";
+    if (cells.length) {
+      var lead = splitLeadingItem(cells[0].text);
+      if (lead) {
+        lote = lead.lote;
+        if (lead.rest) {
+          cells[0] = {
+            x: cells[0].x,
+            w: cells[0].w,
+            text: lead.rest
+          };
+        } else {
+          used[0] = 1;
+        }
+      }
+    }
 
     var moneyIdx = [];
     var qtyIdx = [];
     var undIdx = -1;
     var i;
     for (i = 0; i < cells.length; i++) {
+      if (used[i]) continue;
       var t = String(cells[i].text || "").trim();
       if (UND_RE.test(t)) undIdx = i;
       else if (isMoneyText(t)) moneyIdx.push(i);
@@ -180,7 +235,6 @@
 
     var vunit = 0;
     var vtotal = 0;
-    var used = {};
     if (moneyIdx.length >= 2) {
       vtotal = parseNum(utils, cells[moneyIdx[moneyIdx.length - 1]].text);
       vunit = parseNum(utils, cells[moneyIdx[moneyIdx.length - 2]].text);
@@ -225,12 +279,6 @@
       if (inferred >= 0.5 && inferred < 1e6) qtd = Math.round(inferred * 1000) / 1000;
     }
 
-    var lote = "";
-    if (cells.length && isItemNum(cells[0].text) && !used[0]) {
-      lote = String(cells[0].text).trim();
-      used[0] = 1;
-    }
-
     var descParts = [];
     for (i = 0; i < cells.length; i++) {
       if (used[i]) continue;
@@ -246,6 +294,8 @@
 
     var und = undIdx >= 0 ? String(cells[undIdx].text || "UN").toUpperCase().replace(/\.$/, "") : "UN";
     if (und.length > 6) und = "UN";
+
+    if (!vunit && !vtotal && CLAUSE_HEAD_RE.test(produto)) return { skip: true };
 
     return {
       skip: false,
@@ -324,30 +374,52 @@
     geom.pages.forEach(function (page) {
       (page.rows || []).forEach(function (row) {
         var c = classifyRow(row, utils);
-        if (c.skip) return;
+        if (c.skip) {
+          if (open && open.hasPrices && open.hasQty) flush();
+          return;
+        }
 
-        if (c.hasPrices && c.hasDesc) {
+        var newItem = !!(c.lote && (c.hasQty || c.hasPrices) && c.hasDesc);
+        if (!newItem && c.hasPrices && c.hasDesc && !(open && !open.hasPrices)) {
+          newItem = true;
+        }
+        if (newItem) {
           flush();
           open = c;
           return;
         }
-        if (c.hasPrices && open && !open.hasPrices) {
-          open.editalVunit = c.editalVunit || open.editalVunit;
-          open.editalTotal = c.editalTotal || open.editalTotal;
-          open.qtd = open.qtd || c.qtd;
-          open.und = open.und !== "UN" ? open.und : c.und;
-          open.hasPrices = true;
-          open.hasQty = open.hasQty || c.hasQty;
-          flush();
-          return;
+        if (!open) return;
+
+        if (c.hasPrices) {
+          if (!open.hasPrices) {
+            open.editalVunit = c.editalVunit || open.editalVunit;
+            open.editalTotal = c.editalTotal || open.editalTotal;
+            open.hasPrices = true;
+          }
+          if (!open.hasQty && c.hasQty) {
+            open.qtd = c.qtd;
+            open.hasQty = true;
+          }
+          if (c.und && c.und !== "UN" && open.und === "UN") open.und = c.und;
         }
-        if (c.hasDesc && !c.hasPrices && open && open.hasPrices) {
+        if (c.hasQty && !open.hasQty) {
+          open.qtd = c.qtd;
+          open.hasQty = true;
+          if (c.und && open.und === "UN") open.und = c.und;
+        }
+        if (c.hasDesc) {
+          var legalTail =
+            /^(concord[aâ]ncia|havendo|ser[aã]o observados|nos termos)\b/i.test(c.produto) ||
+            /\b(concord[aâ]ncia das partes|limites da lei|reequil[ií]brio|compet[eê]ncia tribut[aá]ria)\b/i.test(
+              c.produto
+            ) ||
+            SECTION_TITLE_RE.test(c.produto);
+          if (legalTail && open.hasPrices && open.hasQty) {
+            flush();
+            return;
+          }
           open.produto = (open.produto + " " + c.produto).replace(/\s+/g, " ").trim();
-          return;
-        }
-        if (c.hasDesc && (c.hasQty || c.lote)) {
-          flush();
-          open = c;
+          open.hasDesc = true;
         }
       });
     });

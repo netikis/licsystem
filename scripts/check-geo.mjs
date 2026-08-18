@@ -96,3 +96,54 @@ console.log("OK", itens.length, "itens via", modelo && modelo.id, "-", modelo &&
 itens.forEach((it) => {
   console.log(`  #${it.lote} qtd=${it.qtd} vu=${it.editalVunit} vt=${it.editalTotal} ${it.produto}`);
 });
+
+const wrapGeom = {
+  pages: [
+    {
+      rows: [
+        { y: 700, cells: [cell(40, "Item"), cell(80, "Especificação"), cell(320, "Und."), cell(360, "Qtd."), cell(420, "PUMáx"), cell(500, "PTMáx")] },
+        { y: 680, cells: [cell(40, "Lote 1: MATERIAIS"), cell(320, "PTL:"), cell(420, "R$ 80.507,57")] },
+        {
+          y: 660,
+          cells: [cell(40, "1"), cell(80, "Caixa de passagem em concreto"), cell(320, "un"), cell(360, "7"), cell(420, "60,83"), cell(500, "425,81")]
+        },
+        {
+          y: 640,
+          cells: [cell(40, "2"), cell(80, "Quadro trifásico para 28 disjuntores"), cell(320, "un"), cell(360, "7")]
+        },
+        { y: 620, cells: [cell(420, "399,67"), cell(500, "2.797,69")] },
+        { y: 600, cells: [cell(80, "(sobrepor/externo)")] },
+        {
+          y: 580,
+          cells: [cell(40, "3"), cell(80, "Disjuntor bipolar 25 A"), cell(320, "un"), cell(360, "41")]
+        },
+        {
+          y: 560,
+          cells: [cell(80, "capacidade de interrupção mínima 6 kA"), cell(420, "45,78"), cell(500, "1.876,98")]
+        }
+      ]
+    }
+  ]
+};
+const wrapItens = splitEdital("Item Especificação Und. Qtd.", wrapGeom);
+if (wrapItens.length !== 3) {
+  console.error("FAIL wrap: esperava 3 itens, veio", wrapItens.length, wrapItens);
+  process.exit(1);
+}
+if (String(wrapItens[0].lote) !== "1" || String(wrapItens[1].lote) !== "2" || String(wrapItens[2].lote) !== "3") {
+  console.error("FAIL wrap lotes", wrapItens.map((it) => it.lote));
+  process.exit(1);
+}
+if (Number(wrapItens[1].qtd) !== 7 || Number(wrapItens[1].editalVunit) < 399) {
+  console.error("FAIL wrap item 2", wrapItens[1]);
+  process.exit(1);
+}
+if (!/sobrepor/i.test(wrapItens[1].produto)) {
+  console.error("FAIL wrap desc item 2", wrapItens[1].produto);
+  process.exit(1);
+}
+if (Number(wrapItens[2].qtd) !== 41 || Number(wrapItens[2].editalVunit) < 45) {
+  console.error("FAIL wrap item 3", wrapItens[2]);
+  process.exit(1);
+}
+console.log("OK wrap ITEM→lote", wrapItens.map((it) => it.lote).join(","));
