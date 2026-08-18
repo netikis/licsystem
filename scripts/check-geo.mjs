@@ -130,7 +130,7 @@ if (wrapItens.length !== 3) {
   console.error("FAIL wrap: esperava 3 itens, veio", wrapItens.length, wrapItens);
   process.exit(1);
 }
-if (String(wrapItens[0].lote) !== "1" || String(wrapItens[1].lote) !== "2" || String(wrapItens[2].lote) !== "3") {
+if (String(wrapItens[0].lote) !== "1.1" || String(wrapItens[1].lote) !== "1.2" || String(wrapItens[2].lote) !== "1.3") {
   console.error("FAIL wrap lotes", wrapItens.map((it) => it.lote));
   process.exit(1);
 }

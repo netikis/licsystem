@@ -13,7 +13,7 @@
     /^(item|lote|qtd|qtde|quant|und\.?|unid|descri|especif|valor|unit|total|c[oó]d|produto|ordem|n[ºo°]|max\.?)$/i;
   var SKIP_ROW_RE =
     /^(prefeitura|estado|munic[ií]pio|edital|p[aá]gina|cnpj|e-mail|processo|anexo|rela[cç][aã]o dos itens)\b/i;
-  var GROUP_LOTE_RE = /^lote\s+\d+\s*:/i;
+  var GROUP_LOTE_RE = /^lote\s+(\d+)\s*:/i;
   var LEGEND_ROW_RE = /^(ptl|pum[aá]x|ptm[aá]x|und|qtd|abrevia[cç][oõ]es)\s*:/i;
   var CLAUSE_HEAD_RE =
     /^(da|do|dos|das)\s+(fase|recurso|disposi[cç]|penalidade|habilita|julgamento|objeto)\b/i;
@@ -187,7 +187,9 @@
     var cells = mergeRsCells((row && row.cells) || []);
     var text = rowText({ cells: cells });
     if (!text || SKIP_ROW_RE.test(text)) return { skip: true };
-    if (GROUP_LOTE_RE.test(text) || LEGEND_ROW_RE.test(text) || CLAUSE_HEAD_RE.test(text)) {
+    var mGroup = GROUP_LOTE_RE.exec(text);
+    if (mGroup) return { skip: true, groupLote: String(mGroup[1]) };
+    if (LEGEND_ROW_RE.test(text) || CLAUSE_HEAD_RE.test(text)) {
       return { skip: true };
     }
     if (SECTION_TITLE_RE.test(text) || DOTACAO_RE.test(text)) return { skip: true };
@@ -364,6 +366,18 @@
 
     var items = [];
     var open = null;
+    var currentGroup = "";
+
+    function applyGroup(row) {
+      if (!row) return row;
+      var itemNo = String(row.lote || "").trim();
+      if (currentGroup && itemNo && itemNo.indexOf(".") === -1) {
+        row.lote = currentGroup + "." + itemNo;
+      } else if (!itemNo && currentGroup) {
+        row.lote = currentGroup;
+      }
+      return row;
+    }
 
     function flush() {
       var packed = packItem(open, utils);
@@ -374,6 +388,7 @@
     geom.pages.forEach(function (page) {
       (page.rows || []).forEach(function (row) {
         var c = classifyRow(row, utils);
+        if (c.groupLote) currentGroup = c.groupLote;
         if (c.skip) {
           if (open && open.hasPrices && open.hasQty) flush();
           return;
@@ -385,7 +400,7 @@
         }
         if (newItem) {
           flush();
-          open = c;
+          open = applyGroup(c);
           return;
         }
         if (!open) return;
