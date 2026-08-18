@@ -502,7 +502,7 @@ BLACKLIST: BLACKLIST,
         var flag = risco.length ? '<span class="risk-flag" title="Risco: '+utils.escapeHtml(risco.join(", "))+'">⚠</span>' : "";
         html+='<tr class="'+(risco.length?'risk-row':'')+'" data-item-idx="'+idx+'">'+
           '<td><input type="checkbox" class="capChk" data-idx="'+idx+'" aria-label="Selecionar item '+(idx+1)+'"></td>'+
-          '<td>'+(idx+1)+'</td>'+
+          '<td>'+utils.escapeHtml(it.lote || String(idx+1))+'</td>'+
           '<td>'+flag+utils.escapeHtml(linha)+'</td>'+
           '<td><button type="button" class="btn btn-ghost btn-sm capGoogle" data-q="'+utils.escapeHtml(utils.nomeProdutoEdital(linha))+'">🔎 Google</button></td>'+
           '</tr>';
@@ -658,18 +658,21 @@ BLACKLIST: BLACKLIST,
         lines = (LICSYSTEM.state.captacaoLines || []).map(function(l){ return utils.asCaptacaoItem(l); }).filter(Boolean);
       }
       if(!lines.length){ showAlert("pdfStatus","warn","Nada para enviar. Extraia um edital primeiro."); return; }
+      if(LICSYSTEM.state.activeLeilaoId){
+        LICSYSTEM.state.orcBoundLeilaoId = String(LICSYSTEM.state.activeLeilaoId);
+      }
       // Substitui a planilha (evita misturar import antigo quebrado no localStorage)
       LICSYSTEM.state.orcItems = [];
       LICSYSTEM.state.orcPage = 1;
       LICSYSTEM.orcamento.addFromLines(lines);
       showAlert("pdfStatus","ok",lines.length+" item(ns) enviados ao Orçamento com lote, qtd, descrição e valores do edital.");
       if(LICSYSTEM.state.activeLeilaoId){
-        try{ LICSYSTEM.leiloesParticipo.saveActiveWorkspace(); }catch(e){}
+        try{ LICSYSTEM.leiloesParticipo.saveActiveWorkspace({ immediate: true, forceOrcamento: true }); }catch(e){}
         if(window.__lsActivateView){
-          window.__lsActivateView("orcamento", { fromWorkspace: true, skipLeilaoGate: true });
+          window.__lsActivateView("orcamento", { fromWorkspace: true, skipLeilaoGate: true, keepOrcamento: true });
         }
       } else if(window.__lsActivateView){
-        window.__lsActivateView("orcamento");
+        window.__lsActivateView("orcamento", { keepOrcamento: true });
       }
     },
 

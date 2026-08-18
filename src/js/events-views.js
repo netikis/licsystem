@@ -377,9 +377,10 @@
     return view;
   };
 
-  LICSYSTEM.onViewChange = function(view, navKey){
+  LICSYSTEM.onViewChange = function(view, navKey, opts){
     var prev = LICSYSTEM.state.currentView;
     view = view || "dashboard";
+    opts = opts || {};
 
     // Ao sair de ferramentas com edital ativo: grava workspace
     if(
@@ -401,7 +402,11 @@
       LICSYSTEM.state.activeLeilaoId &&
       (LEILAO_SCOPED_VIEWS[view] || (view === "analiseIa" && LICSYSTEM.state._lwAnaliseContext))
     ){
-      try{ LICSYSTEM.leiloesParticipo.loadActiveWorkspace(); }catch(e){}
+      try{
+        LICSYSTEM.leiloesParticipo.loadActiveWorkspace(
+          opts.keepOrcamento ? { orcamento: false } : {}
+        );
+      }catch(e){}
     }
 
     if(view !== "analiseIa" && !LEILAO_SCOPED_VIEWS[view]){

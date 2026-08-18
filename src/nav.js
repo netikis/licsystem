@@ -232,7 +232,7 @@
           };
       if(titleEl) titleEl.textContent = map[navKey]||map[targetView]||"LICSYSTEM";
       if(!opts.skipEnsureGroup) ensureGroupForView(navKey);
-      try{ if(window.LICSYSTEM && LICSYSTEM.onViewChange) LICSYSTEM.onViewChange(targetView, navKey); }catch(e){}
+      try{ if(window.LICSYSTEM && LICSYSTEM.onViewChange) LICSYSTEM.onViewChange(targetView, navKey, opts); }catch(e){}
       if(targetView === "pesquisas"){
         syncPesquisasCards(sectionId);
       }

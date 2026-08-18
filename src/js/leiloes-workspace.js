@@ -33,8 +33,12 @@
       var item = LICSYSTEM.leiloesParticipo.getActiveItem();
       if(!item) return;
       var bound = LICSYSTEM.state.orcBoundLeilaoId;
+      if(opts.forceOrcamento && item && item.id){
+        LICSYSTEM.state.orcBoundLeilaoId = String(item.id);
+        bound = LICSYSTEM.state.orcBoundLeilaoId;
+      }
       var boundMatches = !!(bound && String(bound) === String(item.id));
-      if(boundMatches && LICSYSTEM.state._orcRendered !== false){
+      if(boundMatches && LICSYSTEM.state._orcRendered !== false && !opts.forceOrcamento){
         try{ if(LICSYSTEM.orcamento && LICSYSTEM.orcamento.syncFromDom) LICSYSTEM.orcamento.syncFromDom(); }catch(e){}
       }
       var prev = item.workspace || LICSYSTEM.leiloesParticipo.emptyWorkspace();

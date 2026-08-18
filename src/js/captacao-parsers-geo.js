@@ -373,8 +373,6 @@
       var itemNo = String(row.lote || "").trim();
       if (currentGroup && itemNo && itemNo.indexOf(".") === -1) {
         row.lote = currentGroup + "." + itemNo;
-      } else if (!itemNo && currentGroup) {
-        row.lote = currentGroup;
       }
       return row;
     }

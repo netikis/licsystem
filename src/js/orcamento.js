@@ -458,14 +458,22 @@
         var itCap = utils.asCaptacaoItem(l);
         if(!itCap) return;
 
-        // Se a descrição ainda carrega "100,000 UN ..." ou linha THEO, reparseia
+        // Item já estruturado (lote + qtd + descrição): não reparsear a linha
+        var structured =
+          String(itCap.lote || "").trim() !== "" &&
+          String(itCap.produto || "").trim().length >= 3 &&
+          Number(itCap.qtd) > 0;
         var dirty =
-          /^\d{1,3}([.,]\d{3})*\s+(UN|UND|UNI|UNID)\b/i.test(itCap.produto || "") ||
+          !structured &&
+          (/^\d{1,3}([.,]\d{3})*\s+(UN|UND|UNI|UNID)\b/i.test(itCap.produto || "") ||
           (/^\d{1,5}\s+(UN|UND|UNI|UNID|LT|BL|GAL)\b/i.test(itCap.produto || "") &&
-            !(Number(itCap.editalVunit) > 0));
-        if (dirty || (!itCap.editalVunit && itCap.line)) {
+            !(Number(itCap.editalVunit) > 0)));
+        if (!structured && (dirty || (!itCap.editalVunit && itCap.line))) {
           var again = utils.parseLinhaEdital(itCap.line || itCap.produto);
-          if (again) itCap = again;
+          if (again) {
+            if (String(itCap.lote || "").trim()) again.lote = itCap.lote;
+            itCap = again;
+          }
         }
 
         var rawCheck = itCap.line || itCap.produto || "";

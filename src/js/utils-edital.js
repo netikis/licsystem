@@ -505,7 +505,7 @@
     }
 
     // Clássico / Item: ITEM|LOTE QTDE UND DESCRIÇÃO
-    m = s.match(new RegExp("^(\\d{1,5})\\s+" + QTD + "\\s+" + UND + "\\s+(.+)$", "i"));
+    m = s.match(new RegExp("^(\\d{1,4}(?:\\.\\d{1,4})?)\\s+" + QTD + "\\s+" + UND + "\\s+(.+)$", "i"));
     if (m) {
       return pack(m[1], utils.parseBrNum(m[2]) || theoQtd, m[3].toUpperCase(), m[4], editalVunit, editalTotal);
     }
