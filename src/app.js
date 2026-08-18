@@ -15,6 +15,7 @@ import "./js/captacao-parsers-elotech.js";
 import "./js/captacao-parsers-maringa.js";
 import "./js/captacao-parsers-municipais.js";
 import "./js/captacao-parsers-classico.js";
+import "./js/captacao-parsers-geo.js";
 import "./js/captacao-modelos.js";
 import "./js/captacao-parsers.js";
 import "./js/captacao.js";

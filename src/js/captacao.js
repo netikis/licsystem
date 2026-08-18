@@ -39,6 +39,9 @@ BLACKLIST: BLACKLIST,
         if (/Especifica[cç][aã]o dos Produtos|ANEXO\s*0?1/i.test(t) && t.length < 1400)
           score += 5;
         if (/Total\s+Geral/i.test(t) && t.length < 800) score += 4;
+        if (/\bITEM\b/i.test(t) && /\b(QTDE?|QUANT|UND|UNID)\b/i.test(t)) score += 6;
+        if ((t.match(/R\$\s*\d/g) || []).length >= 4) score += 5;
+        if ((t.match(/\d{1,3}(?:\.\d{3})*,\d{2}\b/g) || []).length >= 8) score += 4;
         if (t.length < 700 && i >= Math.floor(list.length * 0.35)) score += 2;
         if (score > 0) scored.push({ page: i + 1, score: score });
       }
@@ -97,6 +100,27 @@ BLACKLIST: BLACKLIST,
       return chain.then(function () {
         return images;
       });
+    },
+
+    /** Extração fraca: poucos itens válidos ou tabela grande mal aproveitada. */
+    extracaoFraca: function (items, geom) {
+      items = items || [];
+      var good = 0;
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        var desc = String((it && it.produto) || "").replace(/\s+/g, " ").trim();
+        if (Number(it && it.qtd) > 0 && desc.length >= 4) good++;
+      }
+      if (good < 2) return true;
+      var cand = 0;
+      try {
+        var bag = LICSYSTEM.captacaoParsers;
+        if (geom && bag && typeof bag.countGeoCandidates === "function") {
+          cand = bag.countGeoCandidates(geom);
+        }
+      } catch (e) {}
+      if (cand >= 8 && items.length < cand * 0.35) return true;
+      return false;
     },
 
     extractItensViaIa: function (images, textHint, filename) {
@@ -297,13 +321,25 @@ BLACKLIST: BLACKLIST,
         reader.onload = function(){
           var data = new Uint8Array(reader.result);
           window.pdfjsLib.getDocument({data:data}).promise.then(function(pdf){
-            var pages=[], p;
+            var pages=[], geomPages=[], p;
             var chain = Promise.resolve();
             for(p=1;p<=pdf.numPages;p++){
               (function(pg){
                 chain = chain.then(function(){
                   return pdf.getPage(pg).then(function(page){
                     return page.getTextContent().then(function(tc){
+                      var clustered = null;
+                      try {
+                        var bag = LICSYSTEM.captacaoParsers;
+                        if (bag && typeof bag.clusterPdfTextItems === "function") {
+                          clustered = bag.clusterPdfTextItems(tc.items || []);
+                        }
+                      } catch (e) {}
+                      if (clustered && clustered.rows) {
+                        geomPages.push({ rows: clustered.rows });
+                        pages.push(clustered.text || "");
+                        return;
+                      }
                       var items = (tc.items || []).slice();
                       items.sort(function (a, b) {
                         var ya = a.transform ? a.transform[5] : 0;
@@ -337,24 +373,28 @@ BLACKLIST: BLACKLIST,
             }
             chain.then(function(){
               var full = pages.join("\n");
-              var items = LICSYSTEM.captacao.splitEdital(full);
-              var precisaOcr =
-                items.length < 2 &&
-                (/conforme os seguintes itens/i.test(full) ||
-                  /RELA[CÇ][AÃ]O\s+DOS\s+ITENS/i.test(full) ||
-                  /Pinhal[aã]o/i.test(full) ||
-                  items.length === 0);
+              var geom = { pages: geomPages };
+              var items = LICSYSTEM.captacao.splitEdital(full, geom);
+              var fraca = LICSYSTEM.captacao.extracaoFraca(items, geom);
+              var pareceImagem =
+                /conforme os seguintes itens/i.test(full) ||
+                /RELA[CÇ][AÃ]O\s+DOS\s+ITENS/i.test(full) ||
+                /Pinhal[aã]o/i.test(full);
+              var precisaFallback = fraca || (items.length < 2 && pareceImagem);
 
-              if (!precisaOcr) {
+              if (!precisaFallback) {
                 LICSYSTEM.captacao.finishExtrair(items);
                 return null;
               }
 
               var ocrPages = LICSYSTEM.captacao.pickOcrPages(pages);
+              if (!ocrPages.length) {
+                for (var pi = 1; pi <= pages.length && ocrPages.length < 3; pi++) ocrPages.push(pi);
+              }
               showAlert(
                 "pdfStatus",
                 "info",
-                '<span class="spinner"></span> Planilha em imagem — lendo com IA (páginas ' +
+                '<span class="spinner"></span> Layout não reconhecido com segurança — lendo tabela com IA (páginas ' +
                   ocrPages.join(", ") +
                   ")…"
               );
@@ -367,38 +407,44 @@ BLACKLIST: BLACKLIST,
                   return LICSYSTEM.captacao
                     .extractItensViaIa(images, hint, fileName)
                     .then(function (iaItems) {
-                      if (iaItems && iaItems.length) {
+                      var iaLen = (iaItems && iaItems.length) || 0;
+                      if (iaLen >= 2 && (fraca || iaLen > items.length)) {
                         LICSYSTEM.captacao.lastModelo = {
                           id: "ia-imagem",
-                          label: "Planilha em imagem — lida por IA",
+                          label: "Tabela lida por IA (layout não cadastrado)",
                           family: "ia",
                           via: "ia",
                           at: new Date().toISOString()
                         };
                         LICSYSTEM.captacao.finishExtrair(
                           iaItems,
-                          "(planilha lida por IA a partir da imagem)"
+                          "(planilha lida por IA)"
                         );
+                        return null;
+                      }
+                      if (items.length) {
+                        LICSYSTEM.captacao.finishExtrair(items);
                         return null;
                       }
                       throw new Error("IA não retornou itens");
                     })
                     .catch(function () {
-                      // Fallback: OCR local + parsers
                       return LICSYSTEM.captacao.ocrPdfPages(pdf, ocrPages).then(function (ocrText) {
                         if (!ocrText || ocrText.replace(/\s+/g, "").length < 40) {
                           LICSYSTEM.captacao.finishExtrair(
                             items,
-                            "Não foi possível ler a planilha em imagem (IA/OCR)."
+                            items.length
+                              ? ""
+                              : "Não foi possível ler a planilha (IA/OCR)."
                           );
                           return;
                         }
                         var merged = full + "\n\n" + ocrText;
-                        var items2 = LICSYSTEM.captacao.splitEdital(merged);
+                        var items2 = LICSYSTEM.captacao.splitEdital(merged, geom);
                         LICSYSTEM.captacao.finishExtrair(
-                          items2.length ? items2 : items,
+                          items2.length >= items.length ? items2 : items,
                           items2.length
-                            ? "(inclui OCR da planilha em imagem)"
+                            ? "(inclui OCR da planilha)"
                             : "OCR rodou, mas o layout da tabela não foi reconhecido."
                         );
                       });

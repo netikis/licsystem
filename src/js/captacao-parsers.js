@@ -121,7 +121,7 @@
    * Despacha pelo registro permanente de modelos (captacao-modelos.js).
    * Guarda o modelo usado em LICSYSTEM.captacao.lastModelo.
    */
-  LICSYSTEM.captacao.splitEdital = function (text) {
+  LICSYSTEM.captacao.splitEdital = function (text, geom) {
     var P = ensureSplitters();
     if (typeof bag.runModelos !== "function") {
       LICSYSTEM.captacao.lastModelo = {
@@ -133,7 +133,7 @@
       };
       return [];
     }
-    return bag.runModelos(text, P) || [];
+    return bag.runModelos(text, P, geom) || [];
   };
 
   LICSYSTEM.captacao.packApiItens = function (list) {

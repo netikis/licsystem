@@ -296,11 +296,39 @@
     return null;
   }
 
+  function tryGeometric(text, P, geom) {
+    if (!geom || typeof bag.splitGeometricBlocks !== "function") return null;
+    var raw = bag.splitGeometricBlocks(text, geom, P) || [];
+    var out = P.dedupeCaptacao ? P.dedupeCaptacao(raw) : raw;
+    var good = 0;
+    for (var g = 0; g < out.length; g++) {
+      var it = out[g];
+      if (
+        it &&
+        String(it.produto || "").trim().length >= 3 &&
+        Number(it.qtd) > 0 &&
+        (Number(it.editalVunit) > 0 || Number(it.editalTotal) > 0)
+      ) {
+        good++;
+      }
+    }
+    if (good < 2) return null;
+    setLastModelo(
+      {
+        id: "geometrico",
+        label: "Tabela genérica (colunas do PDF)",
+        family: "geo",
+        minItems: 2
+      },
+      "geo"
+    );
+    return out;
+  }
+
   /**
-   * Percorre o registro na ordem memorizada e devolve os itens.
-   * Preserva a lógica antiga: passe com hint → THEO → fallback sem hint → clássico.
+   * Hint de município → tabela geométrica → THEO → fallback sem hint → clássico.
    */
-  bag.runModelos = function (text, P) {
+  bag.runModelos = function (text, P, geom) {
     var rawText = String(text || "");
     var list = sortedModelos();
     var hinted = {};
@@ -316,6 +344,9 @@
       hit = tryModelo(m, text, P, "hint");
       if (hit) return hit;
     }
+
+    hit = tryGeometric(text, P, geom);
+    if (hit) return hit;
 
     for (i = 0; i < list.length; i++) {
       m = list[i];

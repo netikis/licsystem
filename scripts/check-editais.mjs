@@ -12,38 +12,48 @@ const require = createRequire(import.meta.url);
 const pdfjs = require("pdfjs-dist/legacy/build/pdf.js");
 const root = path.resolve(".");
 
-async function extractAppText(filePath) {
+async function extractApp(filePath) {
   const data = new Uint8Array(fs.readFileSync(filePath));
   const pdf = await pdfjs.getDocument({ data, disableWorker: true }).promise;
   const pages = [];
+  const geomPages = [];
+  const cluster =
+    context.window.LICSYSTEM.captacaoParsers &&
+    context.window.LICSYSTEM.captacaoParsers.clusterPdfTextItems;
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
     const tc = await page.getTextContent();
-    const items = (tc.items || []).slice();
-    items.sort((a, b) => {
-      const ya = a.transform ? a.transform[5] : 0;
-      const yb = b.transform ? b.transform[5] : 0;
-      if (Math.abs(ya - yb) > 3) return yb - ya;
-      return (a.transform ? a.transform[4] : 0) - (b.transform ? b.transform[4] : 0);
-    });
-    const lines = [];
-    let buf = [];
-    let lastY = null;
-    for (const it of items) {
-      const str = it.str || "";
-      if (!str.trim()) continue;
-      const y = it.transform ? it.transform[5] : 0;
-      if (lastY !== null && Math.abs(y - lastY) > 3) {
-        if (buf.length) lines.push(buf.join(" ").replace(/\s+/g, " ").trim());
-        buf = [];
+    if (typeof cluster === "function") {
+      const clustered = cluster(tc.items || []);
+      geomPages.push({ rows: clustered.rows || [] });
+      pages.push(clustered.text || "");
+    } else {
+      const items = (tc.items || []).slice();
+      items.sort((a, b) => {
+        const ya = a.transform ? a.transform[5] : 0;
+        const yb = b.transform ? b.transform[5] : 0;
+        if (Math.abs(ya - yb) > 3) return yb - ya;
+        return (a.transform ? a.transform[4] : 0) - (b.transform ? b.transform[4] : 0);
+      });
+      const lines = [];
+      let buf = [];
+      let lastY = null;
+      for (const it of items) {
+        const str = it.str || "";
+        if (!str.trim()) continue;
+        const y = it.transform ? it.transform[5] : 0;
+        if (lastY !== null && Math.abs(y - lastY) > 3) {
+          if (buf.length) lines.push(buf.join(" ").replace(/\s+/g, " ").trim());
+          buf = [];
+        }
+        buf.push(str);
+        lastY = y;
       }
-      buf.push(str);
-      lastY = y;
+      if (buf.length) lines.push(buf.join(" ").replace(/\s+/g, " ").trim());
+      pages.push(lines.join("\n"));
     }
-    if (buf.length) lines.push(buf.join(" ").replace(/\s+/g, " ").trim());
-    pages.push(lines.join("\n"));
   }
-  return pages.join("\n");
+  return { text: pages.join("\n"), geom: { pages: geomPages } };
 }
 
 const context = { console, window: {}, document: {}, navigator: {}, setTimeout, clearTimeout, Intl };
@@ -57,6 +67,7 @@ for (const rel of [
   "src/js/captacao-parsers-maringa.js",
   "src/js/captacao-parsers-municipais.js",
   "src/js/captacao-parsers-classico.js",
+  "src/js/captacao-parsers-geo.js",
   "src/js/captacao-modelos.js",
   "src/js/captacao-parsers.js",
 ]) {
@@ -83,7 +94,8 @@ const brl = (n) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL
 for (const nome of nomes) {
   let itens = [];
   try {
-    itens = splitEdital(await extractAppText(path.join(dir, nome)));
+    const extracted = await extractApp(path.join(dir, nome));
+    itens = splitEdital(extracted.text, extracted.geom);
   } catch (e) {
     console.log(`\n${nome}\n   ERRO: ${e.message}`);
     continue;
