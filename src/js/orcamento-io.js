@@ -123,6 +123,10 @@
         }
       }
 
+      var leilaoId = String(
+        LICSYSTEM.state.orcBoundLeilaoId || LICSYSTEM.state.activeLeilaoId || ""
+      ).trim();
+
       if(entry && entry.tipo === "orcamento"){
         entry.nome = nome;
         entry.numero = numero;
@@ -132,6 +136,7 @@
         entry.totalEdital = totalEdital;
         entry.itens = itens;
         entry.qtdItens = itens.length;
+        if(leilaoId) entry.leilaoId = leilaoId;
         entry.atualizadoEm = agora;
       } else {
         entry = {
@@ -145,6 +150,7 @@
           totalEdital: totalEdital,
           itens: itens,
           qtdItens: itens.length,
+          leilaoId: leilaoId || "",
           criadoEm: agora,
           atualizadoEm: agora
         };
@@ -161,6 +167,58 @@
       if(typeof listarProdutos === "function") listarProdutos();
       showAlert("orcAlert","ok","Orçamento salvo no Catálogo: <b>"+utils.escapeHtml(nome)+"</b> ("+utils.escapeHtml(numero)+") — "+itens.length+" item(ns).");
     },
+    findLeilaoForCatalog:function(entry){
+      if(!entry || !LICSYSTEM.leiloesParticipo) return null;
+      try{ LICSYSTEM.leiloesParticipo.load(); }catch(e){}
+      var items = LICSYSTEM.leiloesParticipo.items || [];
+      var i, it, meta, blob;
+      if(entry.leilaoId){
+        it = LICSYSTEM.leiloesParticipo.findById(entry.leilaoId);
+        if(it) return it;
+      }
+      for(i = 0; i < items.length; i++){
+        it = items[i];
+        meta = ((it.workspace || {}).orcamento || {}).meta || {};
+        if(meta.catalogId && String(meta.catalogId) === String(entry.id)) return it;
+      }
+      function fold(s){
+        return utils.fold ? String(utils.fold(s) || "").toLowerCase() : String(s || "").toLowerCase();
+      }
+      var numero = fold(entry.numero || entry.sku || "");
+      if(numero.length >= 3){
+        var numHits = [];
+        for(i = 0; i < items.length; i++){
+          it = items[i];
+          meta = ((it.workspace || {}).orcamento || {}).meta || {};
+          blob = fold([it.titulo, it.filename, it.municipio, meta.numero, meta.nome].join(" "));
+          if(blob.indexOf(numero) !== -1) numHits.push(it);
+        }
+        if(numHits.length){
+          var liveNum = numHits.filter(function(x){ return x.status !== "arquivado"; });
+          return (liveNum[0] || numHits[0]);
+        }
+      }
+      var nome = fold(entry.nome);
+      var tokens = nome.split(/[^a-z0-9]+/).filter(function(t){
+        return t.length >= 4 && !/^(edital|licitacao|prefeitura|orcamento|anexo|pdf)$/.test(t);
+      });
+      if(!tokens.length && nome.length >= 4) tokens = [nome.replace(/\s+/g, "")];
+      var best = null, bestScore = 0;
+      for(i = 0; i < items.length; i++){
+        it = items[i];
+        if(it.status === "arquivado") continue;
+        blob = fold([it.titulo, it.filename, it.municipio, it.orgao].join(" "));
+        var score = 0;
+        for(var t = 0; t < tokens.length; t++){
+          if(blob.indexOf(tokens[t]) !== -1) score++;
+        }
+        if(score > bestScore){
+          bestScore = score;
+          best = it;
+        }
+      }
+      return bestScore >= 1 ? best : null;
+    },
     abrirDoCatalogo:function(id){
       LICSYSTEM.catalogo.load();
       var item = null;
@@ -176,17 +234,57 @@
       }) : [];
       if(!itens.length) itens = [ LICSYSTEM.orcamento.emptyItem() ];
 
+      var meta = {
+        nome: item.nome || "",
+        numero: item.numero || item.sku || "",
+        catalogId: item.id
+      };
+      var leilao = LICSYSTEM.orcamento.findLeilaoForCatalog(item);
+      if(leilao && leilao.status !== "arquivado" && LICSYSTEM.leiloesParticipo.openWorkspace){
+        if(!leilao.workspace) leilao.workspace = LICSYSTEM.leiloesParticipo.emptyWorkspace();
+        leilao.workspace.orcamento = {
+          v: 2,
+          items: itens,
+          meta: meta,
+          page: 1
+        };
+        leilao.updatedAt = Date.now();
+        if(!item.leilaoId){
+          item.leilaoId = String(leilao.id);
+          try{ LICSYSTEM.catalogo.saveLocal(); }catch(e){}
+        }
+        try{ LICSYSTEM.leiloesParticipo.persist({ immediate: true }); }catch(e){}
+        LICSYSTEM.leiloesParticipo.openWorkspace(leilao.id, "orcamento");
+        showAlert(
+          "orcAlert",
+          "ok",
+          "Edital reaberto: <b>"+utils.escapeHtml(leilao.titulo || item.nome || "")+"</b> — "+itens.length+" item(ns) do catálogo."
+        );
+        return;
+      }
+
+      if(LICSYSTEM.state.activeLeilaoId){
+        try{ LICSYSTEM.leiloesParticipo.saveActiveWorkspace(); }catch(e){}
+        try{ LICSYSTEM.leiloesParticipo.setActiveId(null); }catch(e){}
+      }
+      LICSYSTEM.state.orcBoundLeilaoId = null;
       LICSYSTEM.state.orcItems = itens;
       LICSYSTEM.state.orcPage = 1;
       LICSYSTEM.state.orcCatalogId = item.id;
-      LICSYSTEM.state.orcMetaNome = item.nome || "";
-      LICSYSTEM.state.orcMetaNumero = item.numero || item.sku || "";
+      LICSYSTEM.state.orcMetaNome = meta.nome;
+      LICSYSTEM.state.orcMetaNumero = meta.numero;
       LICSYSTEM.state._orcDirty = true;
       LICSYSTEM.orcamento.save();
       LICSYSTEM.orcamento.render();
       LICSYSTEM.orcamento.updateMeta();
-      showAlert("orcAlert","ok","Orçamento reaberto: <b>"+utils.escapeHtml(item.nome||"")+"</b> — continue editando e salve de novo no catálogo quando quiser.");
-      if(window.__lsActivateView) window.__lsActivateView("orcamento");
+      if(window.__lsActivateView) window.__lsActivateView("orcamento", { skipLeilaoGate: true });
+      showAlert(
+        "orcAlert",
+        leilao && leilao.status === "arquivado" ? "info" : "ok",
+        leilao && leilao.status === "arquivado"
+          ? "Orçamento reaberto, mas o edital está arquivado. Desarquive em Licitações que Participo para usar o PDF."
+          : "Orçamento reaberto: <b>"+utils.escapeHtml(item.nome||"")+"</b>. Não achei o edital correspondente em Licitações que Participo."
+      );
     },
     propostaRows:function(){
       var rows=[], geralMeus=0, geralEdital=0;

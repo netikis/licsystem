@@ -200,7 +200,7 @@
       "CNPJ": "Tax ID (CNPJ)",
       "Buscar": "Search",
       "Produtos": "Products",
-      "Cadastre produtos com preço de referência <b>ou</b> salve orçamentos completos (nome + número da licitação) pela aba Orçamento. Em orçamentos salvos, clique em <b>✎ Editar</b> para reabrir e continuar.": "Register products with a reference price <b>or</b> save full budgets (name + bid number) from the Budget tab. On saved budgets, click <b>✎ Edit</b> to reopen and continue.",
+      "Cadastre produtos com preço de referência <b>ou</b> salve orçamentos completos (nome + número da licitação) pela aba Orçamento. Em orçamentos salvos, clique em <b>✎ Abrir</b> para reabrir o edital e a planilha.": "Register products with a reference price <b>or</b> save full budgets (name + bid number) from the Budget tab. On saved budgets, click <b>✎ Open</b> to reopen the notice and the spreadsheet.",
       "Editando produto — altere os campos e clique em Salvar.": "Editing product — change the fields and click Save.",
       "Cancelar edição": "Cancel edit",
       "Código / Nº": "Code / No.",

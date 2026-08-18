@@ -200,7 +200,7 @@
       "CNPJ": "CNPJ",
       "Buscar": "Buscar",
       "Produtos": "Productos",
-      "Cadastre produtos com preço de referência <b>ou</b> salve orçamentos completos (nome + número da licitação) pela aba Orçamento. Em orçamentos salvos, clique em <b>✎ Editar</b> para reabrir e continuar.": "Registre productos con precio de referencia <b>o</b> guarde presupuestos completos (nombre + número de licitación) desde la pestaña Presupuesto. En presupuestos guardados, haga clic en <b>✎ Editar</b> para reabrir y continuar.",
+      "Cadastre produtos com preço de referência <b>ou</b> salve orçamentos completos (nome + número da licitação) pela aba Orçamento. Em orçamentos salvos, clique em <b>✎ Abrir</b> para reabrir o edital e a planilha.": "Registre productos con precio de referencia <b>o</b> guarde presupuestos completos (nombre + número de licitación) desde la pestaña Presupuesto. En presupuestos guardados, haga clic en <b>✎ Abrir</b> para reabrir el edicto y la planilla.",
       "Editando produto — altere os campos e clique em Salvar.": "Editando producto — cambie los campos y haga clic en Guardar.",
       "Cancelar edição": "Cancelar edición",
       "Código / Nº": "Código / N.º",
