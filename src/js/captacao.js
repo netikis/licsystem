@@ -509,22 +509,74 @@ BLACKLIST: BLACKLIST,
         var jsPDF = window.jspdf.jsPDF;
         var doc = new jsPDF({orientation:"portrait"});
         return licsystemPdfHeader(doc,"Itens Selecionados do Edital").then(function(startY){
-          var rows=[];
-          checks.forEach(function(c,i){
+          var y = LICSYSTEM.licsystemPdfAfterTitle ? LICSYSTEM.licsystemPdfAfterTitle(doc, startY) : startY;
+          var items = [];
+          checks.forEach(function(c){
             var idx = Number(c.getAttribute("data-idx"));
             var it = filtered[idx];
-            var line = it ? (it.line || it.produto || "") : (c.getAttribute("data-line") || "");
-            rows.push([i+1, line]);
+            if(it) items.push(it);
+            else if(c.getAttribute("data-line")) items.push({ produto: c.getAttribute("data-line") });
           });
-          doc.autoTable({
-            startY:startY, head:[["#","Item / Descrição"]], body:rows,
-            styles:{fontSize:9,cellPadding:3},
-            headStyles:{fillColor:[21,38,66],textColor:255},
-            columnStyles:{0:{cellWidth:14}},
-            alternateRowStyles:{fillColor:[248,250,253]}
+          var structured = items.some(function(it){
+            return it && (it.lote || Number(it.qtd) > 0 || Number(it.editalVunit) > 0);
           });
-          doc.save("edital-itens-selecionados.pdf");
-          showAlert("pdfStatus","ok","PDF gerado com "+rows.length+" itens.");
+          var rows = [];
+          var totalEdital = 0;
+          if(structured){
+            items.forEach(function(it, i){
+              var qtd = Number(it.qtd) || 0;
+              var unit = Number(it.editalVunit) || 0;
+              var fin = Number(it.editalTotal) || (qtd && unit ? qtd * unit : 0);
+              totalEdital += fin;
+              rows.push([
+                i + 1,
+                it.lote || "",
+                it.produto || it.line || "",
+                qtd || "",
+                unit ? utils.formatBrl(unit) : "",
+                fin ? utils.formatBrl(fin) : ""
+              ]);
+            });
+            doc.autoTable({
+              startY: y,
+              head: [["#", "Lote", "Descrição", "Qtd", "V.Unit", "V.Final"]],
+              body: rows,
+              foot: totalEdital ? [[
+                {content:"TOTAL", colSpan:5, styles:{halign:"right"}},
+                {content:utils.formatBrl(totalEdital), styles:{halign:"right"}}
+              ]] : undefined,
+              styles:{fontSize:8,cellPadding:2.5,overflow:"linebreak"},
+              headStyles:{fillColor:[21,38,66],textColor:255},
+              footStyles:{fillColor:[201,162,39],textColor:[21,38,66],fontStyle:"bold"},
+              alternateRowStyles:{fillColor:[248,250,253]},
+              columnStyles:{
+                0:{cellWidth:12},
+                1:{cellWidth:18},
+                3:{cellWidth:18,halign:"right"},
+                4:{cellWidth:26,halign:"right"},
+                5:{cellWidth:28,halign:"right"}
+              }
+            });
+          } else {
+            items.forEach(function(it, i){
+              rows.push([i + 1, it.produto || it.line || ""]);
+            });
+            doc.autoTable({
+              startY: y,
+              head: [["#", "Item / Descrição"]],
+              body: rows,
+              styles:{fontSize:9,cellPadding:3,overflow:"linebreak"},
+              headStyles:{fillColor:[21,38,66],textColor:255},
+              columnStyles:{0:{cellWidth:14}},
+              alternateRowStyles:{fillColor:[248,250,253]}
+            });
+          }
+          if(LICSYSTEM.licsystemPdfPageNumbers) LICSYSTEM.licsystemPdfPageNumbers(doc);
+          var nome = LICSYSTEM.licsystemPdfFileName
+            ? LICSYSTEM.licsystemPdfFileName("itens")
+            : "edital-itens-selecionados.pdf";
+          doc.save(nome);
+          showAlert("pdfStatus","ok","PDF gerado com "+items.length+" itens.");
         });
       }).catch(function(err){ showAlert("pdfStatus","error","Falha ao gerar PDF: "+utils.escapeHtml(err.message)); });
     },

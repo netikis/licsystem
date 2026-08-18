@@ -213,20 +213,26 @@
         var jsPDF = window.jspdf.jsPDF;
         var doc = new jsPDF({orientation:"landscape"});
         return licsystemPdfHeader(doc,"Proposta Comercial — Espelho Edital", true).then(function(startY){
-          var y = startY;
+          var y = LICSYSTEM.licsystemPdfAfterTitle ? LICSYSTEM.licsystemPdfAfterTitle(doc, startY) : startY;
           var data = LICSYSTEM.orcamento.propostaRows();
           if(!data.rows.length){ alert("Nenhum item para exportar."); return; }
           doc.autoTable({
             startY:y+2,
             head:[["Lote","Descrição","Qtd","Edital V.Unit","Edital Final","Meu V.Unit","Meu Final"]],
             body:data.rows,
-            foot:[["","","","","","TOTAL EDITAL", utils.formatBrl(data.geralEdital)]],
-            styles:{fontSize:8,cellPadding:2.5},
+            foot:[[
+              {content:"TOTAIS", colSpan:4, styles:{halign:"right"}},
+              {content:utils.formatBrl(data.geralEdital), styles:{halign:"right"}},
+              "",
+              {content:utils.formatBrl(data.geralMeus), styles:{halign:"right"}}
+            ]],
+            styles:{fontSize:8,cellPadding:2.5,overflow:"linebreak"},
             headStyles:{fillColor:[21,38,66],textColor:255},
             footStyles:{fillColor:[201,162,39],textColor:[21,38,66],fontStyle:"bold"},
             alternateRowStyles:{fillColor:[248,250,253]},
             columnStyles:{
               0:{cellWidth:18},
+              1:{cellWidth:"auto"},
               2:{cellWidth:18,halign:"right"},
               3:{cellWidth:28,halign:"right"},
               4:{cellWidth:28,halign:"right"},
@@ -234,14 +240,11 @@
               6:{cellWidth:32,halign:"right"}
             }
           });
-          var finalY = (doc.lastAutoTable && doc.lastAutoTable.finalY) || (y + 20);
-          doc.setFillColor(201,162,39);
-          doc.rect(14, finalY + 3, doc.internal.pageSize.getWidth() - 28, 10, "F");
-          doc.setTextColor(21,38,66);
-          doc.setFontSize(9);
-          doc.setFont(undefined, "bold");
-          doc.text("TOTAL MEUS: "+utils.formatBrl(data.geralMeus), doc.internal.pageSize.getWidth() - 18, finalY + 9.5, {align:"right"});
-          doc.save("proposta-comercial-licsystem.pdf");
+          if(LICSYSTEM.licsystemPdfPageNumbers) LICSYSTEM.licsystemPdfPageNumbers(doc);
+          var nome = LICSYSTEM.licsystemPdfFileName
+            ? LICSYSTEM.licsystemPdfFileName("proposta")
+            : "proposta-comercial-licsystem.pdf";
+          doc.save(nome);
         });
       }).catch(function(err){ alert("Falha ao gerar PDF: "+err.message); });
     },
@@ -254,8 +257,7 @@
           "Lote","Descrição","Qtd","Edital V.Unit","Edital Final","Meu V.Unit","Meu Final"
         ]];
         data.rows.forEach(function(r){ sheet.push(r); });
-        sheet.push(["","","","","","TOTAL EDITAL", utils.formatBrl(data.geralEdital)]);
-        sheet.push(["","","","","","TOTAL MEUS", utils.formatBrl(data.geralMeus)]);
+        sheet.push(["","","","TOTAIS", utils.formatBrl(data.geralEdital), "", utils.formatBrl(data.geralMeus)]);
         var ws = XLSX.utils.aoa_to_sheet(sheet);
         var wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Proposta");

@@ -101,9 +101,80 @@
     });
   }
 
+  function licsystemPdfEditalLine(){
+    var bits = [];
+    try{
+      var item = LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.getActiveItem
+        ? LICSYSTEM.leiloesParticipo.getActiveItem()
+        : null;
+      if(item){
+        if(item.titulo) bits.push(item.titulo);
+        else if(item.filename) bits.push(item.filename);
+        if(item.orgao) bits.push(item.orgao);
+        if(item.municipio) bits.push(item.municipio);
+      }
+    }catch(e){}
+    var st = LICSYSTEM.state || {};
+    if(st.orcMetaNumero) bits.push("Nº " + st.orcMetaNumero);
+    else if(st.orcMetaNome && bits.indexOf(st.orcMetaNome) === -1) bits.push(st.orcMetaNome);
+    var seen = {};
+    return bits.filter(function(b){
+      var k = String(b || "").toLowerCase();
+      if(!k || seen[k]) return false;
+      seen[k] = true;
+      return true;
+    }).join("  ·  ");
+  }
+
+  function licsystemPdfAfterTitle(doc, startY, extraLine){
+    var line = extraLine == null ? licsystemPdfEditalLine() : extraLine;
+    if(!line) return startY;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(70, 85, 110);
+    var maxW = doc.internal.pageSize.getWidth() - 28;
+    var lines = doc.splitTextToSize(String(line), maxW);
+    doc.text(lines, 14, startY);
+    return startY + lines.length * 4.6 + 2;
+  }
+
+  function licsystemPdfPageNumbers(doc){
+    var n = doc.getNumberOfPages();
+    var w = doc.internal.pageSize.getWidth();
+    var h = doc.internal.pageSize.getHeight();
+    for(var i = 1; i <= n; i++){
+      doc.setPage(i);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(120, 130, 145);
+      doc.text("Página " + i + " de " + n, w - 14, h - 8, {align:"right"});
+    }
+  }
+
+  function licsystemPdfFileName(prefix){
+    var st = LICSYSTEM.state || {};
+    var raw = st.orcMetaNumero || st.orcMetaNome || "";
+    if(!raw){
+      try{
+        var item = LICSYSTEM.leiloesParticipo && LICSYSTEM.leiloesParticipo.getActiveItem
+          ? LICSYSTEM.leiloesParticipo.getActiveItem()
+          : null;
+        if(item) raw = item.titulo || item.filename || "";
+      }catch(e){}
+    }
+    var slug = String(raw || prefix || "licsystem")
+      .replace(/[^\w\-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 48) || "licsystem";
+    return slug + "-" + (prefix || "documento") + ".pdf";
+  }
 
   ctx.licsystemPdfHeader = licsystemPdfHeader;
   LICSYSTEM.licsystemPdfHeader = licsystemPdfHeader;
   window.licsystemPdfHeader = licsystemPdfHeader;
+  LICSYSTEM.licsystemPdfAfterTitle = licsystemPdfAfterTitle;
+  LICSYSTEM.licsystemPdfPageNumbers = licsystemPdfPageNumbers;
+  LICSYSTEM.licsystemPdfFileName = licsystemPdfFileName;
+  LICSYSTEM.licsystemPdfEditalLine = licsystemPdfEditalLine;
 
 })(window.LICSYSTEM || (window.LICSYSTEM = {}));

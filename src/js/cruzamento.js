@@ -464,8 +464,9 @@
         var jsPDF = window.jspdf.jsPDF;
         var doc = new jsPDF({orientation:"landscape"});
         return licsystemPdfHeader(doc,"Proposta Comercial — Cruzamento ML", true).then(function(startY){
-          var y = startY;
+          var y = LICSYSTEM.licsystemPdfAfterTitle ? LICSYSTEM.licsystemPdfAfterTitle(doc, startY) : startY;
           if(LICSYSTEM.state.lastBdi){
+            doc.setFont("helvetica","normal");
             doc.setFontSize(9); doc.setTextColor(90);
             doc.text("BDI: Margem "+LICSYSTEM.state.lastBdi.margem+"% | Imposto "+LICSYSTEM.state.lastBdi.imposto+"% | Custo Op. "+LICSYSTEM.state.lastBdi.custoOperacional+"% | Desc. "+utils.formatBrl(LICSYSTEM.state.lastBdi.descontoFornecedor||0), 14, y);
             y+=6;
@@ -479,13 +480,26 @@
             startY:y+2,
             head:[["#","Item Edital","Produto ML","Sim.","Custo Real","Valor Final"]],
             body:rows,
-            foot:[["","","","","TOTAL", utils.formatBrl(geral)]],
-            styles:{fontSize:8.5,cellPadding:3},
+            foot:[[
+              {content:"TOTAL", colSpan:5, styles:{halign:"right"}},
+              {content:utils.formatBrl(geral), styles:{halign:"right"}}
+            ]],
+            styles:{fontSize:8.5,cellPadding:3,overflow:"linebreak"},
             headStyles:{fillColor:[21,38,66],textColor:255},
             footStyles:{fillColor:[201,162,39],textColor:[21,38,66],fontStyle:"bold"},
-            alternateRowStyles:{fillColor:[248,250,253]}
+            alternateRowStyles:{fillColor:[248,250,253]},
+            columnStyles:{
+              0:{cellWidth:12},
+              3:{cellWidth:18,halign:"right"},
+              4:{cellWidth:28,halign:"right"},
+              5:{cellWidth:32,halign:"right"}
+            }
           });
-          doc.save("proposta-cruzamento-licsystem.pdf");
+          if(LICSYSTEM.licsystemPdfPageNumbers) LICSYSTEM.licsystemPdfPageNumbers(doc);
+          var nome = LICSYSTEM.licsystemPdfFileName
+            ? LICSYSTEM.licsystemPdfFileName("cruzamento")
+            : "proposta-cruzamento-licsystem.pdf";
+          doc.save(nome);
         });
       }).catch(function(err){ alert("Falha ao gerar PDF: "+err.message); });
     }
