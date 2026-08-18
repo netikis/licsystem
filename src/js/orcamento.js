@@ -1,4 +1,4 @@
-/* LICSYSTEM — ORCAMENTO (07-orcamento.js) */
+/* LICSYSTEM — ORCAMENTO / PLANILHA */
 (function (LICSYSTEM) {
   "use strict";
 
@@ -9,24 +9,8 @@
   function hideAlert(id){ var fn = ctx.hideAlert || LICSYSTEM.hideAlert; if (fn) return fn(id); }
   var ORC_KEY = ctx.ORC_KEY;
   var ORC_KEY_LEGACY = ctx.ORC_KEY_LEGACY;
-  function licsystemPdfHeader(){
-    var fn = ctx.licsystemPdfHeader || window.licsystemPdfHeader || LICSYSTEM.licsystemPdfHeader;
-    if (typeof fn !== "function") throw new Error("licsystemPdfHeader ainda não disponível");
-    return fn.apply(this, arguments);
-  }
-  function wireOrcFileInput(){
-    var fn = ctx.wireOrcFileInput || window.wireOrcFileInput || LICSYSTEM.wireOrcFileInput;
-    if (typeof fn !== "function") throw new Error("wireOrcFileInput ainda não disponível");
-    return fn.apply(this, arguments);
-  }
-  function listarProdutos(){
-    var fn = ctx.listarProdutos || window.listarProdutos || LICSYSTEM.listarProdutos;
-    if (typeof fn !== "function") throw new Error("listarProdutos ainda não disponível");
-    return fn.apply(this, arguments);
-  }
 
-  /* ============================ ORÇAMENTO ============================ */
-  LICSYSTEM.orcamento = {
+  LICSYSTEM.orcamento = Object.assign(LICSYSTEM.orcamento || {}, {
     emptyItem:function(){
       return {lote:"", qtd:1, qtdEstoque:0, produto:"", editalVunit:0, editalTotal:0, vunit:0, vvenda:0, pct:0, link:"", compensa:null};
     },
@@ -65,26 +49,17 @@
       row.compensa = LICSYSTEM.orcamento.evalCompensa(row);
       return row;
     },
-
-    /** Margem % a partir do custo (vunit) e do V. Venda. */
     calcPctFromVenda:function(vunit, vvenda){
       vunit = Number(vunit) || 0;
       vvenda = Number(vvenda) || 0;
       if(vunit <= 0) return 0;
       return Math.round((((vvenda - vunit) / vunit) * 100) * 1000) / 1000;
     },
-
-    /** V. Venda a partir do custo e da %. */
     calcVendaFromPct:function(vunit, pct){
       vunit = Number(vunit) || 0;
       pct = Number(pct) || 0;
       return Math.round((vunit * (1 + pct / 100)) * 10000) / 10000;
     },
-
-    /**
-     * Mantém vunit ↔ vvenda ↔ % sincronizados.
-     * changed: "vunit" | "vvenda" | "pct"
-     */
     syncPricing:function(it, changed){
       if(!it) return;
       var vunit = Number(it.vunit) || 0;
@@ -106,8 +81,6 @@
       }
       it.compensa = LICSYSTEM.orcamento.evalCompensa(it);
     },
-
-    /** COMPENSA se meu V. Final < V. Final do edital; NÃO COMPENSA se maior. */
     evalCompensa:function(it){
       var meus = LICSYSTEM.orcamento.calcTotal(it);
       var edital = LICSYSTEM.orcamento.calcEditalTotal(it);
@@ -116,19 +89,16 @@
       if(meus > edital) return false;
       return true;
     },
-
     calcEditalTotal:function(it){
       var stored = Number(it.editalTotal)||0;
       if(stored > 0) return stored;
       return (Number(it.qtd)||0) * (Number(it.editalVunit)||0);
     },
-    /** MEUS PREÇOS V. Venda unitário — cai para custo + margem quando não gravado. */
     calcVendaUnit:function(it){
       var vv = Number(it.vvenda);
       if(isFinite(vv) && vv > 0) return vv;
       return (Number(it.vunit) || 0) * (1 + (Number(it.pct) || 0) / 100);
     },
-    /** MEUS PREÇOS V. Final = Qtd do edital × V. Venda */
     calcTotal:function(it){
       return (Number(it.qtd) || 0) * LICSYSTEM.orcamento.calcVendaUnit(it);
     },
@@ -212,7 +182,6 @@
         console.warn("Orçamento: não foi possível salvar tudo no navegador (limite de armazenamento).", e);
       }
     },
-    /** Salva na hora (estilo Word) e sincroniza com o banco — sem ir ao catálogo. */
     salvarAgora:function(){
       function showSavedFeedback(msg){
         try{
@@ -316,7 +285,6 @@
       LICSYSTEM.orcamento.save(opts);
       LICSYSTEM.state._orcDirty = false;
     },
-    /** Pull live input values into state (covers pending keystrokes before leave). */
     syncFromDom:function(){
       // DOM desatualizado após trocar de edital — não misturar planilhas.
       if(LICSYSTEM.state._orcRendered === false) return;
@@ -537,7 +505,6 @@
       LICSYSTEM.orcamento.flushSave({ forceClear: true, immediate: true });
       LICSYSTEM.orcamento.updateMeta();
     },
-
     updateMeta:function(){
       var box = el("orcMeta");
       if(!box) return;
@@ -555,454 +522,6 @@
         (nome ? '<span><b>Nome</b> '+utils.escapeHtml(nome)+'</span>' : '')+
         (LICSYSTEM.state.orcCatalogId ? '<span class="small muted">salvo — edite e clique em Salvar no Catálogo para atualizar</span>' : '');
     },
-
-    exportarExcel:function(){
-      var items = (LICSYSTEM.state.orcItems || []).filter(function(it){
-        return !LICSYSTEM.orcamento.isEmptyRow(it);
-      });
-      if(!items.length){ showAlert("orcAlert","warn","Planilha vazia — nada para exportar."); return; }
-      utils.ensureXlsx().then(function(){
-        var rows = [[
-          "Lote","Qtd","Descrição",
-          "Edital V. Unitário","Edital V. Final",
-          "Meu V. Unitário","%","Meu V. Final","Link"
-        ]];
-        items.forEach(function(it){
-          rows.push([
-            it.lote || "",
-            Number(it.qtd)||0,
-            it.produto || "",
-            Number(it.editalVunit)||0,
-            LICSYSTEM.orcamento.calcEditalTotal(it),
-            Number(it.vunit)||0,
-            Number(it.pct)||0,
-            LICSYSTEM.orcamento.calcTotal(it),
-            it.link || ""
-          ]);
-        });
-        var ws = XLSX.utils.aoa_to_sheet(rows);
-        var wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Orcamento");
-        var nome = (LICSYSTEM.state.orcMetaNumero || LICSYSTEM.state.orcMetaNome || "orcamento")
-          .toString().replace(/[^\w\-]+/g,"_").slice(0,40);
-        XLSX.writeFile(wb, nome + "-licsystem.xlsx");
-        showAlert("orcAlert","ok","Excel exportado com "+items.length+" item(ns).");
-      }).catch(function(err){
-        showAlert("orcAlert","error","Falha ao exportar Excel: "+utils.escapeHtml(err.message||err));
-      });
-    },
-
-    exportarPdf:function(){
-      LICSYSTEM.orcamento.gerarProposta();
-    },
-
-    abrirModalSalvarCatalogo:function(){
-      var items = (LICSYSTEM.state.orcItems || []).filter(function(it){
-        return !LICSYSTEM.orcamento.isEmptyRow(it);
-      });
-      if(!items.length){
-        showAlert("orcAlert","warn","Monte o orçamento antes de salvar no catálogo.");
-        return;
-      }
-      var ov = el("orcSaveOverlay");
-      if(!ov) return;
-      hideAlert("orcSaveAlert");
-      if(el("orcSaveNome")) el("orcSaveNome").value = LICSYSTEM.state.orcMetaNome || "";
-      if(el("orcSaveNumero")) el("orcSaveNumero").value = LICSYSTEM.state.orcMetaNumero || "";
-      ov.classList.add("open");
-      ov.setAttribute("aria-hidden","false");
-      setTimeout(function(){ if(el("orcSaveNome")) el("orcSaveNome").focus(); }, 30);
-    },
-
-    fecharModalSalvarCatalogo:function(){
-      var ov = el("orcSaveOverlay");
-      if(!ov) return;
-      ov.classList.remove("open");
-      ov.setAttribute("aria-hidden","true");
-      hideAlert("orcSaveAlert");
-    },
-
-    confirmarSalvarCatalogo:function(){
-      var nome = ((el("orcSaveNome") && el("orcSaveNome").value) || "").trim();
-      var numero = ((el("orcSaveNumero") && el("orcSaveNumero").value) || "").trim();
-      if(!nome){
-        showAlert("orcSaveAlert","warn","Informe o nome da licitação.");
-        if(el("orcSaveNome")) el("orcSaveNome").focus();
-        return;
-      }
-      if(!numero){
-        showAlert("orcSaveAlert","warn","Informe o número da licitação.");
-        if(el("orcSaveNumero")) el("orcSaveNumero").focus();
-        return;
-      }
-
-      var itens = (LICSYSTEM.state.orcItems || [])
-        .filter(function(it){ return !LICSYSTEM.orcamento.isEmptyRow(it); })
-        .map(function(it){ return LICSYSTEM.orcamento.normalizeItem(it); });
-      if(!itens.length){
-        showAlert("orcSaveAlert","warn","Nenhum item válido para salvar.");
-        return;
-      }
-
-      var totalMeus = 0, totalEdital = 0;
-      itens.forEach(function(it){
-        totalMeus += LICSYSTEM.orcamento.calcTotal(it);
-        totalEdital += LICSYSTEM.orcamento.calcEditalTotal(it);
-      });
-
-      LICSYSTEM.catalogo.load();
-      var agora = new Date().toISOString();
-      var editId = LICSYSTEM.state.orcCatalogId;
-      var entry = null;
-
-      if(editId){
-        for(var i=0;i<LICSYSTEM.catalogo.items.length;i++){
-          if(LICSYSTEM.catalogo.items[i].id === editId){
-            entry = LICSYSTEM.catalogo.items[i];
-            break;
-          }
-        }
-      }
-
-      if(entry && entry.tipo === "orcamento"){
-        entry.nome = nome;
-        entry.numero = numero;
-        entry.sku = numero;
-        entry.marca = "Orçamento";
-        entry.preco = totalMeus;
-        entry.totalEdital = totalEdital;
-        entry.itens = itens;
-        entry.qtdItens = itens.length;
-        entry.atualizadoEm = agora;
-      } else {
-        entry = {
-          id: "orc_" + Date.now() + "_" + Math.floor(Math.random()*1000),
-          tipo: "orcamento",
-          nome: nome,
-          numero: numero,
-          sku: numero,
-          marca: "Orçamento",
-          preco: totalMeus,
-          totalEdital: totalEdital,
-          itens: itens,
-          qtdItens: itens.length,
-          criadoEm: agora,
-          atualizadoEm: agora
-        };
-        LICSYSTEM.catalogo.items.push(entry);
-      }
-
-      LICSYSTEM.catalogo.saveLocal();
-      LICSYSTEM.state.orcCatalogId = entry.id;
-      LICSYSTEM.state.orcMetaNome = nome;
-      LICSYSTEM.state.orcMetaNumero = numero;
-      LICSYSTEM.orcamento.save();
-      LICSYSTEM.orcamento.updateMeta();
-      LICSYSTEM.orcamento.fecharModalSalvarCatalogo();
-      if(typeof listarProdutos === "function") listarProdutos();
-      showAlert("orcAlert","ok","Orçamento salvo no Catálogo: <b>"+utils.escapeHtml(nome)+"</b> ("+utils.escapeHtml(numero)+") — "+itens.length+" item(ns).");
-    },
-
-    abrirDoCatalogo:function(id){
-      LICSYSTEM.catalogo.load();
-      var item = null;
-      for(var i=0;i<LICSYSTEM.catalogo.items.length;i++){
-        if(LICSYSTEM.catalogo.items[i].id === id){ item = LICSYSTEM.catalogo.items[i]; break; }
-      }
-      if(!item || item.tipo !== "orcamento"){
-        showAlert("catalogoAlert","warn","Este registro não é um orçamento salvo.");
-        return;
-      }
-      var itens = Array.isArray(item.itens) ? item.itens.map(function(it){
-        return LICSYSTEM.orcamento.normalizeItem(it);
-      }) : [];
-      if(!itens.length) itens = [ LICSYSTEM.orcamento.emptyItem() ];
-
-      LICSYSTEM.state.orcItems = itens;
-      LICSYSTEM.state.orcPage = 1;
-      LICSYSTEM.state.orcCatalogId = item.id;
-      LICSYSTEM.state.orcMetaNome = item.nome || "";
-      LICSYSTEM.state.orcMetaNumero = item.numero || item.sku || "";
-      LICSYSTEM.state._orcDirty = true;
-      LICSYSTEM.orcamento.save();
-      LICSYSTEM.orcamento.render();
-      LICSYSTEM.orcamento.updateMeta();
-      showAlert("orcAlert","ok","Orçamento reaberto: <b>"+utils.escapeHtml(item.nome||"")+"</b> — continue editando e salve de novo no catálogo quando quiser.");
-      if(window.__lsActivateView) window.__lsActivateView("orcamento");
-    },
-
-    handleFile:function(file){
-      if(!file) return;
-      showAlertOrc('<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Lendo planilha do edital…',"info");
-      utils.ensureXlsx().then(function(){
-        var reader = new FileReader();
-        reader.onload = function(){
-          try{
-            var wb = XLSX.read(new Uint8Array(reader.result), {type:"array"});
-            var ws = wb.Sheets[wb.SheetNames[0]];
-            var rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:""});
-            LICSYSTEM.orcamento._mapRows(rows);
-          }catch(err){ showAlertOrc("Erro ao ler arquivo: "+utils.escapeHtml(err.message),"error"); }
-        };
-        reader.readAsArrayBuffer(file);
-      }).catch(function(err){ showAlertOrc("Falha ao carregar SheetJS: "+utils.escapeHtml(err.message),"error"); });
-      function showAlertOrc(msg,type){
-        var d=el("orcDrop"); d.innerHTML='<span class="big">📊</span>'+msg;
-        setTimeout(function(){ LICSYSTEM.orcamento._restoreDrop(); }, type==="info"?60000:4000);
-      }
-    },
-    _restoreDrop:function(){
-      el("orcDrop").innerHTML='<span class="big">📊</span><b>Arraste Excel/CSV do edital aqui</b> ou clique para selecionar<br/><span class="small muted">Mapeia Lote/Item, Quantidade, Descrição, Valor Unitário e Valor Final (também Valor Máximo)</span><input type="file" id="orcFile" accept=".xlsx,.xls,.csv" style="display:none" />';
-      wireOrcFileInput();
-    },
-    _mapRows:function(rows){
-      if(!rows || !rows.length){ LICSYSTEM.orcamento._restoreDrop(); return; }
-
-      // localiza linha de cabeçalho (até a 10ª) — aceita LOTE ou ITEM
-      var headerRow = 0, header = null;
-      for(var hr=0; hr<Math.min(10, rows.length); hr++){
-        var cand = (rows[hr] || []).map(function(c){
-          return utils.fold(String(c)).toLowerCase().replace(/\s+/g, " ").trim();
-        });
-        var score = 0;
-        cand.forEach(function(h){
-          if(!h) return;
-          if(h.indexOf("descr")!==-1 || h.indexOf("produto")!==-1) score += 3;
-          if(h.indexOf("qtde")!==-1 || h.indexOf("qtd")!==-1 || h.indexOf("quant")!==-1) score += 2;
-          if(h.indexOf("unitario")!==-1 || h.indexOf("maximo unit")!==-1 || (h.indexOf("valor")!==-1 && h.indexOf("unit")!==-1)) score += 3;
-          if(h.indexOf("maximo total")!==-1 || h.indexOf("valor maximo total")!==-1 || (h.indexOf("total")!==-1 && h.indexOf("unit")===-1)) score += 2;
-          if(h==="item" || h.indexOf("lote")!==-1) score += 3;
-          if(h==="und" || h==="unid" || h.indexOf("unidade")===0) score += 1;
-        });
-        if(score >= 5){ headerRow = hr; header = cand; break; }
-      }
-      if(!header) header = (rows[0] || []).map(function(c){
-        return utils.fold(String(c)).toLowerCase().replace(/\s+/g, " ").trim();
-      });
-
-      var colLote=-1, colDesc=-1, colQtd=-1, colUnit=-1, colFinal=-1, colUnd=-1;
-      // 1) ITEM / LOTE (nunca Cód / Cotas)
-      header.forEach(function(h,i){
-        if(!h) return;
-        if(colLote>=0) return;
-        if(h.indexOf("cotas")!==-1 || h==="cod" || h==="codigo" || h.indexOf("cod ")===0 || h.indexOf("codigo ")===0) return;
-        if(h==="item" || h==="lote" || h.indexOf("item ")===0 || h.indexOf("lote")===0) colLote=i;
-        else if((h==="n" || h==="nº" || h==="n°" || h==="nr" || h==="num") && h.indexOf("cotas")===-1) colLote=i;
-      });
-      // 2) Quantidade (não Cotas)
-      header.forEach(function(h,i){
-        if(!h || colQtd>=0) return;
-        if(h.indexOf("cotas")!==-1) return;
-        if(h==="qtde" || h==="qtd" || h.indexOf("qtde")!==-1 || (h.indexOf("quant")!==-1 && h.indexOf("cotas")===-1)) colQtd=i;
-      });
-      // 3) Descrição / Produto
-      header.forEach(function(h,i){
-        if(!h || colDesc>=0) return;
-        if(h.indexOf("descr")!==-1 || h.indexOf("produto")!==-1 || h.indexOf("especific")!==-1) colDesc=i;
-      });
-      // 4) Unidade (só referência)
-      header.forEach(function(h,i){
-        if(!h || colUnd>=0) return;
-        if(h==="und" || h==="un" || h==="unid" || h==="unidade") colUnd=i;
-      });
-      // 5) Valor unitário / Valor Máximo Unit.
-      header.forEach(function(h,i){
-        if(!h || colUnit>=0) return;
-        if(h.indexOf("maximo unit")!==-1 || h.indexOf("valor maximo unit")!==-1) colUnit=i;
-        else if(h.indexOf("unitario")!==-1 || h.indexOf("v. unit")!==-1 || h.indexOf("v unit")!==-1) colUnit=i;
-        else if(h.indexOf("unit")!==-1 && h.indexOf("total")===-1 && h.indexOf("und")===-1 && h!=="und") colUnit=i;
-      });
-      if(colUnit<0){
-        header.forEach(function(h,i){
-          if(!h) return;
-          if(h.indexOf("valor")!==-1 && h.indexOf("total")===-1 && h.indexOf("final")===-1 && i!==colQtd && i!==colUnd) colUnit=i;
-        });
-      }
-      // 6) Valor total / Valor Máximo Total
-      header.forEach(function(h,i){
-        if(!h || colFinal>=0) return;
-        if(h.indexOf("maximo total")!==-1 || h.indexOf("valor maximo total")!==-1) colFinal=i;
-        else if(h.indexOf("final")!==-1 || (h.indexOf("total")!==-1 && h.indexOf("unit")===-1 && i!==colUnit)) colFinal=i;
-      });
-
-      // Fallback posicional:
-      // Item | Cotas | Qtde | Und | Cód | Produto | V.Unit | V.Total  (8 cols)
-      // Item | Qtde | Und | Descrição | V.Unit | V.Final (6 cols)
-      if(colDesc<0 && header.length >= 6){
-        if(header.length >= 8){
-          if(colLote<0) colLote = 0;
-          if(colQtd<0) colQtd = 2;
-          if(colDesc<0) colDesc = 5;
-          if(colUnit<0) colUnit = 6;
-          if(colFinal<0) colFinal = 7;
-        } else {
-          if(colLote<0) colLote = 0;
-          if(colQtd<0) colQtd = 1;
-          if(colDesc<0) colDesc = header.length >= 6 ? 3 : 2;
-          if(colUnit<0) colUnit = header.length - 2;
-          if(colFinal<0) colFinal = header.length - 1;
-        }
-      }
-
-      var startRow = headerRow + 1;
-      if(colDesc<0){ colDesc = 0; startRow = 0; }
-
-      var added=0;
-      for(var r=startRow;r<rows.length;r++){
-        var row = rows[r] || [];
-        var desc = String(row[colDesc]!=null?row[colDesc]:"").trim();
-        if(!desc) continue;
-        if(!utils.sanitizar(desc)) continue;
-
-        var qtd = colQtd>=0 ? utils.parseBrNum(row[colQtd]) : 0;
-        var unit = colUnit>=0 ? utils.parseBrNum(row[colUnit]) : 0;
-        var fin = colFinal>=0 ? utils.parseBrNum(row[colFinal]) : 0;
-        var lote = colLote>=0 ? String(row[colLote]!=null?row[colLote]:"").trim() : "";
-
-        // se a descrição ainda carrega a linha completa do edital, extrai preços dela
-        var parsed = utils.parseLinhaEdital(
-          (lote ? lote + " " : "") +
-          (qtd ? qtd + " " : "") +
-          (colUnd>=0 ? String(row[colUnd]||"UN") + " " : "") +
-          desc +
-          (unit ? " " + unit : "") +
-          (fin ? " " + fin : "")
-        );
-        if(parsed){
-          if(!lote && parsed.lote) lote = parsed.lote;
-          if(!qtd && parsed.qtd) qtd = parsed.qtd;
-          desc = parsed.produto || desc;
-          if(!unit && parsed.editalVunit) unit = parsed.editalVunit;
-          if(!fin && parsed.editalTotal) fin = parsed.editalTotal;
-        } else {
-          var parsedDesc = utils.parseLinhaEdital(desc);
-          if(parsedDesc){
-            if(!lote && parsedDesc.lote) lote = parsedDesc.lote;
-            if(!qtd && parsedDesc.qtd) qtd = parsedDesc.qtd;
-            desc = parsedDesc.produto || desc;
-            if(!unit && parsedDesc.editalVunit) unit = parsedDesc.editalVunit;
-            if(!fin && parsedDesc.editalTotal) fin = parsedDesc.editalTotal;
-          }
-        }
-
-        if(!unit){
-          for(var c=0;c<row.length;c++){
-            if(c===colDesc || c===colQtd || c===colLote || c===colFinal || c===colUnd) continue;
-            var maybe = utils.parseBrNum(row[c]);
-            var rawCell = String(row[c]==null?"":row[c]).trim();
-            if(maybe > 0 && /,\d{2,4}$/.test(rawCell.replace(/\s/g,"")) && maybe < 1e7){
-              if(/,\d{3,4}$/.test(rawCell.replace(/\s/g,"")) || maybe !== qtd){
-                unit = maybe;
-                break;
-              }
-            }
-          }
-        }
-
-        if(!qtd) qtd = 1;
-        if(!fin && unit) fin = qtd * unit;
-        if(!lote) lote = String(added+1);
-
-        var item = LICSYSTEM.orcamento.emptyItem();
-        item.lote = lote;
-        item.produto = desc;
-        item.qtd = qtd;
-        item.editalVunit = unit||0;
-        item.editalTotal = fin||0;
-        LICSYSTEM.state.orcItems.push(item);
-        added++;
-        if(added>=5000) break;
-      }
-      LICSYSTEM.state.orcItems = LICSYSTEM.state.orcItems.filter(function(it,idx){
-        return !(idx===0 && LICSYSTEM.orcamento.isEmptyRow(it));
-      });
-      LICSYSTEM.orcamento.render();
-      LICSYSTEM.orcamento._restoreDrop();
-    },
-
-    /** Linhas da proposta comercial (mostra o preço de venda, nunca o custo nem a %). */
-    propostaRows:function(){
-      var rows=[], geralMeus=0, geralEdital=0;
-      LICSYSTEM.state.orcItems.forEach(function(it){
-        if(!it.produto && !it.lote) return;
-        var meus=LICSYSTEM.orcamento.calcTotal(it);
-        var edital=LICSYSTEM.orcamento.calcEditalTotal(it);
-        geralMeus+=meus; geralEdital+=edital;
-        rows.push([
-          it.lote || "",
-          it.produto || "",
-          it.qtd,
-          utils.formatBrl(it.editalVunit),
-          utils.formatBrl(edital),
-          utils.formatBrl(LICSYSTEM.orcamento.calcVendaUnit(it)),
-          utils.formatBrl(meus)
-        ]);
-      });
-      return { rows: rows, geralMeus: geralMeus, geralEdital: geralEdital };
-    },
-
-    gerarProposta:function(){
-      if(!LICSYSTEM.state.orcItems.length){ alert("Planilha vazia."); return; }
-      utils.ensureJsPdf().then(function(){
-        var jsPDF = window.jspdf.jsPDF;
-        var doc = new jsPDF({orientation:"landscape"});
-        return licsystemPdfHeader(doc,"Proposta Comercial — Espelho Edital", true).then(function(startY){
-          var y = startY;
-          var data = LICSYSTEM.orcamento.propostaRows();
-          if(!data.rows.length){ alert("Nenhum item para exportar."); return; }
-          doc.autoTable({
-            startY:y+2,
-            head:[["Lote","Descrição","Qtd","Edital V.Unit","Edital Final","Meu V.Unit","Meu Final"]],
-            body:data.rows,
-            foot:[["","","","","","TOTAL EDITAL", utils.formatBrl(data.geralEdital)]],
-            styles:{fontSize:8,cellPadding:2.5},
-            headStyles:{fillColor:[21,38,66],textColor:255},
-            footStyles:{fillColor:[201,162,39],textColor:[21,38,66],fontStyle:"bold"},
-            alternateRowStyles:{fillColor:[248,250,253]},
-            columnStyles:{
-              0:{cellWidth:18},
-              2:{cellWidth:18,halign:"right"},
-              3:{cellWidth:28,halign:"right"},
-              4:{cellWidth:28,halign:"right"},
-              5:{cellWidth:28,halign:"right"},
-              6:{cellWidth:32,halign:"right"}
-            }
-          });
-          var finalY = (doc.lastAutoTable && doc.lastAutoTable.finalY) || (y + 20);
-          doc.setFillColor(201,162,39);
-          doc.rect(14, finalY + 3, doc.internal.pageSize.getWidth() - 28, 10, "F");
-          doc.setTextColor(21,38,66);
-          doc.setFontSize(9);
-          doc.setFont(undefined, "bold");
-          doc.text("TOTAL MEUS: "+utils.formatBrl(data.geralMeus), doc.internal.pageSize.getWidth() - 18, finalY + 9.5, {align:"right"});
-          doc.save("proposta-comercial-licsystem.pdf");
-        });
-      }).catch(function(err){ alert("Falha ao gerar PDF: "+err.message); });
-    },
-
-    gerarPropostaExcel:function(){
-      if(!LICSYSTEM.state.orcItems.length){ alert("Planilha vazia."); return; }
-      utils.ensureXlsx().then(function(){
-        var data = LICSYSTEM.orcamento.propostaRows();
-        if(!data.rows.length){ alert("Nenhum item para exportar."); return; }
-        var sheet = [[
-          "Lote","Descrição","Qtd","Edital V.Unit","Edital Final","Meu V.Unit","Meu Final"
-        ]];
-        data.rows.forEach(function(r){ sheet.push(r); });
-        sheet.push(["","","","","","TOTAL EDITAL", utils.formatBrl(data.geralEdital)]);
-        sheet.push(["","","","","","TOTAL MEUS", utils.formatBrl(data.geralMeus)]);
-        var ws = XLSX.utils.aoa_to_sheet(sheet);
-        var wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Proposta");
-        var nome = (LICSYSTEM.state.orcMetaNumero || LICSYSTEM.state.orcMetaNome || "proposta")
-          .toString().replace(/[^\w\-]+/g,"_").slice(0,40);
-        XLSX.writeFile(wb, nome + "-proposta-licsystem.xlsx");
-        showAlert("orcAlert","ok","Proposta Excel exportada ("+data.rows.length+" item(ns)).");
-      }).catch(function(err){
-        alert("Falha ao gerar Excel: "+(err.message||err));
-      });
-    },
-
     onEdit:function(i,f,val){
       var it=LICSYSTEM.state.orcItems[i]; if(!it) return;
       /* Descrição do produto vem do edital e não pode ser alterada */
@@ -1082,7 +601,6 @@
       if(el("orcTotalEdital")) el("orcTotalEdital").textContent = utils.formatBrl(geralEdital);
       LICSYSTEM.orcamento.scheduleSave();
     }
-  };
-
+  });
 
 })(window.LICSYSTEM || (window.LICSYSTEM = {}));
