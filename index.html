@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LICSYSTEM — Sistema Licitação</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<!-- CSS: src/styles.css (minificado no build) -->
+</head>
+<body class="auth-checking">
+<!-- @include src/html/auth-gate.html -->
+
+<div id="app">
+  <!-- @include src/html/sidebar.html -->
+
+  <!-- Nav: carregado via Vite (src/nav.js → index.js) -->
+
+  <!-- ============ MAIN ============ -->
+  <div id="main">
+    <!-- @include src/html/topbar.html -->
+
+    <div class="content">
+      <!-- @include src/html/views/dashboard.html -->
+      <!-- @include src/html/views/pesquisas.html -->
+      <!-- @include src/html/views/analise-ia.html -->
+      <!-- @include src/html/views/leiloes-participo.html -->
+      <!-- @include src/html/views/leilao-workspace.html -->
+      <!-- @include src/html/views/importar-edital.html -->
+      <!-- @include src/html/views/orcamento.html -->
+      <!-- @include src/html/views/cruzamento.html -->
+      <!-- @include src/html/views/cofre.html -->
+      <!-- @include src/html/views/docs-checklist.html -->
+      <!-- @include src/html/views/entregas.html -->
+      <!-- @include src/html/views/hist-entregas.html -->
+      <!-- @include src/html/views/concorrencia.html -->
+      <!-- @include src/html/views/catalogo.html -->
+      <!-- @include src/html/views/arp.html -->
+      <!-- @include src/html/views/disputa.html -->
+      <!-- @include src/html/views/ferramentas.html -->
+    </div>
+  </div>
+</div>
+
+<!-- @include src/html/modals.html -->
+
+<!-- =================================================================== -->
+<!-- ============================ APP SCRIPT (Vite) ===================== -->
+<script type="module" src="/index.js"></script>
+</body>
+</html>

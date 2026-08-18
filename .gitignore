@@ -1,0 +1,50 @@
+# Segredos e ambiente local
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.production.local
+
+# Dependencias e deploy
+node_modules/
+dist/
+.vercel/
+*.log
+npm-debug.log*
+
+# Credenciais / backups locais
+FIREBASE CHAVE KEY.txt
+chave api/
+chave id mercado livre/
+EDITAIS/
+*.backup.html
+licitacao.backup.html
+cruzamento-fuzzy.html
+deploy-prod.bat.bak
+
+# SO / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.cursor/
+*.swp
+
+.vercel
+.env*
+
+# veredito / local
+_archive/
+scripts/_captacao.before-split.js
+
+scripts/_captacao-parsers.before-split.js
+scripts/_fn-ends.mjs
+
+scripts/_index.before-html-split.html
+
+scripts/_styles.before-split.css
+
+scripts/_i18n.before-split.js
+
+scripts/_utils.before-split.js
+scripts/_*.before-split.*

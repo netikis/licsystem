@@ -1,0 +1,24 @@
+      <!-- ===================== DASHBOARD ===================== -->
+      <section id="view-dashboard" class="view active">
+        <div class="grid kpi" id="kpiGrid"></div>
+        <div class="grid two">
+          <div class="card">
+            <div class="card-head"><h2>Desempenho de Pregões</h2></div>
+            <div class="desc">Distribuição de resultados no período.</div>
+            <div class="chart-box"><canvas id="chartDoughnut"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>Volume Mensal Disputado</h2></div>
+            <div class="desc">Últimos 6 meses (R$ mil).</div>
+            <div class="chart-box"><canvas id="chartBar"></canvas></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h2>Radar de Oportunidades</h2>
+            <span class="tag" id="pncpTag">PNCP</span>
+          </div>
+          <div class="desc">Alertas de novas contratações capturados no Radar PNCP (Pesquisas de Editais).</div>
+          <div id="dashPncpList" class="small muted">Nenhuma oportunidade capturada ainda. Use o Radar PNCP em <b>Pesquisas de Editais</b>.</div>
+        </div>
+      </section>

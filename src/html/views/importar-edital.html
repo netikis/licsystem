@@ -1,0 +1,47 @@
+      <!-- ===================== IMPORTAR EDITAL (PDF) ===================== -->
+      <section id="view-importarEdital" class="view">
+        <div class="card">
+          <div class="card-head"><h2>📥 Importar Edital (PDF)</h2></div>
+          <div id="pdfAnexado" class="alert"></div>
+          <div class="form-row">
+            <div style="flex:2">
+              <label class="fld">Arquivo PDF do edital</label>
+              <input type="file" id="pdfFile" accept="application/pdf" />
+            </div>
+            <div style="flex:2">
+              <label class="fld">Palavras-chave (filtro, separadas por vírgula)</label>
+              <input type="text" id="pdfKeywords" placeholder="ex.: parafuso, tinta, cabo" />
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="btnExtrair">📄 Extrair texto e filtrar</button>
+            <button class="btn btn-ghost" id="btnMostrarTudo">Mostrar todas as linhas</button>
+            <button class="btn btn-ghost" id="btnGoogleSel">🔎 Pesquisar selecionados no Google</button>
+            <button class="btn btn-gold" id="btnExportCaptacao">⬇️ Exportar selecionados (PDF)</button>
+            <button class="btn btn-green" id="btnParaOrcamento">➡️ Enviar p/ Orçamento</button>
+          </div>
+          <div id="pdfStatus" class="alert"></div>
+          <div class="tbl-wrap" style="margin-top:12px">
+            <table id="captacaoTable">
+              <thead>
+                <tr>
+                  <th style="width:36px"><input type="checkbox" id="capCheckAll" /></th>
+                  <th style="width:60px">#</th>
+                  <th>Item / Descrição</th>
+                  <th style="width:150px">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="captacaoBody">
+                <tr><td colspan="4" class="muted" style="text-align:center;padding:24px">Nenhum item extraído. Selecione um PDF e clique em "Extrair texto e filtrar".</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager" id="capPager" style="display:none">
+            <div class="pager-info" id="capPagerInfo"></div>
+            <div class="pager-btns">
+              <button type="button" class="btn btn-ghost btn-sm" id="capPrev">← Anterior</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="capNext">Próxima →</button>
+            </div>
+          </div>
+        </div>
+      </section>

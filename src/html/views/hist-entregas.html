@@ -1,0 +1,72 @@
+      <!-- ===================== HISTÓRICO E CONTROLE DE ENTREGAS ===================== -->
+      <section id="view-histEntregas" class="view">
+        <div class="hist-kpi-grid" id="histKpiGrid" aria-label="Resumo financeiro das entregas">
+          <div class="hist-kpi hk-vendido">
+            <div class="hk-label">Total Vendido (R$)</div>
+            <div class="hk-value" id="histTotalVendido">R$ 0,00</div>
+            <div class="hk-sub">Σ Qtd entregue × venda un.</div>
+          </div>
+          <div class="hist-kpi hk-custo">
+            <div class="hk-label">Custo Total (R$)</div>
+            <div class="hk-value" id="histCustoTotal">R$ 0,00</div>
+            <div class="hk-sub">Σ Qtd entregue × custo un.</div>
+          </div>
+          <div class="hist-kpi hk-lucro">
+            <div class="hk-label">Lucro Bruto (R$)</div>
+            <div class="hk-value" id="histLucroBruto">R$ 0,00</div>
+            <div class="hk-sub">Vendido − Custo</div>
+          </div>
+          <div class="hist-kpi hk-pend">
+            <div class="hk-label">Entregas Pendentes</div>
+            <div class="hk-value" id="histPendentes">0</div>
+            <div class="hk-sub">Unidades ainda a entregar</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>📦 Histórico e Controle de Entregas</h2>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="btn btn-ghost btn-sm" id="btnHistSeed" title="Recarregar exemplos de demonstração">↺ Exemplos</button>
+              <button type="button" class="btn btn-gold btn-sm" id="btnHistAdd">+ Novo item</button>
+            </div>
+          </div>
+          <div class="desc">Baixa manual de quantidade entregue, saldo pendente e lucro em tempo real.</div>
+          <div id="histEntregasAlert" class="alert"></div>
+
+          <div class="hist-filters">
+            <div class="hf-search">
+              <label class="fld" for="histBusca">Buscar por Licitação ou Empenho</label>
+              <input type="text" id="histBusca" placeholder="ex.: Pref. Ibaiti, 2026/001…" autocomplete="off" />
+            </div>
+            <div class="hf-status">
+              <label class="fld" for="histStatus">Filtrar por Status</label>
+              <select id="histStatus">
+                <option value="todos">Todos</option>
+                <option value="pendente">Pendente</option>
+                <option value="parcial">Parcialmente Entregue</option>
+                <option value="concluido">Concluído</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="tbl-wrap">
+            <table id="histEntregasTable">
+              <thead>
+                <tr>
+                  <th>Empenho / Licitação</th>
+                  <th>Produto</th>
+                  <th>Qtd Solicitada</th>
+                  <th>Qtd Entregue</th>
+                  <th>Falta Entregar</th>
+                  <th>Custo Un. (R$)</th>
+                  <th>Venda Un. (R$)</th>
+                  <th style="text-align:center">Status / Ação</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="histEntregasBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>

@@ -1,0 +1,66 @@
+      <!-- ===================== CONFIGURAÇÕES ===================== -->
+      <section id="view-ferramentas" class="view">
+        <div class="card">
+          <div class="card-head">
+            <h2>⚙️ <span data-i18n="cfg.title">Configurações</span></h2>
+            <button class="btn btn-primary" id="btnSalvarPerfil">💾 <span data-i18n="cfg.saveProfile">Salvar perfil</span></button>
+          </div>
+          <div id="ferramentasStatus" class="alert"></div>
+
+          <div class="entrega-subcard cfg-lang-card">
+            <h3 class="cat-form-title" data-i18n="cfg.langTitle">Idioma do sistema</h3>
+            <p class="small muted" style="margin:0 0 12px" data-i18n="cfg.langDesc">Escolha o idioma da interface. A preferência fica salva neste navegador.</p>
+            <div class="cfg-field" style="max-width:360px">
+              <label class="fld" for="langSelectCfg" data-i18n="lang.label">Idioma</label>
+              <select id="langSelectCfg">
+                <option value="pt-BR">Português (Brasil)</option>
+                <option value="en">English</option>
+                <option value="es">Español</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="cfg-form-grid">
+            <div class="cfg-field cfg-field-nome">
+              <label class="fld" for="empNome" data-i18n="cfg.name">Nome</label>
+              <input type="text" id="empNome" placeholder="Razão social / nome fantasia" />
+            </div>
+            <div class="cfg-field cfg-field-cnpj">
+              <label class="fld" for="empCnpj" data-i18n="cfg.cnpj">CNPJ</label>
+              <input type="text" id="empCnpj" placeholder="00.000.000/0000-00" />
+            </div>
+            <div class="cfg-field cfg-field-endereco">
+              <label class="fld" for="empEndereco" data-i18n="cfg.address">Endereço</label>
+              <input type="text" id="empEndereco" placeholder="Rua, número, bairro, cidade/UF" />
+            </div>
+            <div class="cfg-field cfg-field-tel">
+              <label class="fld" for="empTelefone" data-i18n="cfg.phone">Telefone</label>
+              <input type="text" id="empTelefone" placeholder="(00) 00000-0000" />
+            </div>
+            <div class="cfg-field cfg-field-cep">
+              <label class="fld" for="empCep" data-i18n="cfg.cep">CEP (frete / cruzamento)</label>
+              <input type="text" id="empCep" placeholder="00000-000" />
+            </div>
+            <div class="cfg-field cfg-field-span2">
+              <label class="fld" for="empLogo" data-i18n="cfg.logo">Logo (PNG/JPG)</label>
+              <div class="cfg-logo-row">
+                <input type="file" id="empLogo" accept="image/png,image/jpeg,image/webp,image/gif" />
+                <div class="cfg-logo-preview">
+                  <img id="empLogoPreview" alt="Prévia do logo" hidden />
+                </div>
+              </div>
+              <div class="small muted cfg-logo-hint" data-i18n="cfg.logoHint">Máx. recomendado ~500 KB para PDFs leves.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>📦 <span data-i18n="cfg.backup">Backup</span></h2></div>
+          <div id="backupStatus" class="alert"></div>
+          <div class="btn-row">
+            <button class="btn btn-gold" id="btnExportBackup" data-i18n="cfg.export">⬇️ Exportar backup</button>
+            <button class="btn btn-ghost" id="btnImportBackup" data-i18n="cfg.import">⬆️ Importar backup</button>
+            <input type="file" id="backupFile" accept="application/json,.json" style="display:none" />
+          </div>
+        </div>
+      </section>

@@ -1,0 +1,60 @@
+  <!-- ============ SIDEBAR ============ -->
+  <aside id="sidebar" aria-label="Menu principal">
+    <div class="brand">
+      <div class="logo">
+        <div class="mark">LS</div>
+        <div class="txt">
+          <b>LICSYSTEM</b>
+          <span>Licitação</span>
+        </div>
+        <button type="button" class="sidebar-close" id="sidebarClose" aria-label="Fechar menu">&times;</button>
+      </div>
+    </div>
+    <nav id="nav">
+      <button class="active" data-view="dashboard"><span class="ico">📊</span> <span data-i18n="nav.dashboard">Dashboard</span></button>
+
+      <div class="nav-group" data-nav-group="pesquisas">
+        <button type="button" class="nav-parent" data-view="pesquisas" data-nav-toggle="pesquisas" aria-expanded="false">
+          <span class="ico">🔎</span><span class="nav-label" data-i18n="nav.pesquisas">Pesquisas de Editais</span><span class="nav-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="nav-children" role="group" data-i18n-aria="nav.pesquisas" aria-label="Pesquisas de Editais" hidden>
+          <button type="button" data-view="perguntarEditais"><span class="ico">💬</span> <span data-i18n="nav.perguntarEditais">Perguntar editais</span></button>
+          <button type="button" data-view="editaisProximos"><span class="ico">📍</span> <span data-i18n="nav.editaisProximos">Editais próximos</span></button>
+          <button type="button" data-view="radarPncp"><span class="ico">📡</span> <span data-i18n="nav.radarPncp">Radar PNCP</span></button>
+        </div>
+      </div>
+
+      <button data-view="analiseIa"><span class="ico">🤖</span> <span data-i18n="nav.analiseIa">Análise IA</span></button>
+      <button data-view="leiloesParticipo"><span class="ico">🏆</span> <span data-i18n="nav.leiloesParticipo">Licitações que Participo</span></button>
+
+      <button data-view="catalogo"><span class="ico">📚</span> <span data-i18n="nav.catalogo">Catálogo</span></button>
+      <button data-view="disputa"><span class="ico">🤖</span> <span data-i18n="nav.disputa">Robô de Disputa</span></button>
+
+      <button data-view="cofre"><span class="ico">🔐</span> <span data-i18n="nav.cofre">Cofre de Documentos</span></button>
+      <div class="nav-group" data-nav-group="entrega">
+        <button type="button" class="nav-parent" data-view="entregas" data-nav-toggle="entrega" aria-expanded="false">
+          <span class="ico">🚚</span><span class="nav-label" data-i18n="nav.entregas">Entrega</span><span class="nav-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="nav-children" role="group" data-i18n-aria="nav.entregas" aria-label="Entrega" hidden>
+          <button type="button" data-view="histEntregas"><span class="ico">📦</span> <span data-i18n="nav.histEntregas">Histórico de Entregas</span></button>
+        </div>
+      </div>
+      <button data-view="concorrencia"><span class="ico">🔎</span> <span data-i18n="nav.concorrencia">Concorrência</span></button>
+
+      <button data-view="ferramentas"><span class="ico">⚙️</span> <span data-i18n="nav.ferramentas">Configurações</span></button>
+
+      <div class="nav-group" data-nav-group="chat">
+        <button type="button" class="nav-parent" data-nav-toggle="chat" aria-expanded="false">
+          <span class="ico">💬</span><span class="nav-label" data-i18n="nav.chat">Pergunte ao Chat</span><span class="nav-chevron" aria-hidden="true"></span>
+        </button>
+        <div class="nav-children" role="group" data-i18n-aria="nav.chat" aria-label="Pergunte ao Chat" hidden>
+          <button type="button" data-ls-action="suporte"><span class="ico">💬</span> <span data-i18n="nav.suporte">Suporte LICSYSTEM</span></button>
+          <button type="button" data-ls-action="chat-ia"><span class="ico">🤖</span> <span data-i18n="nav.chatIa">Chat IA</span></button>
+        </div>
+      </div>
+    </nav>
+    <div class="side-foot"><span data-i18n="side.foot">LICSYSTEM © Sistema Licitação</span><br/>v1.0 — frontend SPA</div>
+  </aside>
+  <div id="sidebar-overlay" aria-hidden="true"></div>
+
+  <!-- Nav: carregado via Vite (src/nav.js → index.js) -->

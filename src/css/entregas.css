@@ -1,0 +1,215 @@
+/* LICSYSTEM — entregas · config · histórico */
+  /* ---------- Entregas (offcanvas) ---------- */
+  .entrega-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+  .entrega-subcard{
+    background:#f8fafc;border:1px solid var(--ls-line);border-radius:14px;padding:16px;
+  }
+  .entrega-subcard h3{margin:0 0 12px;font-size:13px;font-weight:700;color:var(--ls-navy);letter-spacing:.2px}
+  .radio-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0 14px}
+  .radio-card{
+    position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;
+    padding:16px 14px;border:2px solid var(--ls-line);border-radius:14px;background:#fff;
+    cursor:pointer;transition:border .15s,box-shadow .15s,background .15s;user-select:none;
+  }
+  .radio-card input{position:absolute;opacity:0;pointer-events:none}
+  .radio-card .rc-ico{font-size:22px;line-height:1}
+  .radio-card .rc-title{font-weight:800;font-size:13px;color:var(--ls-navy)}
+  .radio-card .rc-sub{font-size:11px;color:var(--ls-muted);line-height:1.35}
+  .radio-card:hover{border-color:#d4c48a}
+  .radio-card.is-active{
+    border-color:var(--ls-gold);background:linear-gradient(180deg,#fffdf5,#fff);
+    box-shadow:0 6px 16px rgba(201,162,39,.18);
+  }
+  .status-nf-wrap{display:flex;gap:8px;flex-wrap:wrap}
+  .status-nf{
+    flex:1;min-width:120px;text-align:center;padding:10px 12px;border-radius:10px;
+    border:2px solid var(--ls-line);background:#fff;font-weight:700;font-size:12px;
+    cursor:pointer;color:var(--ls-muted);transition:all .15s;
+  }
+  .status-nf input{display:none}
+  .status-nf.is-feito{border-color:#1e9e5a;background:#e6f6ee;color:#136c3d}
+  .status-nf.is-nao{border-color:#d23b3b;background:#fbe7e7;color:#a12626}
+  .upload-box{
+    display:flex;align-items:center;gap:12px;padding:14px;border:2px dashed var(--ls-line);
+    border-radius:12px;background:#fff;cursor:pointer;transition:border .15s,background .15s;
+  }
+  .upload-box:hover{border-color:var(--ls-gold);background:#fffbeb}
+  .upload-box .ub-ico{
+    width:42px;height:42px;border-radius:12px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,var(--ls-gold),var(--ls-gold-soft));font-size:18px;
+  }
+  .upload-box .ub-txt b{display:block;font-size:13px;color:var(--ls-navy)}
+  .upload-box .ub-txt span{font-size:11px;color:var(--ls-muted)}
+  .entrega-list{display:flex;flex-direction:column;gap:10px}
+  .entrega-item{
+    display:flex;justify-content:space-between;gap:12px;align-items:flex-start;
+    padding:14px 16px;border:1px solid var(--ls-line);border-radius:14px;background:#fff;
+    box-shadow:0 2px 8px rgba(21,38,66,.04);
+  }
+  .entrega-item .ei-title{font-weight:800;color:var(--ls-navy);font-size:14px}
+  .entrega-item .ei-meta{font-size:12px;color:var(--ls-muted);margin-top:4px;line-height:1.4}
+  .badge-nf{
+    display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;
+    font-size:11px;font-weight:700;white-space:nowrap;
+  }
+  .badge-nf.ok{background:#e6f6ee;color:#136c3d}
+  .badge-nf.pend{background:#fdf4dd;color:#8a6410}
+  #entregaOverlay{
+    display:none;position:fixed;inset:0;z-index:2147483000;background:rgba(15,26,46,.5);
+    backdrop-filter:blur(3px);opacity:0;transition:opacity .25s ease;
+    align-items:center;justify-content:center;padding:18px;
+  }
+  #entregaOverlay.show{display:flex;opacity:1}
+  .search-bar{
+    display:flex;align-items:center;gap:10px;margin-bottom:14px;
+    padding:10px 14px;border:1px solid var(--ls-line);border-radius:12px;background:#fff;
+  }
+  .search-bar .sb-ico{font-size:16px;opacity:.7;flex-shrink:0}
+  .search-bar input{
+    border:0!important;box-shadow:none!important;padding:6px 0!important;margin:0;background:transparent;
+  }
+  .cat-actions{display:flex;gap:6px;flex-wrap:wrap}
+  .badge-edit-mode{
+    display:none;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;
+    background:#e8f0fe;color:#1a4fa0;font-size:12px;font-weight:600;margin-bottom:12px;
+  }
+  .badge-edit-mode.show{display:inline-flex}
+
+  /* Configurações (perfil empresa) — Nome/Endereço largos */
+  .cfg-form-grid{
+    display:grid;
+    grid-template-columns:repeat(12,minmax(0,1fr));
+    gap:12px 14px;
+    width:100%;
+    align-items:stretch;
+  }
+  .cfg-field{
+    display:flex;flex-direction:column;min-width:0;margin:0;
+    grid-column:span 6;
+  }
+  .cfg-field .fld{
+    margin:0 0 6px;line-height:1.2;min-height:16px;
+  }
+  .cfg-field input[type="text"],
+  .cfg-field input[type="tel"],
+  .cfg-field input:not([type]){
+    width:100%;box-sizing:border-box;height:42px;margin:0;
+  }
+  .cfg-field-nome{grid-column:span 8}
+  .cfg-field-cnpj{grid-column:span 4}
+  .cfg-field-endereco{grid-column:1 / -1}
+  .cfg-field-tel{grid-column:span 6}
+  .cfg-field-cep{grid-column:span 6}
+  .cfg-field-span2{grid-column:1 / -1}
+  .cfg-logo-row{
+    display:grid;grid-template-columns:minmax(0,1fr) 180px;gap:12px;
+    align-items:center;width:100%;
+  }
+  .cfg-logo-row input[type="file"]{
+    width:100%;box-sizing:border-box;height:42px;margin:0;
+    padding:8px 16px;border:1px solid var(--ls-line);border-radius:var(--ls-radius-balloon);background:#fff;
+  }
+  .cfg-logo-preview{
+    display:flex;align-items:center;justify-content:center;
+    min-height:72px;height:72px;border:1px solid var(--ls-line);border-radius:10px;
+    background:#fff;padding:6px;box-sizing:border-box;
+  }
+  .cfg-logo-preview img{
+    display:block;max-height:60px;max-width:100%;object-fit:contain;
+  }
+  .cfg-logo-preview img[hidden]{display:none!important}
+  .cfg-logo-hint{margin-top:6px}
+  @media (max-width:720px){
+    .cfg-form-grid{grid-template-columns:1fr}
+    .cfg-field,
+    .cfg-field-nome,
+    .cfg-field-cnpj,
+    .cfg-field-endereco,
+    .cfg-field-tel,
+    .cfg-field-cep,
+    .cfg-field-span2{grid-column:auto}
+    .cfg-logo-row{grid-template-columns:1fr}
+  }
+
+  /* Cadastro de produto — Nome/Marca largos, Preço menor */
+  .cat-form-card{margin-bottom:18px}
+  .cat-form-title{
+    margin:0 0 14px;font-size:13px;font-weight:700;color:var(--ls-navy);letter-spacing:.2px;
+  }
+  .cat-form-grid{
+    display:grid;
+    grid-template-columns:repeat(12,minmax(0,1fr));
+    gap:12px 14px;
+    width:100%;
+    align-items:stretch;
+  }
+  .cat-field{
+    display:flex;flex-direction:column;min-width:0;margin:0;
+  }
+  .cat-field .fld{
+    margin:0 0 6px;line-height:1.2;min-height:16px;
+  }
+  .cat-field input{
+    width:100%;box-sizing:border-box;height:42px;margin:0;
+  }
+  .cat-field-nome{grid-column:span 8}
+  .cat-field-sku{grid-column:span 4}
+  .cat-field-preco{grid-column:span 3}
+  .cat-field-marca{grid-column:span 9}
+  .cat-form-actions{
+    display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;
+    gap:8px;margin-top:14px;width:100%;
+  }
+  .cat-form-actions .btn{height:42px;min-width:160px}
+  @media (max-width:720px){
+    .cat-form-grid{grid-template-columns:1fr}
+    .cat-field-nome,
+    .cat-field-sku,
+    .cat-field-preco,
+    .cat-field-marca{grid-column:auto}
+    .cat-form-actions .btn{flex:1 1 auto;min-width:0}
+  }
+  /* ---------- Histórico / Controle de Entregas ---------- */
+  .hist-kpi-grid{
+    display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:16px;
+  }
+  .hist-kpi{
+    background:var(--ls-card);border:1px solid var(--ls-line);border-radius:16px;
+    padding:16px 18px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+  }
+  .hist-kpi::before{
+    content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--ls-navy);
+  }
+  .hist-kpi .hk-label{
+    font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--ls-muted);
+  }
+  .hist-kpi .hk-value{
+    margin-top:8px;font-size:24px;font-weight:800;color:var(--ls-navy);word-break:break-word;line-height:1.15;
+  }
+  .hist-kpi .hk-sub{margin-top:4px;font-size:11px;color:var(--ls-muted)}
+  .hist-kpi.hk-custo::before{background:var(--ls-yellow)}
+  .hist-kpi.hk-lucro::before{background:var(--ls-green)}
+  .hist-kpi.hk-lucro .hk-value{color:var(--ls-green)}
+  .hist-kpi.hk-pend::before{background:var(--ls-red)}
+  .hist-filters{
+    display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;
+  }
+  .hist-filters .hf-search{flex:2 1 220px;min-width:0}
+  .hist-filters .hf-status{flex:0 1 220px;min-width:160px}
+  #histEntregasTable{min-width:980px}
+  #histEntregasTable td.hist-falta{font-weight:800;color:var(--ls-navy);text-align:center;white-space:nowrap}
+  #histEntregasTable td.hist-falta.zero{color:var(--ls-green);background:var(--ls-green-bg)}
+  #histEntregasTable tr.hist-done{background:#eefaf3!important}
+  #histEntregasTable tr.hist-done:hover{background:#e3f6eb!important}
+  #histEntregasTable input.hist-qtd,
+  #histEntregasTable input.hist-money{
+    max-width:110px;text-align:right;font-weight:600;
+  }
+  #histEntregasTable input.hist-qtd{max-width:88px;text-align:center}
+  .hist-check-wrap{display:flex;align-items:center;justify-content:center;gap:8px}
+  .hist-check{
+    width:22px;height:22px;accent-color:var(--ls-green);cursor:pointer;flex-shrink:0;
+  }
+  .hist-check-label{font-size:11px;font-weight:700;color:var(--ls-muted);white-space:nowrap}
+  tr.hist-done .hist-check-label{color:var(--ls-green)}

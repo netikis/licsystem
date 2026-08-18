@@ -1,0 +1,48 @@
+      <!-- ===================== CRUZAMENTO ===================== -->
+      <section id="view-cruzamento" class="view">
+        <div class="card">
+          <div class="card-head"><h2>🔀 Cruzamento Inteligente (Mercado Livre)</h2><span class="tag">ML API</span></div>
+          <div class="desc">Selecione itens na planilha de <b>Orçamento</b> (checkboxes) e processe em lote. Busca via <b>/api/search-ml</b>. Se o anúncio tiver frete grátis, aparece <b>FRETE GRÁTIS</b>; senão o frete é calculado para o CEP da sua cidade (perfil / campo abaixo).</div>
+          <div class="form-row">
+            <div style="flex:2">
+              <label class="fld">Item avulso (opcional — se nenhum checkbox estiver marcado)</label>
+              <textarea id="cruzItem" placeholder="ex.: Furadeira de impacto 650W com maleta e brocas"></textarea>
+            </div>
+            <div style="flex:1;min-width:200px">
+              <label class="fld">Embalagem</label>
+              <div class="pill-group" style="margin-bottom:12px">
+                <label><input type="radio" name="embalagem" value="unidade" checked><span>Unidade</span></label>
+                <label><input type="radio" name="embalagem" value="kit"><span>Kit</span></label>
+                <label><input type="radio" name="embalagem" value="jogo"><span>Jogo</span></label>
+              </div>
+              <label class="fld">CEP destino (frete) — prioriza perfil</label>
+              <input type="text" id="cruzCep" placeholder="Do perfil da empresa ou digite aqui" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div><label class="fld">Margem %</label><input type="number" id="cruzMargem" value="0" step="0.1" /></div>
+            <div><label class="fld">Imposto %</label><input type="number" id="cruzImposto" value="0" step="0.1" /></div>
+            <div><label class="fld">Custo Operacional %</label><input type="number" id="cruzCustoOp" value="0" step="0.1" /></div>
+            <div><label class="fld">Desconto Fornecedor (R$)</label><input type="number" id="cruzDesconto" value="0" step="0.01" min="0" /></div>
+          </div>
+          <div class="form-row">
+            <div style="display:flex;align-items:flex-end;min-width:220px;flex:1">
+              <button class="btn btn-gold" id="btnCruzar" style="width:100%">⚙️ Processar Lote (ML)</button>
+            </div>
+          </div>
+          <div class="progress-wrap" aria-hidden="true">
+            <div id="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+          </div>
+          <div id="progressLabel">Aguardando processamento…</div>
+          <div id="cruzMode" class="alert alert-info"></div>
+          <div id="cruzStatus" class="alert"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h2>Resultados</h2>
+            <button class="btn btn-gold btn-sm" id="btnPropostaCruz">📑 Gerar Proposta Comercial PDF</button>
+          </div>
+          <div id="cruzResults"><div class="muted small">Nenhum cruzamento processado ainda.</div></div>
+        </div>
+      </section>

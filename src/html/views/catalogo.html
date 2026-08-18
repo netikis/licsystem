@@ -1,0 +1,61 @@
+      <!-- ===================== CATÁLOGO INTERNO ===================== -->
+      <section id="view-catalogo" class="view">
+        <div class="card">
+          <div class="card-head">
+            <h2>📚 <span data-i18n="cat.title">Catálogo Interno</span></h2>
+            <span class="tag">Produtos</span>
+          </div>
+          <div class="desc">Cadastre produtos com preço de referência <b>ou</b> salve orçamentos completos (nome + número da licitação) pela aba Orçamento. Em orçamentos salvos, clique em <b>✎ Editar</b> para reabrir e continuar.</div>
+          <div id="catalogoAlert" class="alert"></div>
+          <div class="badge-edit-mode" id="catEditBadge">Editando produto — altere os campos e clique em Salvar.</div>
+
+          <div class="entrega-subcard cat-form-card">
+            <h3 class="cat-form-title" data-i18n="cat.formTitle">Cadastro de produto</h3>
+            <input type="hidden" id="catEditId" value="" />
+            <div class="cat-form-grid">
+              <div class="cat-field cat-field-nome">
+                <label class="fld" for="catNome" data-i18n="cat.nome">Nome do Produto / Descrição</label>
+                <input type="text" id="catNome" placeholder="ex.: Abraçadeira Borboleta 12–20mm (kit 10)" />
+              </div>
+              <div class="cat-field cat-field-sku">
+                <label class="fld" for="catSku" data-i18n="cat.sku">Código / SKU</label>
+                <input type="text" id="catSku" placeholder="ex.: ABR-BOR-1220" />
+              </div>
+              <div class="cat-field cat-field-preco">
+                <label class="fld" for="catPreco" data-i18n="cat.preco">Preço de Referência (R$)</label>
+                <input type="number" id="catPreco" min="0" step="0.01" placeholder="0,00" />
+              </div>
+              <div class="cat-field cat-field-marca">
+                <label class="fld" for="catMarca" data-i18n="cat.marca">Marca / Fabricante</label>
+                <input type="text" id="catMarca" placeholder="ex.: Vonder" />
+              </div>
+            </div>
+            <div class="cat-form-actions">
+              <button type="button" class="btn btn-ghost" id="btnCancelarEditCat" style="display:none" data-i18n="common.cancel">Cancelar edição</button>
+              <button type="button" class="btn btn-green" id="btnSalvarProduto">💾 <span data-i18n="cat.save">Salvar Produto</span></button>
+            </div>
+          </div>
+
+          <div class="search-bar">
+            <span class="sb-ico" aria-hidden="true">🔍</span>
+            <input type="text" id="catBusca" placeholder="Filtrar por nome, código ou marca…" aria-label="Pesquisar no catálogo" />
+          </div>
+
+          <div class="tbl-wrap">
+            <table id="catalogoTable">
+              <thead>
+                <tr>
+                  <th style="width:120px">Código / Nº</th>
+                  <th>Descrição / Licitação</th>
+                  <th style="width:140px">Tipo / Marca</th>
+                  <th style="width:120px">Preço / Total</th>
+                  <th style="width:160px">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="catalogoBody">
+                <tr><td colspan="5" class="muted" style="text-align:center;padding:24px">Nenhum produto cadastrado.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>

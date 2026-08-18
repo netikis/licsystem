@@ -1,0 +1,123 @@
+/* LICSYSTEM — cruzamento · proximos · perguntar editais */
+  /* ---------------- Cruzamento result ---------------- */
+  .card-collapsible-body{min-width:0}
+  .prox-muni-wrap{position:relative}
+  .suggest-box{
+    position:absolute;left:0;right:0;top:calc(100% + 2px);z-index:60;
+    background:#fff;border:1px solid var(--ls-line);border-radius:10px;
+    box-shadow:0 10px 28px rgba(21,38,66,.16);max-height:260px;overflow:auto;
+  }
+  .suggest-box button{
+    display:block;width:100%;text-align:left;border:0;background:transparent;
+    padding:10px 12px;cursor:pointer;font:inherit;color:var(--ls-navy);
+    border-bottom:1px solid #eef2f7;
+  }
+  .suggest-box button:last-child{border-bottom:0}
+  .suggest-box button:hover,.suggest-box button:focus,.suggest-box button.sg-active{
+    background:#f4f7fb;outline:none;
+  }
+  .suggest-box .sg-uf{float:right;color:var(--ls-muted);font-size:11px;font-weight:700}
+  .prox-quick-pick{margin-top:8px}
+  .prox-quick-pick .btn{margin:0}
+  .prox-dist{font-size:11px;font-weight:700;color:var(--ls-navy-3);white-space:nowrap}
+
+  /* Atalhos de raio — balões tamanho padrão e alinhados */
+  .prox-raio-row{
+    display:flex;align-items:center;flex-wrap:wrap;gap:10px 12px;
+    margin:4px 0 10px;width:100%;
+  }
+  .prox-raio-label{flex:0 0 auto;line-height:1;white-space:nowrap}
+  .prox-raio-chips{
+    display:flex;align-items:center;flex-wrap:wrap;gap:8px;
+  }
+  .prox-raio-chip{
+    box-sizing:border-box;
+    width:96px;min-width:96px;height:36px;
+    margin:0;padding:0 10px;
+    display:inline-flex;align-items:center;justify-content:center;
+    border:1px solid var(--ls-line);border-radius:999px;
+    background:#f3f5f9;color:var(--ls-navy);
+    font:inherit;font-size:12.5px;font-weight:700;
+    cursor:pointer;line-height:1;white-space:nowrap;
+    transition:background .15s,border-color .15s,color .15s,box-shadow .15s;
+  }
+  .prox-raio-chip:hover{
+    background:#e9eef6;border-color:#c8d2e0;
+  }
+  .prox-raio-chip.is-active,
+  .prox-raio-chip[aria-pressed="true"]{
+    background:linear-gradient(135deg,var(--ls-gold),var(--ls-gold-soft));
+    border-color:transparent;color:var(--ls-navy);
+    box-shadow:0 2px 8px rgba(201,162,39,.35);
+  }
+  .prox-opts-row{
+    display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;
+    margin:0 0 8px;width:100%;
+  }
+  .prox-opt{
+    display:inline-flex;align-items:center;gap:8px;
+    margin:0;cursor:pointer;font-size:12.5px;color:var(--ls-text);
+    line-height:1.2;white-space:nowrap;
+  }
+  .prox-opt input{margin:0;flex-shrink:0}
+  .chat-edital-table td,.chat-edital-table th{vertical-align:top}
+  .chat-edital-obj{max-width:280px;white-space:normal;line-height:1.35}
+
+  /* Atalhos Perguntar editais — balões tamanho padrão e alinhados */
+  .chat-prompt-row{
+    display:flex;align-items:center;flex-wrap:wrap;gap:10px 12px;
+    margin:4px 0 10px;width:100%;
+  }
+  .chat-prompt-label{flex:0 0 auto;line-height:1;white-space:nowrap}
+  .chat-prompt-chips{
+    display:flex;align-items:center;flex-wrap:wrap;gap:8px;
+    flex:1 1 auto;min-width:0;
+  }
+  .chat-prompt-chip{
+    box-sizing:border-box;
+    width:210px;min-width:210px;max-width:210px;height:36px;
+    margin:0;padding:0 12px;
+    display:inline-flex;align-items:center;justify-content:center;
+    border:1px solid var(--ls-line);border-radius:999px;
+    background:#f3f5f9;color:var(--ls-navy);
+    font:inherit;font-size:11.5px;font-weight:700;
+    cursor:pointer;line-height:1.15;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    transition:background .15s,border-color .15s,color .15s,box-shadow .15s;
+  }
+  .chat-prompt-chip:hover{background:#e9eef6;border-color:#c8d2e0}
+  .chat-prompt-chip.is-active,
+  .chat-prompt-chip[aria-pressed="true"]{
+    background:linear-gradient(135deg,var(--ls-gold),var(--ls-gold-soft));
+    border-color:transparent;color:var(--ls-navy);
+    box-shadow:0 2px 8px rgba(201,162,39,.35);
+  }
+  .chat-opts-row{
+    display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;
+    margin:0 0 8px;width:100%;
+  }
+  .chat-opt{
+    display:inline-flex;align-items:center;gap:8px;
+    margin:0;cursor:pointer;font-size:12.5px;color:var(--ls-text);
+    line-height:1.2;white-space:nowrap;
+  }
+  .chat-opt input{margin:0;flex-shrink:0}
+
+  .result-item{border:1px solid var(--ls-line);border-radius:14px;padding:16px;margin-bottom:12px;background:#fff;width:100%;max-width:100%;box-sizing:border-box}
+  .result-item.r-green{border-left:5px solid var(--ls-green)}
+  .result-item.r-yellow{border-left:5px solid var(--ls-yellow)}
+  .result-item.r-red{border-left:5px solid var(--ls-red);opacity:.85}
+  .result-item .ri-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start}
+  .result-item .ri-title{font-weight:700;color:var(--ls-navy);font-size:14px;word-break:break-word}
+  .result-item .ri-sub{font-size:12px;color:var(--ls-muted);margin-top:2px;word-break:break-word}
+  .result-item .ri-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,130px),1fr));gap:10px;margin-top:12px}
+  .ri-metric{background:#f7f9fc;border-radius:10px;padding:8px 10px;min-width:0}
+  .ri-metric .m-l{font-size:10.5px;color:var(--ls-muted);text-transform:uppercase;letter-spacing:.5px}
+  .ri-metric .m-v{font-size:14px;font-weight:700;color:var(--ls-navy);word-break:break-word}
+  .sim-ring{font-size:22px;font-weight:800}
+  .muted{color:var(--ls-muted)}
+  .chart-box{position:relative;height:280px;width:100%;max-width:100%}
+  .checklist-item{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--ls-line);flex-wrap:wrap;width:100%}
+  .checklist-item:last-child{border-bottom:0}
+  .checklist-item .ci-name{flex:1 1 160px;min-width:0;font-weight:600;color:var(--ls-navy)}
+  .checklist-item input[type=date]{width:100%;max-width:180px}

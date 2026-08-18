@@ -1,0 +1,35 @@
+<!-- ============ LOGIN (bloqueia o app até autenticar) ============ -->
+<div id="authGate" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+  <div id="authChecking" class="auth-checking-panel" aria-live="polite">
+    <div class="auth-brand">
+      <div class="mark">LS</div>
+      <div>
+        <b>LICSYSTEM</b>
+        <span>Restaurando sessão…</span>
+      </div>
+    </div>
+    <p class="auth-lead">Aguarde um momento.</p>
+    <div class="auth-checking-spinner" aria-hidden="true"></div>
+  </div>
+  <div class="auth-card">
+    <div class="auth-brand">
+      <div class="mark">LS</div>
+      <div>
+        <b>LICSYSTEM</b>
+        <span>Acesso restrito</span>
+      </div>
+    </div>
+    <h2 id="authTitle">Entrar</h2>
+    <p class="auth-lead" id="authLead">Informe e-mail e senha para acessar o sistema.</p>
+    <div id="authAlert" class="alert"></div>
+    <form id="authForm" autocomplete="on">
+      <label class="fld" for="authEmail">E-mail</label>
+      <input type="email" id="authEmail" name="email" required placeholder="seu@email.com" autocomplete="username" />
+      <label class="fld" for="authPass">Senha</label>
+      <input type="password" id="authPass" name="password" required placeholder="••••••••" minlength="6" autocomplete="current-password" />
+      <div class="auth-actions">
+        <button type="submit" class="btn btn-gold" id="authSubmit">Entrar</button>
+      </div>
+    </form>
+  </div>
+</div>

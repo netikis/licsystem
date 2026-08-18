@@ -1,0 +1,233 @@
+      <!-- ===================== PESQUISAS DE EDITAIS ===================== -->
+      <section id="view-pesquisas" class="view">
+        <!-- Monitoramentos salvos (alertas automáticos) -->
+        <div class="card" id="cardAlertasPncp" data-collapse-key="alertas-pncp">
+          <div class="card-head">
+            <div class="card-head-main">
+              <h2>🔔 Meus alertas</h2>
+              <span class="tag">automático</span>
+              <span class="card-collapse-summary muted small" id="alertasCollapseSummary" hidden></span>
+            </div>
+            <div class="alertas-head-actions">
+              <button type="button" class="btn btn-ghost btn-sm" id="btnAlertasCheckNow">Verificar agora</button>
+              <button type="button" class="btn btn-ghost btn-sm card-collapse-btn" id="btnCollapseAlertas" aria-expanded="true" aria-controls="alertasCardBody" title="Minimizar painel">▾ Minimizar</button>
+            </div>
+          </div>
+          <div class="card-collapsible-body" id="alertasCardBody">
+            <div class="desc">
+              Salve um monitoramento — o mais importante é <b>Editais próximos</b> (cidade + raio / vizinhos). Também dá no Radar (UF + palavras) e em Perguntar editais. Os editais novos aparecem em <b>balões</b> abaixo, ordenados pelo prazo: <b>Há interesse</b> envia para a Análise IA; <b>Não há interesse</b> exclui do sistema.
+            </div>
+            <div id="alertasWatchList" class="alertas-watch-list">
+              <div class="small muted">Nenhum alerta ativo. Use “Ativar alerta” em Editais próximos (recomendado), Radar ou Perguntar editais.</div>
+            </div>
+            <div class="alertas-editais-head">
+              <h3>Editais encontrados</h3>
+              <span class="small muted">Ordenados pelo prazo de encerramento · decida edital a edital</span>
+            </div>
+            <div id="alertasEditaisList" class="alertas-editais-list">
+              <div class="small muted">Nenhum edital novo ainda. Quando o monitoramento achar algo, aparece aqui em balões.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Perguntar editais (chat helper — PNCP) -->
+        <div class="card is-collapsed" id="cardChatEditais" data-collapse-key="chat-editais">
+          <div class="card-head">
+            <div class="card-head-main">
+              <h2>💬 Perguntar editais</h2>
+              <span class="tag">PNCP · chat</span>
+              <span class="card-collapse-summary muted small" id="chatCollapseSummary" hidden></span>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm card-collapse-btn" id="btnCollapseChat" aria-expanded="false" aria-controls="chatCardBody" title="Expandir painel">▸ Expandir</button>
+          </div>
+          <div class="card-collapsible-body" id="chatCardBody">
+            <div id="chatEditalAlert" class="alert"></div>
+            <div class="form-row">
+              <div style="flex:2;min-width:220px">
+                <label class="fld">Pergunta</label>
+                <input type="text" id="chatEditalMsg" placeholder='Ex.: Santa Cruz do Rio Pardo  ou  Quais licitações terão em Ibaiti' autocomplete="off" />
+              </div>
+              <div style="max-width:200px">
+                <label class="fld">Categoria (opcional)</label>
+                <select id="chatEditalCat">
+                  <option value="">Todas</option>
+                  <option value="reforma">Reformas / obras</option>
+                  <option value="comida">Aquisições de comida</option>
+                  <option value="cestas">Cestas básicas</option>
+                  <option value="cafe">Café / lanche</option>
+                  <option value="natal">Natal</option>
+                  <option value="eletro">Eletrodomésticos</option>
+                </select>
+              </div>
+              <div style="max-width:140px">
+                <label class="fld">Janela</label>
+                <select id="chatEditalJanela" title="Horizonte de encerramento da proposta no PNCP">
+                  <option value="ano" selected>Ano (~365 dias)</option>
+                  <option value="45">45 dias</option>
+                </select>
+              </div>
+              <div style="max-width:190px;display:flex;align-items:flex-end;gap:8px">
+                <button class="btn btn-gold" id="btnChatEdital" style="width:100%">🔍 Buscar editais</button>
+              </div>
+              <div style="max-width:170px;display:flex;align-items:flex-end">
+                <button type="button" class="btn btn-ghost" id="btnChatAlerta" style="width:100%" title="Salvar cidade/pergunta como alerta automático">🔔 Ativar alerta</button>
+              </div>
+            </div>
+            <div class="chat-prompt-row">
+              <span class="small muted chat-prompt-label">Atalhos:</span>
+              <div class="chat-prompt-chips" role="group" aria-label="Atalhos Norte Pioneiro">
+                <button type="button" class="chat-prompt-chip" data-chat-prompt="norte-pioneiro" title="Norte Pioneiro (todos)">Norte Pioneiro (todos)</button>
+                <button type="button" class="chat-prompt-chip" data-chat-prompt="norte-comida" title="Norte Pioneiro · comida/cestas">Norte Pioneiro · comida/cestas</button>
+                <button type="button" class="chat-prompt-chip" data-chat-prompt="norte-reforma" title="Norte Pioneiro · reformas">Norte Pioneiro · reformas</button>
+                <button type="button" class="chat-prompt-chip" data-chat-prompt="norte-natal" title="Norte Pioneiro · Natal">Norte Pioneiro · Natal</button>
+                <button type="button" class="chat-prompt-chip" data-chat-prompt="norte-eletro" title="Norte Pioneiro · eletro">Norte Pioneiro · eletro</button>
+              </div>
+            </div>
+            <div class="chat-opts-row">
+              <label class="chat-opt">
+                <input type="checkbox" id="chatEditalAmpliar" />
+                Ampliar modalidades
+              </label>
+              <label class="chat-opt">
+                <input type="checkbox" id="chatEditalLeiloes" checked />
+                Incluir leilões
+              </label>
+            </div>
+            <div class="small muted" id="chatEditalMeta" style="margin:8px 0 4px"></div>
+            <div id="chatEditalResults"></div>
+            <div class="pager" id="chatPager" style="display:none">
+              <div class="pager-info" id="chatPagerInfo"></div>
+              <div class="pager-btns">
+                <button type="button" class="btn btn-ghost btn-sm" id="chatPrev">← Anterior</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="chatNext">Próxima →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Editais próximos (município + raio) -->
+        <div class="card is-collapsed" id="cardProxEditais" data-collapse-key="prox-editais">
+          <div class="card-head">
+            <div class="card-head-main">
+              <h2>📍 Editais próximos</h2>
+              <span class="tag">PNCP · raio</span>
+              <span class="card-collapse-summary muted small" id="proxCollapseSummary" hidden></span>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm card-collapse-btn" id="btnCollapseProx" aria-expanded="false" aria-controls="proxCardBody" title="Expandir painel">▸ Expandir</button>
+          </div>
+          <div class="card-collapsible-body" id="proxCardBody">
+            <div id="proxAlert" class="alert"></div>
+            <div class="form-row">
+              <div style="flex:2;min-width:200px">
+                <label class="fld">Município de origem</label>
+                <div class="prox-muni-wrap">
+                  <input type="text" id="proxMunicipio" placeholder="Digite e escolha na lista (ex.: Ibaiti)" autocomplete="off" />
+                  <input type="hidden" id="proxIbge" value="" />
+                  <div id="proxSuggest" class="suggest-box" hidden></div>
+                </div>
+                <div id="proxQuickPick" class="prox-quick-pick" hidden></div>
+                <div class="small muted" id="proxOrigemHint" style="margin-top:6px">Nenhum município salvo ainda.</div>
+              </div>
+              <div style="max-width:220px">
+                <label class="fld">Cobertura</label>
+                <select id="proxCobertura">
+                  <option value="">Raio livre</option>
+                  <option value="pr-sp">Paraná + divisas SP</option>
+                </select>
+              </div>
+              <div style="max-width:130px">
+                <label class="fld">Raio (km)</label>
+                <input type="number" id="proxRaio" min="10" max="700" step="10" value="250" />
+              </div>
+              <div style="max-width:140px">
+                <label class="fld">Janela</label>
+                <select id="proxJanela" title="Horizonte de encerramento da proposta no PNCP">
+                  <option value="ano" selected>Ano (~365 dias)</option>
+                  <option value="45">45 dias</option>
+                </select>
+              </div>
+              <div style="flex:1.4">
+                <label class="fld">Palavras-chave (opcional)</label>
+                <input type="text" id="proxKeywords" placeholder="ex.: material elétrico, ferramenta" />
+              </div>
+              <div style="max-width:190px;display:flex;align-items:flex-end">
+                <button class="btn btn-gold" id="btnProxBuscar" style="width:100%">🔍 Buscar no raio</button>
+              </div>
+              <div style="max-width:170px;display:flex;align-items:flex-end">
+                <button type="button" class="btn btn-ghost" id="btnProxAlerta" style="width:100%" title="Monitorar municípios vizinhos no raio e avisar no sino">🔔 Ativar alerta</button>
+              </div>
+            </div>
+            <div class="prox-raio-row">
+              <span class="small muted prox-raio-label">Atalhos de raio:</span>
+              <div class="prox-raio-chips" role="group" aria-label="Atalhos de raio">
+                <button type="button" class="prox-raio-chip" data-prox-raio="150" aria-pressed="false">150 km</button>
+                <button type="button" class="prox-raio-chip is-active" data-prox-raio="250" aria-pressed="true">250 km</button>
+                <button type="button" class="prox-raio-chip" data-prox-raio="500" aria-pressed="false">500 km</button>
+                <button type="button" class="prox-raio-chip" data-prox-raio="700" aria-pressed="false">700 km</button>
+              </div>
+            </div>
+            <div class="prox-opts-row">
+              <label class="prox-opt">
+                <input type="checkbox" id="proxAmpliar" />
+                Ampliar modalidades (concorrência / pregão presencial)
+              </label>
+              <label class="prox-opt">
+                <input type="checkbox" id="proxLeiloes" checked />
+                Incluir leilões
+              </label>
+              <label class="prox-opt">
+                <input type="checkbox" id="proxFederal" />
+                Incluir órgãos federais no raio
+              </label>
+            </div>
+            <div class="small muted" id="proxCoberturaHint" style="margin-top:6px"></div>
+            <div id="proxMeta" class="small muted" style="margin:8px 0 4px"></div>
+            <div id="proxResults"></div>
+            <div class="pager" id="proxPager" style="display:none">
+              <div class="pager-info" id="proxPagerInfo"></div>
+              <div class="pager-btns">
+                <button type="button" class="btn btn-ghost btn-sm" id="proxPrev">← Anterior</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="proxNext">Próxima →</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Radar PNCP -->
+        <div class="card is-collapsed" id="cardRadarPncp" data-collapse-key="radar-pncp">
+          <div class="card-head">
+            <div class="card-head-main">
+              <h2>📡 Radar PNCP</h2>
+              <span class="tag">API Pública</span>
+              <span class="card-collapse-summary muted small" id="radarCollapseSummary" hidden></span>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm card-collapse-btn" id="btnCollapseRadar" aria-expanded="false" aria-controls="radarCardBody" title="Expandir painel">▸ Expandir</button>
+          </div>
+          <div class="card-collapsible-body" id="radarCardBody">
+            <div id="pncpAlert" class="alert"></div>
+            <div class="form-row">
+              <div style="flex:2">
+                <label class="fld">Palavras-chave de interesse (separadas por vírgula)</label>
+                <input type="text" id="pncpKeywords" placeholder="ex.: leilao veiculo, sucata, cesta basica" />
+              </div>
+              <div style="max-width:160px">
+                <label class="fld">UF</label>
+                <select id="pncpUf"></select>
+              </div>
+              <div style="max-width:170px;display:flex;align-items:flex-end">
+                <button class="btn btn-gold" id="btnPncp" style="width:100%">🔍 Buscar no PNCP</button>
+              </div>
+              <div style="max-width:160px;display:flex;align-items:flex-end">
+                <button type="button" class="btn btn-ghost" id="btnPncpAlerta" style="width:100%" title="Salvar palavras-chave + UF como alerta automático">🔔 Ativar alerta</button>
+              </div>
+            </div>
+            <div class="btn-row" style="margin-top:0;flex-wrap:wrap;gap:8px;align-items:center">
+              <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="pncpIncluirLeiloes" checked />
+                Incluir leilões (eletrônico e presencial)
+              </label>
+            </div>
+            <div id="pncpResults"></div>
+          </div>
+        </div>
+      </section>

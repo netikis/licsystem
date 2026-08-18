@@ -1,0 +1,14 @@
+/**
+ * LICSYSTEM — estilos (entry)
+ * Partials em src/css/ — Vite junta tudo no build.
+ */
+@import "./css/base.css";
+@import "./css/auth.css";
+@import "./css/components.css";
+@import "./css/entregas.css";
+@import "./css/analise-ia.css";
+@import "./css/ui.css";
+@import "./css/orcamento.css";
+@import "./css/pesquisas.css";
+@import "./css/cofre.css";
+@import "./css/responsive.css";

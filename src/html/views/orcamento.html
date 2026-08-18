@@ -1,0 +1,84 @@
+      <!-- ===================== ORÇAMENTO ===================== -->
+      <section id="view-orcamento" class="view">
+        <div class="card">
+          <div class="card-head">
+            <h2>🧮 Planilha de Orçamento</h2>
+            <div class="btn-row" style="margin:0">
+              <button class="btn btn-gold btn-sm" id="btnSalvarOrcamento" title="Salvar tabela e sincronizar (pode fechar e continuar depois)">💾 Salvar orçamento</button>
+              <button class="btn btn-ghost btn-sm" id="btnAddLinha">+ Linha</button>
+              <button class="btn btn-ghost btn-sm" id="btnLimparOrc">Limpar</button>
+              <button class="btn btn-ghost btn-sm" id="btnExportOrcExcel">⬇️ Excel</button>
+              <button class="btn btn-ghost btn-sm" id="btnExportOrcPdf">⬇️ PDF</button>
+              <button class="btn btn-primary btn-sm" id="btnSalvarOrcCatalogo">💾 Salvar no Catálogo</button>
+              <button class="btn btn-gold" id="btnPropostaOrc">📑 Proposta PDF</button>
+              <button class="btn btn-gold" id="btnPropostaOrcExcel">📊 Proposta Excel</button>
+            </div>
+          </div>
+          <div class="desc">Espelho do edital à esquerda; à direita seus preços. <b>V. Venda</b> e <b>%</b> se calculam juntos. <b>Meu V. Final</b> = Qtd do edital × V. Venda. Se ficar abaixo do edital → <b>COMPENSA</b> (verde); se ficar acima → <b>NÃO COMPENSA</b> (vermelho).</div>
+          <div id="orcMeta" class="orc-meta" style="display:none"></div>
+          <div id="orcAlert" class="alert"></div>
+
+          <div class="dropzone" id="orcDrop" style="margin-bottom:16px">
+            <span class="big">📊</span>
+            <b>Arraste Excel/CSV do edital aqui</b> ou clique para selecionar<br/>
+            <span class="small muted">Mapeia Lote/Item, Quantidade, Descrição, Valor Unitário e Valor Final (também Valor Máximo)</span>
+            <input type="file" id="orcFile" accept=".xlsx,.xls,.csv" style="display:none" />
+          </div>
+
+          <div class="orc-mirror">
+            <table class="orc-table" id="orcTable">
+              <colgroup>
+                <col class="c-chk" />
+                <col class="c-lote" />
+                <col class="c-qtd" />
+                <col class="c-desc" />
+                <col class="c-money" />
+                <col class="c-money" />
+                <col class="c-money-meus" />
+                <col class="c-money-meus" />
+                <col class="c-pct" />
+                <col class="c-money" />
+                <col class="c-link" />
+                <col class="c-actions" />
+              </colgroup>
+              <thead>
+                <tr class="orc-titles">
+                  <th colspan="6" class="orc-title-edital">EDITAL</th>
+                  <th colspan="6" class="orc-title-meus">MEUS PREÇOS</th>
+                </tr>
+                <tr class="orc-cols">
+                  <th class="col-chk"><input type="checkbox" id="orcCheckAll" title="Selecionar todos" /></th>
+                  <th class="col-lote" title="Lote ou Item do edital">Lote</th>
+                  <th class="col-qtd" title="Quantidade">Qtd</th>
+                  <th>Descrição</th>
+                  <th>V. Unitário</th>
+                  <th class="split-end">V. Final</th>
+                  <th class="split-start" title="Seu custo / valor unitário de compra">V. Unitário</th>
+                  <th title="Valor que você quer vender">V. Venda</th>
+                  <th class="col-pct" title="Margem automática sobre o V. Unitário">%</th>
+                  <th>V. Final</th>
+                  <th>Link de Acesso</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="orcBody"></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="5" class="foot-edital-label">TOTAL EDITAL</td>
+                  <td class="foot-edital-value split-end"><span id="orcTotalEdital">R$ 0,00</span></td>
+                  <td colspan="3" class="foot-meus-label split-start">TOTAL MEUS PREÇOS</td>
+                  <td class="foot-meus-value"><span id="orcTotalGeral">R$ 0,00</span></td>
+                  <td colspan="2"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <div class="pager" id="orcPager" style="display:none">
+            <div class="pager-info" id="orcPagerInfo"></div>
+            <div class="pager-btns">
+              <button type="button" class="btn btn-ghost btn-sm" id="orcPrev">← Anterior</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="orcNext">Próxima →</button>
+            </div>
+          </div>
+        </div>
+      </section>

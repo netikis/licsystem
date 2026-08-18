@@ -1,0 +1,90 @@
+      <!-- ===================== ATAS DE REGISTRO (ARP) ===================== -->
+      <section id="view-arp" class="view">
+        <div class="card">
+          <div class="card-head">
+            <h2>📄 Atas de Registro (ARP)</h2>
+            <span class="tag">Saldos</span>
+          </div>
+          <div class="desc">Cadastre a ata, itens homologados e acompanhe o <b>saldo disponível</b> (Total − Consumido). Preparado para persistência no banco.</div>
+          <div id="arpAlert" class="alert"></div>
+
+          <!-- 1. Cabeçalho da Ata -->
+          <div class="entrega-subcard" style="margin-bottom:16px">
+            <h3 style="margin:0 0 12px;font-size:13px;font-weight:700;color:var(--ls-navy)">1 · Dados gerais da ata</h3>
+            <input type="hidden" id="arpId" value="" />
+            <div class="form-row">
+              <div style="flex:2">
+                <label class="fld" for="arpOrgao">Órgão Gerenciador</label>
+                <input type="text" id="arpOrgao" placeholder="ex.: Prefeitura de Ibaiti" />
+              </div>
+              <div>
+                <label class="fld" for="arpNumero">Número do Pregão / ARP</label>
+                <input type="text" id="arpNumero" placeholder="ex.: PE 013/2026 — ARP 05/2026" />
+              </div>
+              <div style="max-width:180px">
+                <label class="fld" for="arpValidade">Data de Vencimento / Validade</label>
+                <input type="date" id="arpValidade" />
+              </div>
+            </div>
+            <div class="toggle-row" style="margin-top:4px">
+              <input type="checkbox" id="arpAceitaCarona" />
+              <label for="arpAceitaCarona">Aceita Carona (Adesão)?</label>
+            </div>
+          </div>
+
+          <!-- 2. Itens da Ata -->
+          <div class="entrega-subcard" style="margin-bottom:16px">
+            <h3 style="margin:0 0 12px;font-size:13px;font-weight:700;color:var(--ls-navy)">2 · Adicionar item à ata</h3>
+            <div class="form-row">
+              <div style="flex:2">
+                <label class="fld" for="arpItemProduto">Produto</label>
+                <input type="text" id="arpItemProduto" placeholder="Descrição do item homologado" />
+              </div>
+              <div>
+                <label class="fld" for="arpItemQtdTotal">Qtd. Total Homologada</label>
+                <input type="number" id="arpItemQtdTotal" min="0" step="1" placeholder="0" />
+              </div>
+              <div>
+                <label class="fld" for="arpItemQtdConsumida">Qtd. Já Consumida / Empenhada</label>
+                <input type="number" id="arpItemQtdConsumida" min="0" step="1" value="0" placeholder="0" />
+              </div>
+              <div style="display:flex;align-items:flex-end">
+                <button type="button" class="btn btn-primary" id="btnArpAddItem">+ Adicionar Item à Ata</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Tabela de saldo -->
+          <div class="card-head" style="padding:0;margin-bottom:10px;border:0">
+            <h2 style="font-size:15px;margin:0">3 · Acompanhamento de saldo</h2>
+            <button type="button" class="btn btn-green btn-sm" id="btnArpSalvarAta">💾 Salvar Ata</button>
+          </div>
+          <div class="tbl-wrap">
+            <table id="arpItensTable">
+              <thead>
+                <tr>
+                  <th style="width:48px">#</th>
+                  <th>Produto</th>
+                  <th style="width:120px">Qtd. Total</th>
+                  <th style="width:130px">Qtd. Consumida</th>
+                  <th style="width:140px">Saldo Disponível</th>
+                  <th style="width:90px">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="arpItensBody">
+                <tr><td colspan="6" class="muted" style="text-align:center;padding:24px">Nenhum item adicionado a esta ata.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="margin-top:18px">
+            <div class="card-head" style="padding:0;margin-bottom:10px;border:0">
+              <h2 style="font-size:15px;margin:0">Atas salvas</h2>
+              <button type="button" class="btn btn-ghost btn-sm" id="btnArpNova">+ Nova Ata</button>
+            </div>
+            <div id="arpListaSalvas" class="entrega-list">
+              <div class="muted small" style="padding:14px;text-align:center">Nenhuma ARP salva ainda.</div>
+            </div>
+          </div>
+        </div>
+      </section>

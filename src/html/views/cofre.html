@@ -1,0 +1,26 @@
+      <!-- ===================== COFRE ===================== -->
+      <section id="view-cofre" class="view">
+        <div class="card">
+          <div class="card-head">
+            <h2>🔐 Cofre de Documentos</h2>
+            <div class="btn-row" style="margin:0">
+              <button type="button" class="btn btn-primary btn-sm" id="btnCofreAdd">+ Adicionar</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="btnCofreEdit">✏️ Editar</button>
+              <button type="button" class="btn btn-red btn-sm" id="btnCofreRemove">🗑 Remover</button>
+              <button type="button" class="btn btn-gold btn-sm" id="btnCofreExportZip">📦 Exportar ZIP</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="btnSalvarCofre">💾 Salvar</button>
+            </div>
+          </div>
+          <div class="desc">
+            Gerencie certidões e documentos habilitatórios: <b>Anexar</b> PDF/imagem (máx. 1,5 MB), <b>Ver</b> em tela cheia nítida, editar validade e exportar ZIP.
+            <b>Verde:</b> válido · <b>Amarelo:</b> vence em ≤15 dias · <b>Vermelho:</b> vencido/sem data.
+          </div>
+          <div id="cofreAlert" class="alert"></div>
+          <div class="btn-row cofre-toolbar">
+            <label class="cofre-check-all"><input type="checkbox" id="cofreSelectAll" /> Selecionar todos</label>
+            <button type="button" class="btn btn-ghost btn-sm" id="btnCofreSeed">Carregar padrões</button>
+          </div>
+          <input type="file" id="cofreQuickFile" accept=".pdf,image/*,application/pdf" style="display:none" />
+          <div id="cofreList" class="cofre-list"></div>
+        </div>
+      </section>

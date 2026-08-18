@@ -1,0 +1,66 @@
+    <div class="topbar">
+      <div class="topbar-left">
+        <button type="button" class="menu-toggle" id="menuToggle" aria-label="Abrir menu" aria-controls="sidebar" aria-expanded="false">
+          <span class="burger" aria-hidden="true"><span></span><span></span><span></span></span>
+        </button>
+        <div class="topbar-titles">
+          <h1 id="topTitle">Dashboard</h1>
+          <div class="sub" data-i18n="top.subtitle">LICSYSTEM — Inteligência em Licitações</div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <label class="lang-switch" for="langSelect">
+          <span class="lang-switch-ico" aria-hidden="true">🌐</span>
+          <select id="langSelect" aria-label="Idioma" data-i18n-aria="lang.label">
+            <option value="pt-BR">PT</option>
+            <option value="en">EN</option>
+            <option value="es">ES</option>
+          </select>
+        </label>
+        <div class="bell-wrap" id="bellWrap">
+          <button type="button" class="bell" id="bell" data-i18n-title="top.alerts" title="Alertas de editais" aria-haspopup="true" aria-expanded="false" aria-controls="bellPanel">
+            🔔<span class="badge zero" id="bellBadge">0</span>
+          </button>
+          <div class="bell-panel" id="bellPanel" hidden>
+            <div class="bell-panel-head">
+              <div>
+                <b data-i18n="top.alerts">Alertas de editais</b>
+                <div class="small muted" id="bellPanelSub" data-i18n="top.alertsSub">Monitoramento automático PNCP</div>
+              </div>
+              <div class="bell-panel-actions">
+                <button type="button" class="btn btn-ghost btn-sm" id="btnBellCheck" data-i18n="top.alertsUpdate">Atualizar</button>
+                <button type="button" class="btn btn-ghost btn-sm" id="btnBellMarkAll" data-i18n="top.alertsMark">Marcar lidos</button>
+              </div>
+            </div>
+            <div id="bellPanelList" class="bell-panel-list">
+              <div class="small muted" data-i18n="top.alertsEmpty">Nenhum alerta ainda. Ative um monitoramento em Pesquisas de Editais.</div>
+            </div>
+          </div>
+        </div>
+        <div class="top-user-row">
+          <span id="syncStatus" class="sync-status" hidden title="Sincronização na nuvem"></span>
+          <div class="top-user">
+            <div style="font-weight:700;color:var(--ls-navy);font-size:13px" id="topUserName">LICSYSTEM</div>
+            <div class="small muted" id="topUserEmail">Setor de Licitações</div>
+          </div>
+          <button type="button" class="btn-logout" id="btnLogout" data-i18n="top.logout" data-i18n-title="top.logout" title="Sair" style="display:none">Sair</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div id="lwContextBar" class="lw-context-bar" hidden>
+        <button type="button" class="btn btn-ghost btn-sm" id="lwBackList" data-i18n="lw.backList" title="Voltar à lista">← Lista</button>
+        <div class="lw-context-meta">
+          <span class="lw-context-label" data-i18n="lw.activeEdital">Edital ativo</span>
+          <strong id="lwContextTitle">—</strong>
+        </div>
+        <div class="lw-context-tabs" role="tablist" aria-label="Ferramentas do edital">
+          <button type="button" class="lw-tab" data-lw-tab="hub" data-i18n="lw.tab.hub">Painel</button>
+          <button type="button" class="lw-tab" data-lw-tab="docsChecklist" data-i18n="lw.tab.docs">Docs</button>
+          <button type="button" class="lw-tab" data-lw-tab="analiseIa" data-i18n="lw.tab.analise">Análise IA</button>
+          <button type="button" class="lw-tab" data-lw-tab="importarEdital" data-i18n="lw.tab.importar">Importar</button>
+          <button type="button" class="lw-tab" data-lw-tab="orcamento" data-i18n="lw.tab.orcamento">Orçamento</button>
+          <button type="button" class="lw-tab" data-lw-tab="cruzamento" data-i18n="lw.tab.cruzamento">Cruzamento ML</button>
+        </div>
+      </div>

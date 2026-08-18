@@ -1,0 +1,341 @@
+(function(){
+    var MQ = window.matchMedia("(max-width: 768px)");
+    var NAV_OPEN_KEY = "licsystem_nav_open_v1";
+    /** Última view gravada no history — evita push duplicado e guia replace vs push */
+    var _histNavKey = null;
+    var VIEW_RESOLVE = {
+      captacao: { view: "pesquisas" },
+      perguntarEditais: { view: "pesquisas", section: "cardChatEditais" },
+      editaisProximos: { view: "pesquisas", section: "cardProxEditais" },
+      radarPncp: { view: "pesquisas", section: "cardRadarPncp" }
+    };
+    var PESQUISAS_CARDS = ["cardChatEditais", "cardProxEditais", "cardRadarPncp"];
+    var CHILD_TO_GROUP = {
+      perguntarEditais: "pesquisas",
+      editaisProximos: "pesquisas",
+      radarPncp: "pesquisas",
+      histEntregas: "entrega"
+    };
+    var PARENT_VIEWS = {
+      pesquisas: "pesquisas",
+      entregas: "entrega"
+    };
+
+    function syncPesquisasCards(sectionId){
+      for(var i=0;i<PESQUISAS_CARDS.length;i++){
+        var card = document.getElementById(PESQUISAS_CARDS[i]);
+        if(!card) continue;
+        var show = !sectionId || PESQUISAS_CARDS[i] === sectionId;
+        card.classList.toggle("pesquisas-card-hidden", !show);
+        if(show) card.removeAttribute("hidden");
+        else card.setAttribute("hidden", "");
+      }
+      try{
+        var cap = window.LICSYSTEM && LICSYSTEM.captacao;
+        if(!cap) return;
+        if(sectionId && typeof cap.expandPesquisasCard === "function"){
+          cap.expandPesquisasCard(sectionId);
+        }else if(typeof cap.minimizeAllPesquisasCards === "function"){
+          cap.minimizeAllPesquisasCards();
+        }
+      }catch(e){}
+    }
+    function clearActionActive(){
+      var actions = document.querySelectorAll("#nav button[data-ls-action]");
+      for(var i=0;i<actions.length;i++) actions[i].classList.remove("active");
+      var chatParent = document.querySelector('#nav .nav-group[data-nav-group="chat"] > .nav-parent');
+      if(chatParent) chatParent.classList.remove("nav-branch-active");
+    }
+
+    function setSidebar(open){
+      document.body.classList.toggle("sidebar-open", !!open);
+      var overlay = document.getElementById("sidebar-overlay");
+      var toggle = document.getElementById("menuToggle");
+      if(overlay){
+        overlay.classList.toggle("show", !!open);
+        overlay.setAttribute("aria-hidden", open ? "false" : "true");
+      }
+      if(toggle) toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+    function closeSidebar(){ setSidebar(false); }
+    function toggleSidebar(){ setSidebar(!document.body.classList.contains("sidebar-open")); }
+
+    function loadOpenGroups(){
+      try{
+        var raw = localStorage.getItem(NAV_OPEN_KEY);
+        var parsed = raw ? JSON.parse(raw) : {};
+        return parsed && typeof parsed === "object" ? parsed : {};
+      }catch(e){
+        return {};
+      }
+    }
+    function saveOpenGroups(map){
+      try{ localStorage.setItem(NAV_OPEN_KEY, JSON.stringify(map || {})); }catch(e){}
+    }
+    function setGroupOpen(groupId, open, opts){
+      opts = opts || {};
+      var group = document.querySelector('#nav .nav-group[data-nav-group="' + groupId + '"]');
+      if(!group) return;
+      var parent = group.querySelector(".nav-parent");
+      var children = group.querySelector(".nav-children");
+      group.classList.toggle("open", !!open);
+      if(parent) parent.setAttribute("aria-expanded", open ? "true" : "false");
+      if(children){
+        if(open) children.removeAttribute("hidden");
+        else children.setAttribute("hidden", "");
+      }
+      if(!opts.skipPersist){
+        var map = loadOpenGroups();
+        if(open) map[groupId] = true;
+        else delete map[groupId];
+        saveOpenGroups(map);
+      }
+    }
+    function closeOtherGroups(exceptId){
+      var groups = document.querySelectorAll("#nav .nav-group[data-nav-group]");
+      for(var i=0;i<groups.length;i++){
+        var id = groups[i].getAttribute("data-nav-group");
+        if(id && id !== exceptId) setGroupOpen(id, false);
+      }
+    }
+    function ensureGroupForView(view){
+      var groupId = CHILD_TO_GROUP[view] || PARENT_VIEWS[view];
+      if(!groupId && VIEW_RESOLVE[view]){
+        groupId = PARENT_VIEWS[VIEW_RESOLVE[view].view];
+      }
+      if(!groupId) return;
+      closeOtherGroups(groupId);
+      setGroupOpen(groupId, true);
+    }
+    function restoreNavGroups(){
+      // Always start collapsed on F5/load — do not restore open branches from localStorage.
+      var groups = document.querySelectorAll("#nav .nav-group[data-nav-group]");
+      for(var i=0;i<groups.length;i++){
+        var id = groups[i].getAttribute("data-nav-group");
+        if(id) setGroupOpen(id, false, { skipPersist: true });
+      }
+      saveOpenGroups({});
+    }
+
+    /** Lê a tela do hash (#/orcamento). Usado no Voltar/Avançar e no F5. */
+    function viewFromHash(){
+      var h = String(location.hash || "").replace(/^#\/?/, "").split(/[?#]/)[0].trim();
+      if(!h) return null;
+      if(!/^[a-zA-Z][a-zA-Z0-9]*$/.test(h)) return null;
+      return h;
+    }
+
+    function syncHistory(navKey, opts){
+      opts = opts || {};
+      navKey = navKey || "dashboard";
+      if(opts.fromPopstate || opts.skipHistory){
+        _histNavKey = navKey;
+        return;
+      }
+      var path = "#/" + navKey;
+      var state = {
+        licsystem: 1,
+        view: navKey,
+        opts: {
+          skipEnsureGroup: !!opts.skipEnsureGroup,
+          fromWorkspace: !!opts.fromWorkspace,
+          skipLeilaoGate: !!opts.skipLeilaoGate
+        }
+      };
+      try{
+        if(opts.replaceHistory){
+          history.replaceState(state, "", path);
+        } else if(_histNavKey === null){
+          // 1ª navegação interna: marca a entrada atual (ex. veio do Google) e
+          // só dá push se for para outra tela — assim o Voltar fica no app.
+          if(navKey === "dashboard"){
+            history.replaceState(state, "", path);
+          } else {
+            history.replaceState(
+              { licsystem: 1, view: "dashboard", opts: {} },
+              "",
+              "#/dashboard"
+            );
+            history.pushState(state, "", path);
+          }
+        } else if(_histNavKey === navKey){
+          history.replaceState(state, "", path);
+        } else {
+          history.pushState(state, "", path);
+        }
+      }catch(e){}
+      _histNavKey = navKey;
+    }
+
+    function activate(view, opts){
+      opts = opts || {};
+      if(document.body.classList.contains("auth-locked")) return;
+      view = view || "dashboard";
+      try{
+        if(window.LICSYSTEM && typeof LICSYSTEM.beforeActivateView === "function"){
+          var gated = LICSYSTEM.beforeActivateView(view, opts);
+          if(gated === false) return;
+          if(typeof gated === "string" && gated) view = gated;
+        }
+      }catch(e){}
+      var resolved = VIEW_RESOLVE[view];
+      var targetView = resolved ? resolved.view : view;
+      var navKey = view;
+      var sectionId = resolved && resolved.section ? resolved.section : null;
+
+      syncHistory(navKey, opts);
+
+      clearActionActive();
+
+      var btns=document.querySelectorAll("#nav button[data-view]");
+      for(var i=0;i<btns.length;i++){
+        var btn = btns[i];
+        var bv = btn.getAttribute("data-view");
+        var isParent = btn.classList.contains("nav-parent");
+        var gid = btn.getAttribute("data-nav-toggle");
+        var isActive = bv === navKey;
+        var branchActive = isParent && gid && CHILD_TO_GROUP[navKey] === gid && !isActive;
+        btn.classList.toggle("active", isActive);
+        btn.classList.toggle("nav-branch-active", !!branchActive);
+      }
+
+      var views=document.querySelectorAll(".view");
+      for(var j=0;j<views.length;j++){
+        views[j].classList.toggle("active", views[j].id===("view-"+targetView));
+      }
+      var titleEl=document.getElementById("topTitle");
+      var map = (window.LICSYSTEM && LICSYSTEM.i18n && typeof LICSYSTEM.i18n.viewTitles === "function")
+        ? LICSYSTEM.i18n.viewTitles()
+        : {
+            dashboard:"Dashboard",
+            pesquisas:"Pesquisas de Editais",
+            perguntarEditais:"Perguntar editais",
+            editaisProximos:"Editais próximos",
+            radarPncp:"Radar PNCP",
+            captacao:"Pesquisas de Editais",
+            analiseIa:"Análise Inteligente de Editais",
+            leiloesParticipo:"Licitações que Participo",
+            leilaoWorkspace:"Painel do Edital",
+            importarEdital:"Importar Edital (PDF)",
+            orcamento:"Orçamento",
+            cruzamento:"Cruzamento Inteligente (ML)",
+            cofre:"Cofre de Documentos",
+            docsChecklist:"Docs do Edital",
+            entregas:"Entrega",
+            histEntregas:"Histórico de Entregas",
+            concorrencia:"Análise de Concorrência",
+            catalogo:"Catálogo Interno",
+            arp:"Atas de Registro (ARP)",
+            disputa:"Robô de Disputa",
+            ferramentas:"Configurações",
+            chat:"Pergunte ao Chat"
+          };
+      if(titleEl) titleEl.textContent = map[navKey]||map[targetView]||"LICSYSTEM";
+      if(!opts.skipEnsureGroup) ensureGroupForView(navKey);
+      try{ if(window.LICSYSTEM && LICSYSTEM.onViewChange) LICSYSTEM.onViewChange(targetView, navKey); }catch(e){}
+      if(targetView === "pesquisas"){
+        syncPesquisasCards(sectionId);
+      }
+      try{ window.scrollTo(0,0); }catch(e){}
+      if(MQ.matches) closeSidebar();
+    }
+    var nav=document.getElementById("nav");
+    nav.addEventListener("click", function(ev){
+      var actionBtn=ev.target.closest("button[data-ls-action]");
+      if(actionBtn){
+        var action=actionBtn.getAttribute("data-ls-action");
+        clearActionActive();
+        var viewBtns=document.querySelectorAll("#nav button[data-view]");
+        for(var ai=0;ai<viewBtns.length;ai++){
+          viewBtns[ai].classList.remove("active");
+          viewBtns[ai].classList.remove("nav-branch-active");
+        }
+        actionBtn.classList.add("active");
+        closeOtherGroups("chat");
+        setGroupOpen("chat", true);
+        var chatParentBtn=document.querySelector('#nav .nav-group[data-nav-group="chat"] > .nav-parent');
+        if(chatParentBtn) chatParentBtn.classList.add("nav-branch-active");
+        var titleEl=document.getElementById("topTitle");
+        if(titleEl){
+          titleEl.textContent = action==="chat-ia" ? "Chat IA" : "Suporte LICSYSTEM";
+        }
+        try{
+          if(action==="suporte" && window.LICSYSTEM && LICSYSTEM.voiceflow && typeof LICSYSTEM.voiceflow.openPanel==="function"){
+            LICSYSTEM.voiceflow.openPanel();
+          }else if(action==="chat-ia" && window.LICSYSTEM && LICSYSTEM.voiceflow && typeof LICSYSTEM.voiceflow.openChatIA==="function"){
+            LICSYSTEM.voiceflow.openChatIA();
+          }else if(window.__licsystemInitVoiceflow){
+            window.__licsystemInitVoiceflow();
+            setTimeout(function(){
+              if(action==="suporte" && LICSYSTEM.voiceflow) LICSYSTEM.voiceflow.openPanel();
+              else if(action==="chat-ia" && LICSYSTEM.voiceflow) LICSYSTEM.voiceflow.openChatIA();
+            }, 200);
+          }
+        }catch(e){}
+        if(MQ.matches) closeSidebar();
+        return;
+      }
+      var parentBtn=ev.target.closest("button.nav-parent[data-nav-toggle]");
+      if(parentBtn && nav.contains(parentBtn)){
+        var gid=parentBtn.getAttribute("data-nav-toggle");
+        var willOpen=!parentBtn.closest(".nav-group").classList.contains("open");
+        if(willOpen) closeOtherGroups(gid);
+        setGroupOpen(gid, willOpen);
+        var pv=parentBtn.getAttribute("data-view");
+        // skipEnsureGroup: allow collapsing the branch without activate() forcing it open again
+        if(pv) activate(pv, { skipEnsureGroup: true });
+        else if(gid==="chat" && willOpen){
+          clearActionActive();
+          parentBtn.classList.add("nav-branch-active");
+          var chatTitle=document.getElementById("topTitle");
+          if(chatTitle) chatTitle.textContent = "Pergunte ao Chat";
+        }
+        return;
+      }
+      var b=ev.target.closest("button[data-view]");
+      if(!b || !nav.contains(b)) return;
+      activate(b.getAttribute("data-view"));
+    });
+
+    function wireMobileNav(){
+      var toggle = document.getElementById("menuToggle");
+      var closeBtn = document.getElementById("sidebarClose");
+      var overlay = document.getElementById("sidebar-overlay");
+      if(toggle) toggle.addEventListener("click", toggleSidebar);
+      if(closeBtn) closeBtn.addEventListener("click", closeSidebar);
+      if(overlay) overlay.addEventListener("click", closeSidebar);
+      document.addEventListener("keydown", function(e){
+        if(e.key === "Escape") closeSidebar();
+      });
+      function onMq(){ if(!MQ.matches) closeSidebar(); }
+      if(MQ.addEventListener) MQ.addEventListener("change", onMq);
+      else if(MQ.addListener) MQ.addListener(onMq);
+      restoreNavGroups();
+    }
+    if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", wireMobileNav);
+    else wireMobileNav();
+
+    window.addEventListener("popstate", function(ev){
+      if(document.body.classList.contains("auth-locked")) return;
+      var st = ev.state;
+      var view = null;
+      var popOpts = { fromPopstate: true, skipHistory: true };
+      if(st && st.licsystem && st.view){
+        view = st.view;
+        if(st.opts){
+          if(st.opts.skipEnsureGroup) popOpts.skipEnsureGroup = true;
+          if(st.opts.fromWorkspace) popOpts.fromWorkspace = true;
+          if(st.opts.skipLeilaoGate) popOpts.skipLeilaoGate = true;
+        }
+      } else {
+        view = viewFromHash();
+      }
+      if(!view) view = "dashboard";
+      activate(view, popOpts);
+    });
+
+    window.__lsActivateView=activate;
+    window.__lsViewFromHash=viewFromHash;
+    window.__lsCloseSidebar=closeSidebar;
+    window.__lsToggleSidebar=toggleSidebar;
+  })();

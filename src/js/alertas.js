@@ -1,0 +1,1106 @@
+/* LICSYSTEM — ALERTAS PNCP (14-alertas.js) */
+(function (LICSYSTEM) {
+  "use strict";
+
+  var ctx = LICSYSTEM._ctx || (LICSYSTEM._ctx = {});
+  var utils = LICSYSTEM.utils;
+  function el(id){ var fn = ctx.el || LICSYSTEM.el; return fn ? fn(id) : document.getElementById(id); }
+  function showAlert(id, type, msg){ var fn = ctx.showAlert || LICSYSTEM.showAlert; if (fn) return fn(id, type, msg); }
+  var PNCP_WATCHES_KEY = ctx.PNCP_WATCHES_KEY;
+  var PNCP_ALERTS_KEY = ctx.PNCP_ALERTS_KEY;
+  var PNCP_INTERESSADOS_KEY = ctx.PNCP_INTERESSADOS_KEY;
+  function wire(){
+    var fn = ctx.wire || window.wire || LICSYSTEM.wire;
+    if (typeof fn !== "function") throw new Error("wire ainda não disponível");
+    return fn.apply(this, arguments);
+  }
+
+  /* ============================ ALERTAS PNCP (estilo ConLicitação) ============================ */
+  LICSYSTEM.alertas = {
+    CHECK_MS: 15 * 60 * 1000,
+    MAX_WATCHES: 12,
+    MAX_ALERTS: 200,
+    MAX_SEEN: 400,
+    MAX_INTERESSADOS: 40,
+    watches: [],
+    alerts: [],
+    interessados: [],
+    _timer: null,
+    _busy: false,
+    _wired: false,
+    _panelOpen: false,
+
+    load: function(){
+      try{
+        var w = JSON.parse(localStorage.getItem(PNCP_WATCHES_KEY) || "[]");
+        this.watches = Array.isArray(w) ? w.map(function(x){ return LICSYSTEM.alertas.normalizeWatch(x); }) : [];
+      }catch(e){ this.watches = []; }
+      try{
+        var a = JSON.parse(localStorage.getItem(PNCP_ALERTS_KEY) || "[]");
+        this.alerts = Array.isArray(a) ? a.map(function(x){ return LICSYSTEM.alertas.normalizeAlert(x); }) : [];
+      }catch(e){ this.alerts = []; }
+      try{
+        var i = JSON.parse(localStorage.getItem(PNCP_INTERESSADOS_KEY) || "[]");
+        this.interessados = Array.isArray(i) ? i.map(function(x){ return LICSYSTEM.alertas.normalizeAlert(x); }) : [];
+      }catch(e){ this.interessados = []; }
+      LICSYSTEM.state.pncpAlerts = this.alerts.filter(function(x){ return !x.readAt; });
+      this.updateBell();
+      this.renderWatches();
+      this.renderEditaisBalloons();
+      this.renderInteressadosIa();
+      this.renderPanelList();
+      try{ LICSYSTEM.dashboard.renderPncp(); }catch(e){}
+      /* Alertas antigos sem prazo: busca de novo no PNCP e preenche as datas */
+      if(this.alertsMissingPrazo() > 0 && this.watches.some(function(w){ return w.enabled !== false; })){
+        var self = this;
+        if(!this._prazoBackfillScheduled){
+          this._prazoBackfillScheduled = true;
+          setTimeout(function(){
+            self.checkAll().catch(function(){}).then(function(){
+              self._prazoBackfillScheduled = false;
+            }, function(){
+              self._prazoBackfillScheduled = false;
+            });
+          }, 1200);
+        }
+      }
+    },
+
+    normalizeWatch: function(raw){
+      raw = raw || {};
+      var seen = raw.seenIds && typeof raw.seenIds === "object" ? raw.seenIds : {};
+      var raio = Number(raw.raio || 0) || 0;
+      if(raio && raio < 10) raio = 10;
+      if(raio > 700) raio = 700;
+      return {
+        id: String(raw.id || ("w_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7))),
+        tipo: String(raw.tipo || "municipio"),
+        label: String(raw.label || "").slice(0, 160),
+        q: String(raw.q || raw.keywords || "").slice(0, 200),
+        uf: String(raw.uf || "").trim().toUpperCase().slice(0, 2),
+        municipio: String(raw.municipio || "").slice(0, 120),
+        ibge: Number(raw.ibge || 0) || 0,
+        raio: raio || 0,
+        cobertura: String(raw.cobertura || "").slice(0, 20),
+        federal: !!raw.federal,
+        regiao: String(raw.regiao || "").slice(0, 60),
+        mensagem: String(raw.mensagem || "").slice(0, 200),
+        categoria: String(raw.categoria || "").slice(0, 80),
+        leiloes: raw.leiloes !== false,
+        ampliar: !!raw.ampliar,
+        janela: raw.janela === "ano" ? "ano" : "45",
+        enabled: raw.enabled !== false,
+        createdAt: Number(raw.createdAt || Date.now()),
+        lastCheckedAt: Number(raw.lastCheckedAt || 0) || 0,
+        seenIds: seen
+      };
+    },
+
+    normalizeAlert: function(raw){
+      raw = raw || {};
+      var key = String(raw.key || raw.numeroControlePNCP || raw.id || "");
+      return {
+        id: String(raw.id || key || ("a_" + Date.now())),
+        key: key,
+        numeroControlePNCP: raw.numeroControlePNCP || null,
+        numeroCompra: raw.numeroCompra != null ? String(raw.numeroCompra).slice(0, 80) : null,
+        orgao: String(raw.orgao || "").slice(0, 200),
+        municipio: String(raw.municipio || "").slice(0, 120),
+        uf: String(raw.uf || "").slice(0, 2),
+        objeto: String(raw.objeto || "").slice(0, 500),
+        modalidade: String(raw.modalidade || "").slice(0, 80),
+        valorEstimado: raw.valorEstimado != null ? Number(raw.valorEstimado) : null,
+        dataAbertura: LICSYSTEM.alertas.pickDataAbertura(raw),
+        dataEncerramento: LICSYSTEM.alertas.pickDataPrazo(raw),
+        link: raw.link || null,
+        watchId: String(raw.watchId || ""),
+        watchLabel: String(raw.watchLabel || "").slice(0, 160),
+        foundAt: Number(raw.foundAt || Date.now()),
+        readAt: raw.readAt != null ? Number(raw.readAt) || null : null,
+        interessadoAt: raw.interessadoAt != null ? Number(raw.interessadoAt) || null : null
+      };
+    },
+
+    /** Aceita nomes variados vindos do PNCP / APIs. */
+    pickDataPrazo: function(raw){
+      if(!raw || typeof raw !== "object") return null;
+      var v =
+        raw.dataEncerramento ||
+        raw.dataEncerramentoProposta ||
+        raw.dataEncerramentoPropostas ||
+        raw.dataFinalProposta ||
+        raw.dataFimProposta ||
+        raw.dataLimiteProposta ||
+        null;
+      if(v == null || v === "") return null;
+      return String(v);
+    },
+
+    pickDataAbertura: function(raw){
+      if(!raw || typeof raw !== "object") return null;
+      var v = raw.dataAbertura || raw.dataAberturaProposta || null;
+      if(v == null || v === "") return null;
+      return String(v);
+    },
+
+    /** Atualiza alertas já salvos (sem prazo) com dados frescos do monitor. */
+    enrichAlertsFromRows: function(rows){
+      if(!rows || !rows.length) return 0;
+      var byKey = Object.create(null);
+      for(var i = 0; i < rows.length; i++){
+        var row = rows[i] || {};
+        var key = this.editalKey(row);
+        if(key) byKey[key] = row;
+        if(row.numeroControlePNCP) byKey[String(row.numeroControlePNCP)] = row;
+      }
+      var updated = 0;
+      for(var j = 0; j < this.alerts.length; j++){
+        var a = this.alerts[j];
+        var src = byKey[a.key] || byKey[a.id] || (a.numeroControlePNCP ? byKey[String(a.numeroControlePNCP)] : null);
+        if(!src) continue;
+        var changed = false;
+        var prazo = this.pickDataPrazo(src);
+        var abertura = this.pickDataAbertura(src);
+        if(prazo && String(a.dataEncerramento || "") !== String(prazo)){
+          a.dataEncerramento = prazo;
+          changed = true;
+        }
+        if(abertura && !a.dataAbertura){
+          a.dataAbertura = abertura;
+          changed = true;
+        }
+        if(src.link && !a.link){ a.link = src.link; changed = true; }
+        if(src.numeroCompra != null && !a.numeroCompra){
+          a.numeroCompra = String(src.numeroCompra).slice(0, 80);
+          changed = true;
+        }
+        if(src.modalidade && !a.modalidade){
+          a.modalidade = String(src.modalidade).slice(0, 80);
+          changed = true;
+        }
+        if(src.valorEstimado != null && a.valorEstimado == null){
+          a.valorEstimado = Number(src.valorEstimado);
+          changed = true;
+        }
+        if(changed) updated++;
+      }
+      return updated;
+    },
+
+    alertsMissingPrazo: function(){
+      var n = 0;
+      for(var i = 0; i < this.alerts.length; i++){
+        if(!this.alerts[i].dataEncerramento) n++;
+      }
+      return n;
+    },
+
+    applyWatches: function(arr, opts){
+      opts = opts || {};
+      this.watches = (Array.isArray(arr) ? arr : []).map(function(x){
+        return LICSYSTEM.alertas.normalizeWatch(x);
+      });
+      if(!opts.skipPersist){
+        try{ localStorage.setItem(PNCP_WATCHES_KEY, JSON.stringify(this.watches)); }catch(e){}
+      }
+      if(!opts.skipCloud && LICSYSTEM.cloudSync){
+        LICSYSTEM.cloudSync.notifyLocalChange("pncpWatches", { immediate: !!opts.immediate });
+      }
+      this.renderWatches();
+    },
+
+    applyAlerts: function(arr, opts){
+      opts = opts || {};
+      this.alerts = (Array.isArray(arr) ? arr : []).map(function(x){
+        return LICSYSTEM.alertas.normalizeAlert(x);
+      });
+      if(!opts.skipPersist){
+        try{ localStorage.setItem(PNCP_ALERTS_KEY, JSON.stringify(this.alerts)); }catch(e){}
+      }
+      if(!opts.skipCloud && LICSYSTEM.cloudSync){
+        LICSYSTEM.cloudSync.notifyLocalChange("pncpAlerts", { immediate: !!opts.immediate });
+      }
+      LICSYSTEM.state.pncpAlerts = this.alerts.filter(function(x){ return !x.readAt; });
+      this.updateBell();
+      this.renderEditaisBalloons();
+      this.renderPanelList();
+      try{ LICSYSTEM.dashboard.renderPncp(); }catch(e){}
+    },
+
+    persistWatches: function(opts){
+      opts = opts || {};
+      try{ localStorage.setItem(PNCP_WATCHES_KEY, JSON.stringify(this.watches)); }catch(e){}
+      if(!opts.skipCloud && LICSYSTEM.cloudSync){
+        LICSYSTEM.cloudSync.notifyLocalChange("pncpWatches", { immediate: !!opts.immediate });
+      }
+      this.renderWatches();
+    },
+
+    persistAlerts: function(opts){
+      opts = opts || {};
+      try{ localStorage.setItem(PNCP_ALERTS_KEY, JSON.stringify(this.alerts)); }catch(e){}
+      if(!opts.skipCloud && LICSYSTEM.cloudSync){
+        LICSYSTEM.cloudSync.notifyLocalChange("pncpAlerts", { immediate: !!opts.immediate });
+      }
+      LICSYSTEM.state.pncpAlerts = this.alerts.filter(function(x){ return !x.readAt; });
+      this.updateBell();
+      this.renderEditaisBalloons();
+      this.renderPanelList();
+      try{ LICSYSTEM.dashboard.renderPncp(); }catch(e){}
+    },
+
+    persistInteressados: function(){
+      try{ localStorage.setItem(PNCP_INTERESSADOS_KEY, JSON.stringify(this.interessados)); }catch(e){}
+      this.renderInteressadosIa();
+    },
+
+    editalKey: function(o){
+      if(!o) return "";
+      if(o.key) return String(o.key);
+      if(o.numeroControlePNCP) return String(o.numeroControlePNCP);
+      return [o.orgao || "", o.objeto || "", o.dataAbertura || "", o.uf || ""].join("|");
+    },
+
+    unreadCount: function(){
+      var n = 0;
+      for(var i = 0; i < this.alerts.length; i++){
+        if(!this.alerts[i].readAt) n++;
+      }
+      return n;
+    },
+
+    updateBell: function(){
+      var badge = el("bellBadge");
+      if(!badge) return;
+      var n = this.unreadCount();
+      badge.textContent = String(n);
+      badge.classList.toggle("zero", n === 0);
+      var sub = el("bellPanelSub");
+      if(sub){
+        var ativo = this.watches.filter(function(w){ return w.enabled !== false; }).length;
+        sub.textContent = ativo
+          ? (n + " novo(s) · " + ativo + " monitoramento(s) ativo(s)")
+          : "Nenhum monitoramento ativo";
+      }
+    },
+
+    setPanelOpen: function(open){
+      this._panelOpen = !!open;
+      var panel = el("bellPanel");
+      var bell = el("bell");
+      if(panel) panel.hidden = !this._panelOpen;
+      if(bell) bell.setAttribute("aria-expanded", this._panelOpen ? "true" : "false");
+      if(this._panelOpen) this.renderPanelList();
+    },
+
+    togglePanel: function(){
+      this.setPanelOpen(!this._panelOpen);
+    },
+
+    renderPanelList: function(){
+      var box = el("bellPanelList");
+      if(!box) return;
+      if(!this.alerts.length){
+        box.innerHTML = '<div class="small muted">Nenhum alerta ainda. Ative um monitoramento em <b>Pesquisas de Editais</b>.</div>';
+        return;
+      }
+      var sorted = this.sortByPrazo(this.alerts);
+      var html = "";
+      var self = this;
+      sorted.slice(0, 40).forEach(function(a){
+        var unread = !a.readAt;
+        var title = a.link
+          ? '<a href="'+utils.escapeHtml(a.link)+'" target="_blank" rel="noopener">'+utils.escapeHtml(a.orgao || "Órgão")+'</a>'
+          : '<b>'+utils.escapeHtml(a.orgao || "Órgão")+'</b>';
+        html += '<div class="bell-item'+(unread?' is-unread':'')+'" data-alert-id="'+utils.escapeHtml(a.id)+'">'+
+          title+
+          ' <span class="badge-status b-yellow">'+utils.escapeHtml(a.uf || "")+'</span>'+
+          (a.watchLabel ? ' <span class="small muted">· '+utils.escapeHtml(a.watchLabel)+'</span>' : '')+
+          '<div class="small muted" style="margin-top:4px">'+utils.escapeHtml((a.objeto || "").slice(0, 160))+'</div>'+
+          '<div class="small" style="margin-top:4px;font-weight:700;color:var(--ls-navy)">Prazo: '+utils.escapeHtml(self.formatPrazo(a.dataEncerramento))+'</div>'+
+          (a.municipio ? '<div class="small muted">'+utils.escapeHtml(a.municipio)+'</div>' : '')+
+          '</div>';
+      });
+      box.innerHTML = html;
+    },
+
+    prazoTs: function(iso){
+      if(!iso) return Number.POSITIVE_INFINITY;
+      var t = new Date(iso).getTime();
+      return isNaN(t) ? Number.POSITIVE_INFINITY : t;
+    },
+
+    formatPrazo: function(iso){
+      try{
+        if(LICSYSTEM.captacao && LICSYSTEM.captacao.formatProxDate){
+          return LICSYSTEM.captacao.formatProxDate(iso);
+        }
+      }catch(e){}
+      if(!iso) return "—";
+      try{
+        var d = new Date(iso);
+        if(isNaN(d.getTime())) return String(iso);
+        return d.toLocaleString("pt-BR", {
+          day: "2-digit", month: "2-digit", year: "numeric",
+          hour: "2-digit", minute: "2-digit"
+        });
+      }catch(e){ return String(iso); }
+    },
+
+    sortByPrazo: function(list){
+      var self = this;
+      return (list || []).slice().sort(function(a, b){
+        var da = self.prazoTs(a && a.dataEncerramento);
+        var db = self.prazoTs(b && b.dataEncerramento);
+        if(da !== db) return da - db;
+        return Number((b && b.foundAt) || 0) - Number((a && a.foundAt) || 0);
+      });
+    },
+
+    isPrazoUrgente: function(iso){
+      var t = this.prazoTs(iso);
+      if(!isFinite(t)) return false;
+      var diff = t - Date.now();
+      return diff >= 0 && diff <= 3 * 24 * 60 * 60 * 1000;
+    },
+
+    balloonHtml: function(a, opts){
+      opts = opts || {};
+      var self = this;
+      var unread = !a.readAt;
+      var urgente = self.isPrazoUrgente(a.dataEncerramento);
+      var nome = a.orgao || "Órgão";
+      var nomeHtml = a.link
+        ? '<a href="'+utils.escapeHtml(a.link)+'" target="_blank" rel="noopener">'+utils.escapeHtml(nome)+'</a>'
+        : utils.escapeHtml(nome);
+      var editalLabel = a.numeroCompra
+        ? ("Nº " + a.numeroCompra)
+        : (a.numeroControlePNCP || a.modalidade || "Edital PNCP");
+      var meta = [];
+      if(a.municipio) meta.push(a.municipio);
+      if(a.uf) meta.push(a.uf);
+      if(a.watchLabel) meta.push(a.watchLabel);
+      var actions = "";
+      if(opts.mode === "interessado"){
+        actions =
+          '<div class="alerta-balloon-actions">'+
+            '<button type="button" class="btn btn-gold btn-sm" data-interessado-analisar="'+utils.escapeHtml(a.id)+'">✨ Analisar com IA</button>'+
+            '<button type="button" class="btn btn-ghost btn-sm" data-interessado-pdf="'+utils.escapeHtml(a.id)+'"'+(a.link ? "" : " disabled title=\"Sem link PNCP\"")+'>Baixar PDF</button>'+
+            (a.link
+              ? '<a class="btn btn-ghost btn-sm" href="'+utils.escapeHtml(a.link)+'" target="_blank" rel="noopener">Abrir no PNCP</a>'
+              : '')+
+            '<button type="button" class="btn btn-ghost btn-sm" data-interessado-rm="'+utils.escapeHtml(a.id)+'">Remover</button>'+
+          '</div>';
+      } else {
+        actions =
+          '<div class="alerta-balloon-actions">'+
+            '<button type="button" class="btn btn-gold btn-sm" data-alert-interesse="'+utils.escapeHtml(a.id)+'">Há interesse</button>'+
+            '<button type="button" class="btn btn-ghost btn-sm" data-alert-dismiss="'+utils.escapeHtml(a.id)+'">Não há interesse</button>'+
+          '</div>';
+      }
+      return (
+        '<div class="alerta-balloon'+(unread && opts.mode !== "interessado" ? " is-unread" : "")+(urgente ? " is-urgente" : "")+'" data-alert-id="'+utils.escapeHtml(a.id)+'">'+
+          '<div class="alerta-balloon-prazo">'+(urgente ? "Prazo próximo · " : "Prazo · ")+utils.escapeHtml(self.formatPrazo(a.dataEncerramento))+'</div>'+
+          '<div class="alerta-balloon-nome">'+nomeHtml+'</div>'+
+          (meta.length ? '<div class="alerta-balloon-meta">'+utils.escapeHtml(meta.join(" · "))+'</div>' : '')+
+          '<div class="alerta-balloon-edital"><b>Edital:</b> '+utils.escapeHtml(editalLabel)+
+            (a.objeto ? ' — '+utils.escapeHtml(a.objeto) : '')+
+          '</div>'+
+          '<div class="alerta-balloon-prazo-line"><span class="label">Prazo</span> '+utils.escapeHtml(self.formatPrazo(a.dataEncerramento))+'</div>'+
+          actions+
+        '</div>'
+      );
+    },
+
+    renderEditaisBalloons: function(){
+      var box = el("alertasEditaisList");
+      if(!box) return;
+      if(!this.alerts.length){
+        box.innerHTML = '<div class="small muted">Nenhum edital novo ainda. Quando o monitoramento achar algo, aparece aqui em balões.</div>';
+        this.updateCollapseSummary();
+        return;
+      }
+      var sorted = this.sortByPrazo(this.alerts);
+      var html = "";
+      var self = this;
+      sorted.forEach(function(a){
+        html += self.balloonHtml(a, { mode: "alerta" });
+      });
+      box.innerHTML = html;
+      this.updateCollapseSummary();
+    },
+
+    updateCollapseSummary: function(){
+      var nWatch = this.watches.length;
+      var nEditais = this.alerts.length;
+      var parts = [];
+      if(nWatch) parts.push(nWatch + " monitoramento" + (nWatch === 1 ? "" : "s"));
+      if(nEditais) parts.push(nEditais + " edital" + (nEditais === 1 ? "" : "is"));
+      var text = parts.length ? parts.join(" · ") : "Nenhum alerta ativo";
+      try{
+        if(LICSYSTEM.captacao && LICSYSTEM.captacao.updateCollapseSummary){
+          LICSYSTEM.captacao.updateCollapseSummary("alertas", text);
+        }
+      }catch(e){}
+    },
+
+    renderInteressadosIa: function(){
+      var wrap = el("iaPendingEditaisWrap");
+      var box = el("iaPendingEditais");
+      if(!box) return;
+      if(!this.interessados.length){
+        if(wrap) wrap.hidden = true;
+        box.innerHTML = "";
+        return;
+      }
+      if(wrap) wrap.hidden = false;
+      var sorted = this.sortByPrazo(this.interessados);
+      var html = "";
+      var self = this;
+      sorted.forEach(function(a){
+        html += self.balloonHtml(a, { mode: "interessado" });
+      });
+      box.innerHTML = html;
+    },
+
+    renderWatches: function(){
+      var box = el("alertasWatchList");
+      if(!box) return;
+      if(!this.watches.length){
+        box.innerHTML = '<div class="small muted">Nenhum alerta ativo. Use “Ativar alerta” em Editais próximos (recomendado), Radar ou Perguntar editais.</div>';
+        this.updateCollapseSummary();
+        return;
+      }
+      var html = "";
+      this.watches.forEach(function(w){
+        var off = w.enabled === false;
+        var tipoLabel =
+          w.tipo === "radar" ? "Radar" :
+          (w.tipo === "proximos" || w.tipo === "raio" || w.tipo === "vizinhos") ? ("Próximos · " + (w.raio || 250) + " km") :
+          "Município";
+        html += '<div class="alerta-watch-row'+(off?' off':'')+'" data-watch-id="'+utils.escapeHtml(w.id)+'">'+
+          '<div>'+
+            '<div style="font-weight:700;color:var(--ls-navy)">'+utils.escapeHtml(w.label || w.id)+'</div>'+
+            '<div class="alerta-watch-meta small muted">'+
+              '<span>'+utils.escapeHtml(tipoLabel)+'</span>'+
+              (w.lastCheckedAt ? '<span>· última verificação '+utils.escapeHtml(new Date(w.lastCheckedAt).toLocaleString("pt-BR"))+'</span>' : '<span>· ainda não verificado</span>')+
+              (off ? '<span>· pausado</span>' : '')+
+            '</div>'+
+          '</div>'+
+          '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+            '<button type="button" class="btn btn-ghost btn-sm" data-watch-toggle="'+utils.escapeHtml(w.id)+'">'+(off?'Ativar':'Pausar')+'</button>'+
+            '<button type="button" class="btn btn-ghost btn-sm" data-watch-del="'+utils.escapeHtml(w.id)+'">Excluir</button>'+
+          '</div>'+
+        '</div>';
+      });
+      box.innerHTML = html;
+      this.updateCollapseSummary();
+    },
+
+    findWatch: function(id){
+      id = String(id || "");
+      for(var i = 0; i < this.watches.length; i++){
+        if(this.watches[i].id === id) return this.watches[i];
+      }
+      return null;
+    },
+
+    upsertWatch: function(partial, opts){
+      opts = opts || {};
+      var w = this.normalizeWatch(partial);
+      if(!w.label){
+        if(w.tipo === "radar") w.label = (w.q || "radar") + (w.uf ? " · " + w.uf : "");
+        else if(w.tipo === "proximos" || w.tipo === "raio" || w.tipo === "vizinhos"){
+          w.label = (w.municipio || "Origem") + " · " + (w.raio || 250) + " km";
+        }
+        else w.label = w.municipio || w.mensagem || w.regiao || "Município";
+      }
+      var dup = null;
+      for(var i = 0; i < this.watches.length; i++){
+        var x = this.watches[i];
+        if(w.tipo === "radar" && x.tipo === "radar" && x.q === w.q && x.uf === w.uf){ dup = x; break; }
+        if((w.tipo === "proximos" || w.tipo === "raio") && (x.tipo === "proximos" || x.tipo === "raio") &&
+          x.ibge === w.ibge && Number(x.raio || 0) === Number(w.raio || 0) &&
+          String(x.q || "") === String(w.q || "") && String(x.cobertura || "") === String(w.cobertura || "")){
+          dup = x; break;
+        }
+        if(w.tipo !== "radar" && w.tipo !== "proximos" && w.tipo !== "raio" &&
+          x.tipo !== "radar" && x.tipo !== "proximos" && x.tipo !== "raio" &&
+          ((w.ibge && x.ibge === w.ibge) || (w.municipio && x.municipio === w.municipio && x.uf === w.uf))){
+          dup = x; break;
+        }
+      }
+      if(dup){
+        Object.assign(dup, w, { id: dup.id, seenIds: dup.seenIds || {}, createdAt: dup.createdAt });
+        w = dup;
+      } else {
+        if(this.watches.length >= this.MAX_WATCHES){
+          throw new Error("Limite de " + this.MAX_WATCHES + " alertas. Exclua um para criar outro.");
+        }
+        this.watches.unshift(w);
+      }
+      this.persistWatches({ immediate: true });
+      if(opts.baseline !== false){
+        return this.checkWatch(w, { baseline: true }).then(function(){ return w; });
+      }
+      return Promise.resolve(w);
+    },
+
+    removeWatch: function(id){
+      this.watches = this.watches.filter(function(w){ return w.id !== id; });
+      this.persistWatches({ immediate: true });
+    },
+
+    toggleWatch: function(id){
+      var w = this.findWatch(id);
+      if(!w) return;
+      w.enabled = !w.enabled;
+      this.persistWatches({ immediate: true });
+    },
+
+    markRead: function(id){
+      var a = null;
+      for(var i = 0; i < this.alerts.length; i++){
+        if(this.alerts[i].id === id){ a = this.alerts[i]; break; }
+      }
+      if(!a || a.readAt) return;
+      a.readAt = Date.now();
+      this.persistAlerts({ immediate: true });
+    },
+
+    markAllRead: function(){
+      var now = Date.now();
+      var changed = false;
+      for(var i = 0; i < this.alerts.length; i++){
+        if(!this.alerts[i].readAt){
+          this.alerts[i].readAt = now;
+          changed = true;
+        }
+      }
+      if(changed) this.persistAlerts({ immediate: true });
+    },
+
+    findAlert: function(id){
+      id = String(id || "");
+      for(var i = 0; i < this.alerts.length; i++){
+        if(this.alerts[i].id === id) return this.alerts[i];
+      }
+      return null;
+    },
+
+    removeAlert: function(id){
+      id = String(id || "");
+      var before = this.alerts.length;
+      this.alerts = this.alerts.filter(function(a){ return a.id !== id; });
+      if(this.alerts.length !== before){
+        this.persistAlerts({ immediate: true });
+      }
+    },
+
+    /** Não há interesse: remove o edital dos alertas do sistema. */
+    dismissAlert: function(id){
+      this.removeAlert(id);
+    },
+
+    /** Há interesse: envia o balão ao Painel de Análise IA e tira dos alertas. */
+    markInteresse: function(id){
+      var a = this.findAlert(id);
+      if(!a) return null;
+      var item = this.normalizeAlert(Object.assign({}, a, {
+        interessadoAt: Date.now(),
+        readAt: a.readAt || Date.now()
+      }));
+      this.interessados = this.interessados.filter(function(x){
+        return x.id !== item.id && x.key !== item.key;
+      });
+      this.interessados.unshift(item);
+      if(this.interessados.length > this.MAX_INTERESSADOS){
+        this.interessados = this.interessados.slice(0, this.MAX_INTERESSADOS);
+      }
+      this.removeAlert(id);
+      this.persistInteressados();
+      if(window.__lsActivateView){
+        window.__lsActivateView("analiseIa");
+      }
+      try{
+        showAlert(
+          "iaAlert",
+          "ok",
+          "Edital com interesse adicionado ao painel. Use <b>Analisar com IA</b> no balão (sem PDF) ou envie o PDF para análise completa."
+        );
+      }catch(e){}
+      return item;
+    },
+
+    removeInteressado: function(id){
+      id = String(id || "");
+      this.interessados = this.interessados.filter(function(a){ return a.id !== id; });
+      this.persistInteressados();
+    },
+
+    trimSeen: function(watch){
+      var keys = Object.keys(watch.seenIds || {});
+      if(keys.length <= this.MAX_SEEN) return;
+      keys.sort();
+      var drop = keys.length - this.MAX_SEEN;
+      for(var i = 0; i < drop; i++) delete watch.seenIds[keys[i]];
+    },
+
+    addNovos: function(rows, watch, opts){
+      opts = opts || {};
+      var baseline = !!opts.baseline;
+      var added = 0;
+      if(!watch.seenIds) watch.seenIds = {};
+      for(var i = 0; i < rows.length; i++){
+        var row = rows[i] || {};
+        var key = this.editalKey(row);
+        if(!key) continue;
+        var alreadySeen = !!watch.seenIds[key];
+        watch.seenIds[key] = 1;
+        if(alreadySeen) continue;
+        if(baseline) continue;
+        var exists = false;
+        for(var j = 0; j < this.alerts.length; j++){
+          if(this.alerts[j].key === key){ exists = true; break; }
+        }
+        if(exists) continue;
+        this.alerts.unshift(this.normalizeAlert({
+          id: key,
+          key: key,
+          numeroControlePNCP: row.numeroControlePNCP || null,
+          numeroCompra: row.numeroCompra || null,
+          orgao: row.orgao,
+          municipio: row.municipio,
+          uf: row.uf,
+          objeto: row.objeto,
+          modalidade: row.modalidade,
+          valorEstimado: row.valorEstimado,
+          dataAbertura: this.pickDataAbertura(row),
+          dataEncerramento: this.pickDataPrazo(row),
+          link: row.link,
+          watchId: watch.id,
+          watchLabel: watch.label,
+          foundAt: Date.now(),
+          readAt: null
+        }));
+        added++;
+      }
+      this.trimSeen(watch);
+      if(this.alerts.length > this.MAX_ALERTS){
+        this.alerts = this.alerts.slice(0, this.MAX_ALERTS);
+      }
+      return added;
+    },
+
+    checkWatch: function(watch, opts){
+      opts = opts || {};
+      var self = this;
+      var knownIds = Object.keys(watch.seenIds || {});
+      return fetch("/api/monitor-pncp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ watches: [watch], knownIds: knownIds })
+      }).then(function(r){
+        return utils.parseApiResponse(r);
+      }).then(function(j){
+        if(!j || j.ok === false) throw new Error((j && j.error) || "Falha no monitor PNCP");
+        var pack = (j.results && j.results[0] && j.results[0].editais) || [];
+        var novos = j.novos || [];
+        /* baseline: marca tudo visto sem criar alerta */
+        var added = self.addNovos(opts.baseline ? pack : novos, watch, opts);
+        var enriched = self.enrichAlertsFromRows(pack);
+        watch.lastCheckedAt = Date.now();
+        self.persistWatches({ immediate: true });
+        if(!opts.baseline || enriched) self.persistAlerts({ immediate: true });
+        else self.persistWatches({ immediate: true });
+        return { added: added, enriched: enriched, total: pack.length, watch: watch };
+      });
+    },
+
+    checkAll: function(opts){
+      opts = opts || {};
+      var self = this;
+      if(self._busy) return Promise.resolve({ skipped: true });
+      var list = self.watches.filter(function(w){ return w.enabled !== false; });
+      if(!list.length) return Promise.resolve({ checked: 0, added: 0, enriched: 0 });
+      self._busy = true;
+      var btnIds = ["btnAlertasCheckNow", "btnBellCheck"];
+      btnIds.forEach(function(id){ var b = el(id); if(b) b.disabled = true; });
+
+      var addedTotal = 0;
+      var enrichedTotal = 0;
+      var chain = Promise.resolve();
+      /* API aceita até 4 watches por chamada */
+      var chunks = [];
+      for(var i = 0; i < list.length; i += 4){
+        chunks.push(list.slice(i, i + 4));
+      }
+      chunks.forEach(function(chunk){
+        chain = chain.then(function(){
+          var known = [];
+          chunk.forEach(function(w){
+            Object.keys(w.seenIds || {}).forEach(function(k){ known.push(k); });
+          });
+          return fetch("/api/monitor-pncp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ watches: chunk, knownIds: known })
+          }).then(function(r){ return utils.parseApiResponse(r); }).then(function(j){
+            if(!j || j.ok === false) throw new Error((j && j.error) || "Falha no monitor PNCP");
+            var byWatch = Object.create(null);
+            (j.results || []).forEach(function(res){
+              byWatch[res.watchId] = res;
+            });
+            chunk.forEach(function(w){
+              var res = byWatch[w.id];
+              var pack = (res && res.editais) || [];
+              var novos = (j.novos || []).filter(function(n){ return n.watchId === w.id; });
+              addedTotal += self.addNovos(opts.baseline ? pack : novos, w, opts);
+              enrichedTotal += self.enrichAlertsFromRows(pack);
+              w.lastCheckedAt = Date.now();
+            });
+          });
+        });
+      });
+
+      return chain.then(function(){
+        self.persistWatches({ immediate: true });
+        self.persistAlerts({ immediate: true });
+        return { checked: list.length, added: addedTotal, enriched: enrichedTotal };
+      }).catch(function(err){
+        console.warn("alertas.checkAll", err);
+        throw err;
+      }).then(function(r){
+        self._busy = false;
+        btnIds.forEach(function(id){ var b = el(id); if(b) b.disabled = false; });
+        return r;
+      }, function(err){
+        self._busy = false;
+        btnIds.forEach(function(id){ var b = el(id); if(b) b.disabled = false; });
+        throw err;
+      });
+    },
+
+    createFromRadar: function(){
+      var q = String((el("pncpKeywords") && el("pncpKeywords").value) || "").trim();
+      var uf = String((el("pncpUf") && el("pncpUf").value) || "").trim().toUpperCase();
+      if(!q) throw new Error("Informe palavras-chave no Radar PNCP.");
+      if(!uf) throw new Error("Escolha uma UF para o alerta do Radar (ex.: SP).");
+      var leiloes = !el("pncpIncluirLeiloes") || !!(el("pncpIncluirLeiloes") && el("pncpIncluirLeiloes").checked);
+      return this.upsertWatch({
+        tipo: "radar",
+        q: q,
+        uf: uf,
+        leiloes: leiloes,
+        janela: "45",
+        label: q + " · " + uf
+      }, { baseline: true });
+    },
+
+    createFromChat: function(){
+      var texto = String((el("chatEditalMsg") && el("chatEditalMsg").value) || "").trim();
+      var cat = String((el("chatEditalCat") && el("chatEditalCat").value) || "").trim();
+      var janela = (el("chatEditalJanela") && el("chatEditalJanela").value) || "45";
+      var leiloes = !el("chatEditalLeiloes") || !!(el("chatEditalLeiloes") && el("chatEditalLeiloes").checked);
+      var ampliar = !!(el("chatEditalAmpliar") && el("chatEditalAmpliar").checked);
+      if(!texto && !cat) throw new Error("Digite o nome da cidade ou uma pergunta antes de ativar o alerta.");
+      var folded = utils.fold(texto).toLowerCase();
+      var regiao = "";
+      if(/norte\s*pioneiro/.test(folded)) regiao = "norte-pioneiro";
+      return this.upsertWatch({
+        tipo: "municipio",
+        municipio: regiao ? "" : texto,
+        mensagem: regiao ? "" : texto,
+        regiao: regiao,
+        categoria: cat,
+        leiloes: leiloes,
+        ampliar: ampliar,
+        janela: janela === "ano" ? "ano" : "45",
+        label: regiao ? ("Norte Pioneiro" + (cat ? " · " + cat : "")) : texto
+      }, { baseline: true });
+    },
+
+    createFromProximos: function(){
+      var self = this;
+      var ibge = Number((el("proxIbge") && el("proxIbge").value) || 0) || 0;
+      var nome = String((el("proxMunicipio") && el("proxMunicipio").value) || "").trim();
+      var raio = Number((el("proxRaio") && el("proxRaio").value) || 250) || 250;
+      var cobertura = String((el("proxCobertura") && el("proxCobertura").value) || "");
+      var q = String((el("proxKeywords") && el("proxKeywords").value) || "").trim();
+      var janela = (el("proxJanela") && el("proxJanela").value) || "ano";
+      var ampliar = !!(el("proxAmpliar") && el("proxAmpliar").checked);
+      var leiloes = !el("proxLeiloes") || !!(el("proxLeiloes") && el("proxLeiloes").checked);
+      var federal = !!(el("proxFederal") && el("proxFederal").checked);
+      if(raio < 10) raio = 10;
+      if(raio > 700) raio = 700;
+
+      function saveWatch(m){
+        var munNome = (m && (m.nome || m.n)) || nome.split("/")[0].trim() || "Município";
+        var uf = (m && (m.uf || m.u)) || "";
+        var code = Number((m && (m.ibge || m.i)) || ibge) || 0;
+        if(!code) throw new Error("Escolha o município de origem na lista (IBGE).");
+        var label =
+          munNome +
+          (uf ? "/" + uf : "") +
+          " · " +
+          raio +
+          " km" +
+          (cobertura === "pr-sp" ? " · PR+SP" : "") +
+          (q ? " · " + q : "");
+        return self.upsertWatch({
+          tipo: "proximos",
+          ibge: code,
+          municipio: munNome,
+          uf: uf,
+          raio: raio,
+          cobertura: cobertura,
+          q: q,
+          janela: janela === "45" ? "45" : "ano",
+          ampliar: ampliar,
+          leiloes: leiloes,
+          federal: federal,
+          label: label
+        }, { baseline: true });
+      }
+
+      if(ibge){
+        var saved = null;
+        try{ saved = LICSYSTEM.captacao.loadOrigem && LICSYSTEM.captacao.loadOrigem(); }catch(e){}
+        return Promise.resolve(saveWatch({
+          ibge: ibge,
+          nome: (saved && saved.nome) || nome.split("/")[0].trim(),
+          uf: (saved && saved.uf) || (nome.indexOf("/") >= 0 ? nome.split("/")[1] : "")
+        }));
+      }
+      if(nome.length < 2){
+        return Promise.reject(new Error("Informe o município de origem e escolha na lista antes de ativar o alerta."));
+      }
+      return LICSYSTEM.captacao.resolveMunicipioFromInput().then(function(m){
+        if(!m || !m.ibge){
+          throw new Error("Não deu para confirmar o município. Clique na sugestão da lista e tente de novo.");
+        }
+        try{ LICSYSTEM.captacao.selectMunicipio(m); }catch(e){}
+        return saveWatch(m);
+      });
+    },
+
+    startPolling: function(){
+      var self = this;
+      this.stopPolling();
+      this._timer = setInterval(function(){
+        if(document.hidden) return;
+        self.checkAll().catch(function(){});
+      }, this.CHECK_MS);
+    },
+
+    stopPolling: function(){
+      if(this._timer){
+        clearInterval(this._timer);
+        this._timer = null;
+      }
+    },
+
+    onLogin: function(){
+      this.load();
+      this.startPolling();
+      var self = this;
+      var missing = this.alertsMissingPrazo();
+      var delay = missing ? 1500 : 8000;
+      setTimeout(function(){
+        self.checkAll().catch(function(){});
+      }, delay);
+    },
+
+    onLogout: function(){
+      this.stopPolling();
+      this.setPanelOpen(false);
+    },
+
+    wire: function(){
+      if(this._wired) return;
+      this._wired = true;
+      var self = this;
+      try{
+        var card = el("cardAlertasPncp");
+        if(card && LICSYSTEM.captacao && LICSYSTEM.captacao.applyCardCollapse){
+          var stored = false;
+          try{
+            var map = JSON.parse(localStorage.getItem(LICSYSTEM.captacao.COLLAPSE_KEY) || "{}");
+            stored = !!(map && map["alertas-pncp"]);
+          }catch(e){}
+          LICSYSTEM.captacao.applyCardCollapse(card, stored, { skipPersist: true });
+          self.updateCollapseSummary();
+          var btnCollapse = el("btnCollapseAlertas");
+          if(btnCollapse && !btnCollapse._collapseWired){
+            btnCollapse._collapseWired = true;
+            btnCollapse.addEventListener("click", function(){
+              LICSYSTEM.captacao.applyCardCollapse(
+                card,
+                !card.classList.contains("is-collapsed")
+              );
+              self.updateCollapseSummary();
+            });
+          }
+        }
+      }catch(e){}
+      var bell = el("bell");
+      if(bell){
+        bell.addEventListener("click", function(e){
+          e.stopPropagation();
+          self.togglePanel();
+        });
+      }
+      document.addEventListener("click", function(e){
+        var wrap = el("bellWrap");
+        if(!wrap || !self._panelOpen) return;
+        if(!wrap.contains(e.target)) self.setPanelOpen(false);
+      });
+      var list = el("bellPanelList");
+      if(list){
+        list.addEventListener("click", function(e){
+          var item = e.target.closest("[data-alert-id]");
+          if(item) self.markRead(item.getAttribute("data-alert-id"));
+        });
+      }
+      var watchesBox = el("alertasWatchList");
+      if(watchesBox){
+        watchesBox.addEventListener("click", function(e){
+          var t = e.target.closest("[data-watch-toggle]");
+          if(t){ self.toggleWatch(t.getAttribute("data-watch-toggle")); return; }
+          var d = e.target.closest("[data-watch-del]");
+          if(d){
+            if(confirm("Excluir este alerta?")) self.removeWatch(d.getAttribute("data-watch-del"));
+          }
+        });
+      }
+      var editaisBox = el("alertasEditaisList");
+      if(editaisBox){
+        editaisBox.addEventListener("click", function(e){
+          var interesse = e.target.closest("[data-alert-interesse]");
+          if(interesse){
+            e.preventDefault();
+            self.markInteresse(interesse.getAttribute("data-alert-interesse"));
+            return;
+          }
+          var dismiss = e.target.closest("[data-alert-dismiss]");
+          if(dismiss){
+            e.preventDefault();
+            var did = dismiss.getAttribute("data-alert-dismiss");
+            if(confirm("Não há interesse neste edital? Ele será excluído dos alertas.")){
+              self.dismissAlert(did);
+            }
+            return;
+          }
+          var item = e.target.closest("[data-alert-id]");
+          if(item && !e.target.closest("a,button")){
+            self.markRead(item.getAttribute("data-alert-id"));
+          }
+        });
+      }
+      var iaPending = el("iaPendingEditais");
+      if(iaPending){
+        iaPending.addEventListener("click", function(e){
+          function findInteressado(id){
+            for(var i = 0; i < self.interessados.length; i++){
+              if(self.interessados[i].id === id) return self.interessados[i];
+            }
+            return null;
+          }
+          var an = e.target.closest("[data-interessado-analisar]");
+          if(an){
+            e.preventDefault();
+            var ed = findInteressado(an.getAttribute("data-interessado-analisar"));
+            if(ed && LICSYSTEM.analiseIa && LICSYSTEM.analiseIa.analisarDeInteresse){
+              LICSYSTEM.analiseIa.analisarDeInteresse(ed);
+            }
+            return;
+          }
+          var pdfBtn = e.target.closest("[data-interessado-pdf]");
+          if(pdfBtn){
+            e.preventDefault();
+            var edPdf = findInteressado(pdfBtn.getAttribute("data-interessado-pdf"));
+            if(edPdf && LICSYSTEM.analiseIa && LICSYSTEM.analiseIa.baixarPdfDeInteresse){
+              LICSYSTEM.analiseIa.baixarPdfDeInteresse(edPdf);
+            }
+            return;
+          }
+          var rm = e.target.closest("[data-interessado-rm]");
+          if(rm){
+            e.preventDefault();
+            self.removeInteressado(rm.getAttribute("data-interessado-rm"));
+          }
+        });
+      }
+      function runCheck(){
+        self.checkAll().then(function(r){
+          var msg;
+          if(r && r.added){
+            msg = r.added + " edital(is) novo(s) — veja os balões em Meus alertas.";
+          } else if(r && r.enriched){
+            msg = "Prazos atualizados em " + r.enriched + " edital(is).";
+          } else {
+            msg = "Verificação concluída. Nenhum edital novo.";
+          }
+          showAlert("pncpAlert", (r && (r.added || r.enriched)) ? "ok" : "info", msg);
+        }).catch(function(err){
+          showAlert("pncpAlert", "error", (err && err.message) || "Falha ao verificar alertas");
+        });
+      }
+      var btnCheck = el("btnAlertasCheckNow");
+      if(btnCheck) btnCheck.addEventListener("click", runCheck);
+      var btnBellCheck = el("btnBellCheck");
+      if(btnBellCheck) btnBellCheck.addEventListener("click", function(e){ e.stopPropagation(); runCheck(); });
+      var btnMark = el("btnBellMarkAll");
+      if(btnMark) btnMark.addEventListener("click", function(e){ e.stopPropagation(); self.markAllRead(); });
+      var btnRadar = el("btnPncpAlerta");
+      if(btnRadar){
+        btnRadar.addEventListener("click", function(){
+          try{
+            self.createFromRadar().then(function(){
+              showAlert("pncpAlert", "ok", "Alerta ativado! Os editais atuais foram registrados como base; o sino avisará só os novos.");
+            }).catch(function(err){
+              showAlert("pncpAlert", "error", (err && err.message) || "Não foi possível ativar o alerta");
+            });
+          }catch(err){
+            showAlert("pncpAlert", "error", (err && err.message) || "Não foi possível ativar o alerta");
+          }
+        });
+      }
+      var btnChat = el("btnChatAlerta");
+      if(btnChat){
+        btnChat.addEventListener("click", function(){
+          try{
+            self.createFromChat().then(function(){
+              showAlert("chatEditalAlert", "ok", "Alerta ativado! O sino avisará quando surgir edital novo para essa busca.");
+            }).catch(function(err){
+              showAlert("chatEditalAlert", "error", (err && err.message) || "Não foi possível ativar o alerta");
+            });
+          }catch(err){
+            showAlert("chatEditalAlert", "error", (err && err.message) || "Não foi possível ativar o alerta");
+          }
+        });
+      }
+      var btnProx = el("btnProxAlerta");
+      if(btnProx){
+        btnProx.addEventListener("click", function(){
+          btnProx.disabled = true;
+          self.createFromProximos().then(function(w){
+            showAlert(
+              "proxAlert",
+              "ok",
+              "Alerta de vizinhos ativado" +
+                (w && w.label ? " (“" + utils.escapeHtml(w.label) + "”)" : "") +
+                ". Os editais atuais viraram base; o sino avisará só os novos no raio."
+            );
+          }).catch(function(err){
+            showAlert("proxAlert", "error", (err && err.message) || "Não foi possível ativar o alerta");
+          }).then(function(){
+            btnProx.disabled = false;
+          });
+        });
+      }
+    }
+  };
+
+
+})(window.LICSYSTEM || (window.LICSYSTEM = {}));

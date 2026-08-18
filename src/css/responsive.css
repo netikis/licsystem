@@ -1,0 +1,64 @@
+/* LICSYSTEM — breakpoints 980 / 768 / 480 */
+  /* ---------------- Responsive ≤980px ---------------- */
+  @media (max-width:980px){
+    .grid.two{grid-template-columns:1fr}
+  }
+
+  /* ---------------- Mobile ≤768px ---------------- */
+  @media (max-width:768px){
+    #app{flex-direction:column}
+    #sidebar{
+      position:fixed;left:0;top:0;bottom:0;
+      width:min(288px,86vw);max-width:86vw;
+      height:100dvh;height:100vh;
+      transform:translateX(-105%);
+      box-shadow:var(--shadow-lg);
+    }
+    body.sidebar-open #sidebar{transform:translateX(0)}
+    #main{width:100%;max-width:100%}
+    #sidebar-overlay{display:block}
+    .sidebar-close{display:flex}
+    .brand .logo{gap:10px}
+    .menu-toggle{display:inline-flex}
+    .topbar{padding:12px 14px}
+    .topbar h1{font-size:16px}
+    .topbar .sub{font-size:11px}
+    .top-user{display:none}
+    .top-actions{gap:10px}
+    .content{padding:14px;width:100%;max-width:100%}
+    .card{padding:14px;border-radius:14px;margin-bottom:14px}
+    .card h2{font-size:15px}
+    .grid{gap:12px}
+    .grid.kpi{grid-template-columns:1fr}
+    .kpi-card{padding:14px 16px}
+    .kpi-card .k-value{font-size:22px}
+    .form-row{flex-direction:column;gap:10px}
+    .form-row > div{flex:1 1 auto;width:100%;max-width:100%!important;min-width:0}
+    .btn-row .btn{flex:1 1 auto}
+    .btn{min-height:42px}
+    .tbl-wrap{margin:0 -2px;border-radius:10px}
+    .tbl-wrap table{min-width:560px;font-size:12px}
+    .chart-box{height:220px}
+    .checklist-item{flex-direction:column;align-items:stretch;gap:8px}
+    .checklist-item input[type=date]{max-width:100%}
+    .cofre-item{grid-template-columns:auto 1fr;gap:10px}
+    .cofre-item .ci-actions{grid-column:1 / -1;flex-direction:row;justify-content:flex-start;flex-wrap:wrap;min-width:0}
+    .cofre-item .ci-actions .btn{width:auto}
+    .cofre-view-head{flex-direction:column}
+    .cofre-view-scroll,.cofre-view-frame{height:min(70vh,640px)}
+    .pill-group{width:100%}
+    .pill-group label{flex:1 1 auto;text-align:center}
+    .dropzone{padding:18px 14px}
+    .result-item .ri-grid{grid-template-columns:1fr 1fr}
+    .side-foot{font-size:10px}
+  }
+
+  /* ---------------- Small phones ≤480px ---------------- */
+  @media (max-width:480px){
+    .content{padding:10px}
+    .topbar{padding:10px 12px}
+    .kpi-card .k-value{font-size:20px}
+    .result-item .ri-grid{grid-template-columns:1fr}
+    .btn-row .btn{width:100%}
+    .tbl-wrap table{min-width:480px}
+  }

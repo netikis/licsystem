@@ -1,0 +1,451 @@
+/* LICSYSTEM — orçamento · licitações · workspace · docs · modais */
+  /* ---------------- Orçamento espelho EDITAL | MEUS PREÇOS (tabela) ---------------- */
+  .orc-mirror{
+    --orc-split: 3px solid #0f1c30;
+    border:1px solid var(--ls-line);border-radius:14px;overflow:auto;background:#fff;
+    width:100%;max-width:100%;max-height:min(70vh,780px);
+  }
+  .orc-table{
+    width:100%;min-width:1380px;border-collapse:collapse;table-layout:fixed;
+    font-size:12.5px;
+  }
+  .orc-table col.c-chk{width:36px}
+  .orc-table col.c-lote{width:72px}
+  .orc-table col.c-qtd{width:76px}
+  .orc-table col.c-desc{width:auto;min-width:196px}
+  .orc-table col.c-money{width:120px}
+  .orc-table col.c-money-meus{width:100px}
+  .orc-table col.c-pct{width:76px}
+  .orc-table col.c-link{width:96px}
+  .orc-table col.c-actions{width:150px}
+
+  .orc-table thead th{
+    position:static;z-index:auto;
+    font-weight:700;letter-spacing:.3px;text-align:left;
+    padding:8px 8px;vertical-align:middle;
+  }
+  .orc-table thead tr.orc-titles th{
+    font-size:12px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;
+    padding:10px 14px;
+  }
+  .orc-title-edital{background:var(--ls-navy);color:#fff}
+  .orc-title-meus{
+    background:linear-gradient(135deg,var(--ls-gold),var(--ls-gold-soft));color:var(--ls-navy);
+    border-left: var(--orc-split);
+  }
+  .orc-table thead tr.orc-cols th{
+    background:var(--ls-navy-2);color:#fff;font-size:11px;
+    border-bottom:1px solid rgba(255,255,255,.08);
+  }
+  .orc-table thead .col-chk,
+  .orc-table thead .col-lote,
+  .orc-table thead .col-qtd,
+  .orc-table thead .col-pct{text-align:center;padding-left:4px;padding-right:4px}
+  .orc-table .split-end{border-right:0}
+  .orc-table .split-start{border-left: var(--orc-split)}
+
+  .orc-table tbody td{
+    padding:6px 6px;vertical-align:middle;
+    border-bottom:1px solid var(--ls-line);
+    background:#fff;
+  }
+  .orc-table tbody tr:nth-child(even) td{background:#fafbfd}
+  .orc-table tbody tr:hover td{background:#f3f6fb}
+  .orc-table tbody tr.risk-row td:first-child{box-shadow:inset 3px 0 0 var(--ls-red)}
+  .orc-table tbody td.td-chk{text-align:center}
+  .orc-table tbody td.td-lote,
+  .orc-table tbody td.td-qtd,
+  .orc-table tbody td.td-pct{padding:6px 5px;text-align:center}
+  .orc-table tbody td.split-start{border-left: var(--orc-split)}
+
+  .orc-table tbody input[type="text"],
+  .orc-table tbody input[type="number"]{
+    width:100%;min-width:0;padding:6px 12px;font-size:12px;
+    border:1px solid var(--ls-line);border-radius:var(--ls-radius-balloon);font-family:inherit;background:#fff;
+    box-sizing:border-box;
+  }
+  /* Balões Lote / Qtd — largura útil para 1–3 dígitos sem cortar */
+  .orc-table tbody input.orc-lote,
+  .orc-table tbody input.orc-qtd{
+    display:block;width:100%;min-width:0;max-width:100%;
+    margin:0 auto;text-align:center;
+    padding:6px 6px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;
+    border-radius:var(--ls-radius-balloon);line-height:1.2;
+  }
+  .orc-table tbody input.orc-qtd{
+    -moz-appearance:textfield;
+    appearance:textfield;
+  }
+  .orc-table tbody input.orc-qtd::-webkit-outer-spin-button,
+  .orc-table tbody input.orc-qtd::-webkit-inner-spin-button{
+    -webkit-appearance:none;margin:0;
+  }
+  /* % — coluna ~76px; input legível p/ 12,50 / 100; sem spinners */
+  .orc-table tbody input.orc-pct{
+    display:block;width:100%;min-width:56px;max-width:100%;
+    margin:0 auto;text-align:center;
+    padding:6px 8px;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;
+    border-radius:var(--ls-radius-balloon);line-height:1.2;
+    -moz-appearance:textfield;
+    appearance:textfield;
+  }
+  .orc-table tbody input.orc-pct::-webkit-outer-spin-button,
+  .orc-table tbody input.orc-pct::-webkit-inner-spin-button{
+    -webkit-appearance:none;margin:0;
+  }
+  .orc-table tbody input:focus{
+    outline:0;border-color:var(--ls-gold);box-shadow:0 0 0 3px rgba(201,162,39,.15);
+  }
+  .orc-table tbody td.td-money{
+    padding:6px 8px;overflow:hidden;min-width:0;
+  }
+  .orc-table .cell-ro,
+  .orc-table .cell-total{
+    display:block;max-width:100%;min-width:0;
+    font-size:11px;font-weight:700;color:var(--ls-navy);
+    white-space:nowrap;overflow:hidden;
+    font-variant-numeric:tabular-nums;letter-spacing:-0.02em;
+    line-height:1.25;
+  }
+  .orc-table .cell-total{font-weight:800}
+  .orc-desc-wrap{display:flex;align-items:flex-start;gap:4px;min-width:0;width:100%}
+  .orc-desc-wrap input{flex:1;min-width:0}
+  /* A descrição do edital é longa: quebra em 2 linhas e abre inteira ao clicar. */
+  .orc-desc-wrap .orc-produto-locked{
+    flex:1;min-width:0;
+    background:#f3f5f8;color:var(--ls-navy);font-weight:600;
+    border-radius:6px;padding:5px 7px;font-size:11px;line-height:1.35;
+    white-space:normal;overflow:hidden;overflow-wrap:anywhere;cursor:pointer;
+    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;
+  }
+  .orc-desc-wrap .orc-produto-locked:hover{background:#eaeef4}
+  .orc-desc-wrap .orc-produto-locked.is-open{
+    display:block;background:#fff;box-shadow:inset 0 0 0 1px var(--ls-line);
+  }
+  .orc-desc-vazia{color:var(--ls-muted);font-weight:500}
+  .orc-table tbody td.td-link input{
+    padding:5px 6px;font-size:11px;
+  }
+  .orc-actions{
+    display:flex;gap:3px;flex-wrap:nowrap;justify-content:flex-end;align-items:center;
+    white-space:nowrap;margin-left:auto;
+  }
+  .orc-actions .btn{
+    min-height:0;padding:3px 6px;font-size:10px;line-height:1.15;border-radius:6px;gap:0;flex-shrink:0;
+  }
+  .orc-actions .orcGoogle,
+  .orc-actions .orcMl,
+  .orc-actions .orcOpenLink,
+  .orc-actions .orcDel,
+  .orc-final-cell{
+    display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;
+  }
+  .orc-status-badge{
+    display:inline-block;font-size:10px;font-weight:800;letter-spacing:.04em;
+    padding:2px 7px;border-radius:999px;line-height:1.3;white-space:nowrap;
+  }
+  .orc-status-badge.is-ok{background:#1e9e5a!important;color:#fff!important}
+  .orc-status-badge.is-bad{background:#d23b3b!important;color:#fff!important}
+  .orc-actions .orcCompensa,
+  .orc-actions .orcNaoCompensa{display:none}
+  .orc-actions .orcOpenLink{
+    font-size:9.5px;font-weight:800;letter-spacing:.2px;text-transform:uppercase;
+  }
+  .orc-actions .orcOpenLink:disabled,
+  .orc-actions .orcOpenLink:not(.is-ready){
+    opacity:.38;cursor:not-allowed;pointer-events:none;
+  }
+  .orc-actions .orcOpenLink.is-ready{
+    opacity:1;color:var(--ls-navy-3);border-color:#c5d0e0;
+  }
+  .orc-actions .orcOpenLink.is-ready:hover{
+    background:#eef2f8;border-color:var(--ls-navy-3);
+  }
+  .orc-actions .orcCompensa,
+  .orc-actions .orcNaoCompensa{
+    font-size:10px;letter-spacing:.15px;white-space:nowrap;line-height:1.15;
+    border:1px solid transparent;font-weight:700;min-width:22px;
+  }
+  .orc-actions .orcCompensa:not(.is-active){
+    background:var(--ls-green-bg);color:var(--ls-green);border-color:#b6e3ca;
+  }
+  .orc-actions .orcCompensa:not(.is-active):hover{background:#d4f0e2}
+  .orc-actions .orcCompensa.is-active{background:var(--ls-green);color:#fff;border-color:var(--ls-green)}
+  .orc-actions .orcNaoCompensa:not(.is-active){
+    background:var(--ls-red-bg);color:var(--ls-red);border-color:#f2c4c4;
+  }
+  .orc-actions .orcNaoCompensa:not(.is-active):hover{background:#f7d4d4}
+  .orc-actions .orcNaoCompensa.is-active{background:var(--ls-red);color:#fff;border-color:var(--ls-red)}
+  .orc-actions .orcDel{opacity:.65}
+  .orc-actions .orcDel:hover{opacity:1}
+  .orc-table tbody tr.orc-row-compensa td{background:#f0faf4}
+  .orc-table tbody tr.orc-row-compensa:nth-child(even) td{background:#e8f6ee}
+  .orc-table tbody tr.orc-row-compensa:hover td{background:#dff3e8}
+  .orc-table tbody tr.orc-row-nao-compensa td{background:#fdf4f4}
+  .orc-table tbody tr.orc-row-nao-compensa:nth-child(even) td{background:#fbeaea}
+  .orc-table tbody tr.orc-row-nao-compensa:hover td{background:#f8e0e0}
+  .orc-empty{
+    text-align:center;padding:28px 16px;color:var(--ls-muted);font-size:13px;
+  }
+
+  .orc-table tfoot td{
+    padding:12px 10px;background:#f7f9fc;border-top:1px solid var(--ls-line);
+    position:static;z-index:auto;
+  }
+  .orc-table .foot-edital-label,
+  .orc-table .foot-meus-label{
+    text-align:right;font-size:12px;font-weight:700;color:var(--ls-navy);
+  }
+  .orc-table .foot-edital-value,
+  .orc-table .foot-meus-value{
+    font-size:12px;font-weight:800;color:var(--ls-navy);
+    white-space:nowrap;overflow:visible;max-width:100%;
+    font-variant-numeric:tabular-nums;letter-spacing:-0.02em;
+  }
+  .orc-table .foot-edital-value span,
+  .orc-table .foot-meus-value span{display:inline-block;max-width:100%;vertical-align:bottom}
+  .orc-table tfoot .split-start{border-left: var(--orc-split)}
+  /* card-head do orçamento NÃO fica sticky — cobria a tabela ao rolar */
+
+  .orc-meta{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    margin:0 0 12px;padding:10px 12px;border-radius:10px;
+    background:#f7f9fc;border:1px solid var(--ls-line);font-size:12.5px;
+  }
+  .orc-meta b{color:var(--ls-navy)}
+  .orc-meta .tag{margin-left:0}
+  .cat-tipo-orc{
+    display:inline-block;margin-left:6px;padding:2px 7px;border-radius:6px;
+    background:#e8f0fe;color:#1a4fa0;font-size:10.5px;font-weight:700;
+  }
+
+  /* Modal salvar orçamento no catálogo */
+  #orcSaveOverlay{
+    position:fixed;inset:0;z-index:120;background:rgba(21,38,66,.45);
+    display:none;align-items:center;justify-content:center;padding:18px;
+  }
+  #orcSaveOverlay.open{display:flex}
+  .orc-save-card{
+    width:100%;max-width:440px;background:#fff;border-radius:16px;
+    box-shadow:var(--shadow-lg);padding:22px 22px 18px;
+  }
+  .orc-save-card h3{margin:0 0 6px;font-size:17px;color:var(--ls-navy)}
+  .orc-save-card p{margin:0 0 14px;font-size:13px;color:var(--ls-muted)}
+  .orc-save-card .btn-row{justify-content:flex-end;margin-top:16px}
+
+  /* Modal documentos exigidos (Análise IA) */
+  #docsOverlay{
+    position:fixed;inset:0;z-index:120;background:rgba(21,38,66,.45);
+    display:none;align-items:center;justify-content:center;padding:18px;
+  }
+  #docsOverlay.open{display:flex}
+
+  /* Modal Vamos participar? */
+  #participarOverlay{
+    position:fixed;inset:0;z-index:130;background:rgba(21,38,66,.5);
+    display:none;align-items:center;justify-content:center;padding:18px;
+  }
+  #participarOverlay.open{display:flex}
+  .participar-modal-card{max-width:560px;text-align:left;max-height:min(92vh,820px);overflow:auto}
+  .participar-meta{
+    display:flex;flex-direction:column;gap:6px;padding:12px 14px;margin-bottom:4px;
+    border-radius:12px;background:#f7f9fc;border:1px solid var(--ls-line);font-size:13px;color:var(--ls-navy);
+  }
+  .participar-resumo{
+    margin-top:6px;padding-top:8px;border-top:1px dashed var(--ls-line);
+    font-size:12.5px;color:var(--ls-muted);line-height:1.45;
+  }
+  .participar-empresas{
+    margin-top:12px;padding:12px 14px;border-radius:12px;
+    border:1px solid #d7e3f4;background:linear-gradient(180deg,#f4f8ff,#eef4fc);
+  }
+  .participar-empresas-head{
+    font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;
+    color:var(--ls-navy);margin-bottom:8px;
+  }
+  .participar-empresas-body{font-size:13px;color:var(--ls-navy);line-height:1.45}
+  .participar-empresas-loading{
+    display:flex;align-items:center;gap:8px;padding:4px 0;
+  }
+  .participar-empresas-resumo{margin:0 0 10px;font-size:12.5px;color:var(--ls-muted)}
+  .participar-pill{
+    display:inline-flex;align-items:center;gap:4px;margin:0 6px 8px 0;padding:3px 9px;
+    border-radius:999px;font-size:11px;font-weight:700;background:#fff;border:1px solid #c8d6ea;color:var(--ls-navy);
+  }
+  .participar-pill.is-me{background:#e8f7ee;border-color:#9fd4b0;color:#1b6b3a}
+  .participar-list{margin:0;padding:0 0 0 18px}
+  .participar-list li{margin:0 0 5px}
+  .participar-sub{margin:12px 0 6px;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.35px;color:var(--ls-muted)}
+  .participar-empresa-item{
+    padding:8px 10px;margin:0 0 6px;border-radius:10px;background:#fff;border:1px solid var(--ls-line);
+  }
+  .participar-empresa-item strong{display:block;font-size:12.5px;color:var(--ls-navy)}
+  .participar-empresa-item .muted{font-size:11.5px;margin-top:2px}
+  .participar-empresas-aviso{
+    margin-top:10px;font-size:11px;color:var(--ls-muted);line-height:1.4;
+  }
+  .participar-actions{justify-content:center!important;gap:12px;margin-top:18px;position:sticky;bottom:0;padding-top:8px;background:linear-gradient(180deg,transparent,#fff 40%)}
+  .participar-actions .btn{min-width:110px;font-weight:800;letter-spacing:.3px}
+
+  /* Lista Licitações que Participo */
+  .leiloes-list{display:flex;flex-direction:column;gap:10px}
+  .leiloes-arch-label{margin:10px 0 2px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+  .leilao-item{
+    display:flex;justify-content:space-between;gap:14px;align-items:flex-start;
+    padding:14px 16px;border:1px solid var(--ls-line);border-radius:14px;background:#fff;
+    box-shadow:0 2px 8px rgba(21,38,66,.04);border-left:5px solid var(--ls-green);
+    cursor:pointer;transition:border-color .15s,box-shadow .15s,background .15s;
+  }
+  .leilao-item:hover{
+    border-color:#c8d2e0;background:#fafbfd;box-shadow:0 4px 14px rgba(21,38,66,.08);
+  }
+  .leilao-item.is-archived{opacity:.72;border-left-color:var(--ls-muted);cursor:default}
+  .leilao-item.is-archived:hover{border-color:var(--ls-line);background:#fff;box-shadow:0 2px 8px rgba(21,38,66,.04)}
+  .leilao-main{min-width:0;flex:1}
+  .leilao-title{font-weight:800;color:var(--ls-navy);font-size:14px;word-break:break-word}
+  .leilao-sub{font-size:12px;color:var(--ls-muted);margin-top:3px;word-break:break-word}
+  .leilao-meta{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-top:8px}
+  .leilao-resumo{
+    margin-top:10px;font-size:12.5px;color:var(--ls-muted);line-height:1.45;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+  }
+  .leilao-actions{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;flex-shrink:0}
+  @media (max-width:720px){
+    .leilao-item{flex-direction:column}
+    .leilao-actions{justify-content:flex-start}
+  }
+
+  /* Painel do edital (workspace por leilão) */
+  .lw-context-bar{
+    display:flex;align-items:center;flex-wrap:wrap;gap:10px 12px;
+    margin:0 0 14px;padding:10px 14px;border:1px solid var(--ls-line);border-radius:14px;
+    background:linear-gradient(180deg,#fff,#f7f9fc);box-shadow:0 2px 8px rgba(21,38,66,.04);
+  }
+  .lw-context-bar[hidden]{display:none!important}
+  .lw-context-meta{min-width:0;flex:1 1 160px}
+  .lw-context-label{
+    display:block;font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;
+    color:var(--ls-muted);line-height:1.2;
+  }
+  .lw-context-meta strong{
+    display:block;font-size:13px;color:var(--ls-navy);margin-top:2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;
+  }
+  .lw-context-tabs{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .lw-tab{
+    margin:0;padding:7px 12px;border:1px solid var(--ls-line);border-radius:999px;
+    background:#f3f5f9;color:var(--ls-navy);font:inherit;font-size:12px;font-weight:700;
+    cursor:pointer;line-height:1;transition:background .15s,border-color .15s,box-shadow .15s;
+  }
+  .lw-tab:hover{background:#e9eef6;border-color:#c8d2e0}
+  .lw-tab.is-active{
+    background:linear-gradient(135deg,var(--ls-gold),var(--ls-gold-soft));
+    border-color:transparent;box-shadow:0 2px 8px rgba(201,162,39,.3);
+  }
+  .lw-hub-grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:6px;
+  }
+  .lw-hub-card{
+    display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;
+    margin:0;padding:18px 16px;border:1px solid var(--ls-line);border-radius:14px;
+    background:#fff;cursor:pointer;font:inherit;color:inherit;
+    box-shadow:0 2px 8px rgba(21,38,66,.04);
+    transition:border-color .15s,box-shadow .15s,transform .15s,background .15s;
+  }
+  .lw-hub-card:hover{
+    border-color:var(--ls-gold);background:#fffbeb;
+    box-shadow:0 6px 18px rgba(201,162,39,.14);transform:translateY(-1px);
+  }
+  .lw-hub-ico{font-size:22px;line-height:1}
+  .lw-hub-card b{font-size:14px;color:var(--ls-navy)}
+  .lw-hub-card span:last-child{font-size:12px;color:var(--ls-muted);line-height:1.4}
+  .docs-modal-card{
+    width:100%;max-width:560px;max-height:min(86vh,720px);overflow:auto;
+    background:#fff;border-radius:16px;box-shadow:var(--shadow-lg);padding:22px 22px 18px;
+  }
+  .docs-modal-card h3{margin:0 0 6px;font-size:17px;color:var(--ls-navy)}
+  .docs-modal-card p{margin:0 0 14px;font-size:13px;color:var(--ls-muted)}
+  .docs-modal-card .btn-row{justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+  .docs-modal-list{display:flex;flex-direction:column;gap:8px}
+  .docs-modal-item{
+    display:flex;gap:10px;align-items:flex-start;padding:10px 12px;
+    border:1px solid var(--ls-line);border-radius:10px;background:#f7f9fc;
+  }
+  .docs-modal-item .di-tipo{
+    flex-shrink:0;font-size:10.5px;font-weight:700;text-transform:uppercase;
+    letter-spacing:.4px;padding:3px 7px;border-radius:6px;background:var(--ls-navy);color:#fff;
+  }
+  .docs-modal-item .di-tipo.t-tecnica{background:#1a4fa0}
+  .docs-modal-item .di-tipo.t-outro{background:var(--ls-muted)}
+  .docs-modal-item .di-body{min-width:0;flex:1}
+  .docs-modal-item .di-nome{font-weight:700;color:var(--ls-navy);font-size:13px;word-break:break-word}
+  .docs-modal-item .di-obs{font-size:12px;color:var(--ls-muted);margin-top:2px;word-break:break-word}
+
+  /* Checklist documentos do edital */
+  .docs-meta{
+    display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;
+    margin-bottom:12px;padding:10px 12px;border-radius:10px;
+    background:#f7f9fc;border:1px solid var(--ls-line);font-size:13px;
+  }
+  .docs-meta b{color:var(--ls-navy)}
+  .docs-summary{
+    display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;
+  }
+  .docs-summary .docs-pill,
+  .docs-acc-pills .docs-pill{
+    font-size:12px;font-weight:700;padding:5px 10px;border-radius:999px;
+    background:#e8edf5;color:var(--ls-navy);
+  }
+  .docs-summary .docs-pill.ok,
+  .docs-acc-pills .docs-pill.ok{background:var(--ls-green-bg);color:#136c3d}
+  .docs-summary .docs-pill.pend,
+  .docs-acc-pills .docs-pill.pend{background:var(--ls-yellow-bg);color:#8a6410}
+  .docs-list{width:100%;display:flex;flex-direction:column;gap:10px}
+  .docs-accordion{
+    border:1px solid var(--ls-line);border-radius:10px;background:#fff;overflow:hidden;
+  }
+  .docs-acc-head{
+    width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;
+    padding:10px 12px;border:0;background:#f7f9fc;cursor:pointer;text-align:left;
+    font:inherit;color:inherit;
+  }
+  .docs-acc-head:hover{background:#eef2f8}
+  .docs-acc-chevron{
+    flex-shrink:0;width:1.1em;font-size:14px;font-weight:700;color:var(--ls-navy);line-height:1;
+  }
+  .docs-acc-meta{
+    flex:1;min-width:180px;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:13px;
+  }
+  .docs-acc-title{color:#111}
+  .docs-edital-name{font-weight:700;color:#000}
+  .docs-acc-file{font-size:12px;color:var(--ls-muted)}
+  .docs-acc-updated{font-weight:700;color:#1565c0;font-size:13px}
+  .docs-acc-pills{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+  .docs-acc-body{padding:4px 12px 8px;border-top:1px solid var(--ls-line);background:#fff}
+  .docs-acc-body[hidden]{display:none !important}
+  .docs-row{
+    display:grid;grid-template-columns:auto 1fr auto;gap:12px 14px;
+    align-items:center;padding:12px 0;border-bottom:1px solid var(--ls-line);
+  }
+  .docs-row:last-child{border-bottom:0}
+  .docs-row .docs-ok{
+    display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:12px;
+    color:var(--ls-navy);cursor:pointer;user-select:none;white-space:nowrap;
+  }
+  .docs-row .docs-ok input{width:18px;height:18px;accent-color:var(--ls-green);cursor:pointer}
+  .docs-row.is-ok .docs-name{color:var(--ls-green)}
+  .docs-name{font-weight:700;color:var(--ls-navy);font-size:13.5px;word-break:break-word}
+  .docs-obs{font-size:12px;color:var(--ls-muted);margin-top:3px;word-break:break-word}
+  .docs-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .docs-badge{
+    font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:6px;
+    background:#e8edf5;color:var(--ls-navy);
+  }
+  .docs-badge.cofre{background:#e8f0fe;color:#1a4fa0}
+  .docs-badge.ok{background:var(--ls-green-bg);color:#136c3d}
+  .docs-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  @media (max-width:720px){
+    .docs-acc-pills{margin-left:0;width:100%}
+    .docs-row{grid-template-columns:1fr;gap:8px}
+    .docs-actions{justify-content:flex-start}
+  }

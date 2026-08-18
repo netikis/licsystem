@@ -1,0 +1,277 @@
+<!-- ============ MODAL CENTRAL: CONTROLE DE ENTREGA ============ -->
+<div id="entregaOverlay" aria-hidden="true">
+<aside id="entregaOffcanvas" role="dialog" aria-modal="true" aria-labelledby="entregaOcTitle" aria-hidden="true">
+  <div class="oc-head">
+    <div>
+      <h2 id="entregaOcTitle">Nova Entrega</h2>
+      <p>Preencha identificação, nota fiscal e destinação logística.</p>
+    </div>
+    <button type="button" class="oc-close" id="btnFecharEntrega" aria-label="Fechar">&times;</button>
+  </div>
+  <div class="oc-body">
+    <div id="entregaFormAlert" class="alert"></div>
+
+    <!-- Sessão 1: Identificação -->
+    <div class="oc-section">
+      <span class="oc-label">1 · Identificação</span>
+      <div class="form-row">
+        <div style="flex:2">
+          <label class="fld" for="entregaNomeLicitacao">Nome da Licitação</label>
+          <input type="text" id="entregaNomeLicitacao" placeholder="ex.: PREFEITURA IBAITI" />
+        </div>
+        <div>
+          <label class="fld" for="entregaNumeroEmpenho">Número do Empenho</label>
+          <input type="text" id="entregaNumeroEmpenho" placeholder="ex.: 2026NE001234" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div style="flex:1;width:100%">
+          <label class="fld" for="entregaPreenchidoPor">Preenchido por <span style="color:var(--ls-red)">*</span></label>
+          <input type="text" id="entregaPreenchidoPor" placeholder="Nome de quem está preenchendo este formulário" required autocomplete="name" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Sessão 2: Faturamento / Anexos -->
+    <div class="oc-section">
+      <span class="oc-label">2 · Faturamento, origem e anexos</span>
+      <div class="entrega-grid">
+        <div class="entrega-subcard">
+          <h3>Status da Nota</h3>
+          <div class="status-nf-wrap" role="radiogroup" aria-label="Status da Nota">
+            <label class="status-nf is-nao" id="lblStatusNaoFeito">
+              <input type="radio" name="entregaStatusNota" id="entregaStatusNaoFeito" value="NAO_FEITO" checked />
+              NÃO FEITO
+            </label>
+            <label class="status-nf" id="lblStatusFeito">
+              <input type="radio" name="entregaStatusNota" id="entregaStatusFeito" value="FEITO" />
+              FEITO
+            </label>
+          </div>
+        </div>
+        <div class="entrega-subcard">
+          <h3>Anexar Nota Fiscal</h3>
+          <label class="upload-box" for="entregaArquivoNf" id="entregaUploadBox">
+            <span class="ub-ico" aria-hidden="true">📎</span>
+            <span class="ub-txt">
+              <b id="entregaArquivoNome">PDF ou imagem</b>
+              <span>Clique para selecionar o arquivo</span>
+            </span>
+          </label>
+          <input type="file" id="entregaArquivoNf" accept="application/pdf,image/*" style="display:none" />
+        </div>
+      </div>
+      <div class="form-row" style="margin-top:12px">
+        <div style="flex:1;width:100%">
+          <label class="fld" for="entregaObservacoes">Observações / Balão da Nota</label>
+          <textarea id="entregaObservacoes" placeholder="Detalhes da NF, pendências, contato…"></textarea>
+        </div>
+      </div>
+      <div class="form-row">
+        <div style="flex:1;width:100%">
+          <label class="fld" for="entregaMaterialOrigem">Material Adquirido / Fornecedor de Origem</label>
+          <input type="text" id="entregaMaterialOrigem" placeholder="ex.: Ferragens XYZ — abraçadeiras e furadeiras" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Sessão 3: Logística -->
+    <div class="oc-section">
+      <span class="oc-label">3 · Logística de destinação</span>
+      <div class="radio-cards">
+        <label class="radio-card is-active" id="cardDestinoFinal">
+          <input type="radio" name="entregaTipoDestino" id="entregaDestinoFinal" value="DESTINO_FINAL" checked />
+          <span class="rc-ico">🏢</span>
+          <span class="rc-title">DESTINO FINAL</span>
+          <span class="rc-sub">Entrega direta no órgão / local do cliente</span>
+        </label>
+        <label class="radio-card" id="cardMinhaLoja">
+          <input type="radio" name="entregaTipoDestino" id="entregaMinhaLoja" value="MINHA_LOJA" />
+          <span class="rc-ico">🏪</span>
+          <span class="rc-title">MINHA LOJA</span>
+          <span class="rc-sub">Estoque interno — envio futuro</span>
+        </label>
+      </div>
+
+      <div id="painelDestinoFinal">
+        <div class="entrega-subcard">
+          <h3>Endereço do destino</h3>
+          <div class="form-row">
+            <div style="flex:1;width:100%">
+              <label class="fld" for="entregaLocalResponsavel">Nome do Local / Responsável</label>
+              <input type="text" id="entregaLocalResponsavel" placeholder="ex.: Almoxarifado Pref. Ibaiti — João" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div style="max-width:160px">
+              <label class="fld" for="entregaCep">CEP</label>
+              <input type="text" id="entregaCep" placeholder="00000-000" maxlength="9" inputmode="numeric" />
+            </div>
+            <div style="flex:2">
+              <label class="fld" for="entregaEndereco">Endereço</label>
+              <input type="text" id="entregaEndereco" placeholder="Rua / Avenida (ViaCEP)" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div style="max-width:120px">
+              <label class="fld" for="entregaNumero">Número</label>
+              <input type="text" id="entregaNumero" placeholder="Nº" />
+            </div>
+            <div style="flex:1">
+              <label class="fld" for="entregaComplemento">Complemento</label>
+              <input type="text" id="entregaComplemento" placeholder="Sala, bloco, referência…" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label class="fld" for="entregaBairro">Bairro</label>
+              <input type="text" id="entregaBairro" placeholder="Bairro" />
+            </div>
+            <div>
+              <label class="fld" for="entregaCidade">Cidade</label>
+              <input type="text" id="entregaCidade" placeholder="Cidade" />
+            </div>
+            <div style="max-width:80px">
+              <label class="fld" for="entregaUf">UF</label>
+              <input type="text" id="entregaUf" placeholder="UF" maxlength="2" />
+            </div>
+          </div>
+          <div class="small muted" id="entregaCepHint">Digite o CEP (8 dígitos) para preencher via ViaCEP.</div>
+        </div>
+      </div>
+
+      <div id="painelMinhaLoja" style="display:none">
+        <div class="entrega-subcard">
+          <h3>Envio futuro</h3>
+          <label class="fld" for="entregaTransporte">Transporte para envio futuro</label>
+          <select id="entregaTransporte">
+            <option value="">Selecione…</option>
+            <option value="CORREIOS">Correios</option>
+            <option value="TRANSPORTADORA">Transportadora</option>
+            <option value="VEICULO_PROPRIO">Veículo Próprio</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="oc-foot">
+    <button type="button" class="btn btn-ghost" id="btnCancelarEntrega">Cancelar</button>
+    <button type="button" class="btn btn-green" id="btnSalvarEntrega">💾 Salvar Entrega</button>
+  </div>
+</aside>
+</div>
+
+<!-- ============ MODAL: SALVAR ORÇAMENTO NO CATÁLOGO ============ -->
+<div id="orcSaveOverlay" aria-hidden="true">
+  <div class="orc-save-card" role="dialog" aria-modal="true" aria-labelledby="orcSaveTitle">
+    <h3 id="orcSaveTitle">Salvar no Catálogo Interno</h3>
+    <p>Informe o nome e o número da licitação. Depois você reabre pelo Catálogo → Editar.</p>
+    <div id="orcSaveAlert" class="alert"></div>
+    <label class="fld" for="orcSaveNome">Nome da Licitação</label>
+    <input type="text" id="orcSaveNome" placeholder="ex.: Pref. Ibaiti — Material de construção" autocomplete="off" />
+    <label class="fld" for="orcSaveNumero" style="margin-top:10px">Número da Licitação / Pregão</label>
+    <input type="text" id="orcSaveNumero" placeholder="ex.: PE 013/2026" autocomplete="off" />
+    <div class="btn-row">
+      <button type="button" class="btn btn-ghost" id="btnOrcSaveCancel">Cancelar</button>
+      <button type="button" class="btn btn-green" id="btnOrcSaveConfirm">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: DOCUMENTOS EXIGIDOS (pós Análise IA) ============ -->
+<div id="docsOverlay" aria-hidden="true">
+  <div class="docs-modal-card" role="dialog" aria-modal="true" aria-labelledby="docsModalTitle">
+    <h3 id="docsModalTitle">📑 Documentos necessários</h3>
+    <p id="docsModalLead">A IA identificou os documentos abaixo no edital. Confira e marque o que você já tem.</p>
+    <div id="docsModalList" class="docs-modal-list"></div>
+    <div class="btn-row">
+      <button type="button" class="btn btn-ghost" id="btnDocsModalClose">Fechar</button>
+      <button type="button" class="btn btn-gold" id="btnDocsModalGo">Ver o que tenho / Marcar OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: VAMOS PARTICIPAR? (pós Análise IA) ============ -->
+<div id="participarOverlay" aria-hidden="true">
+  <div class="docs-modal-card participar-modal-card" role="dialog" aria-modal="true" aria-labelledby="participarModalTitle">
+    <h3 id="participarModalTitle">🏆 Vamos participar?</h3>
+    <p id="participarModalLead">Deseja marcar este edital em <b>Licitações que Participo</b> para acompanhar a disputa?</p>
+    <div id="participarModalMeta" class="participar-meta"></div>
+    <div id="participarEmpresasBox" class="participar-empresas" aria-live="polite">
+      <div class="participar-empresas-head">Quem pode participar</div>
+      <div id="participarEmpresasBody" class="participar-empresas-body">
+        <div class="participar-empresas-loading muted small">A IA está analisando quem pode disputar este leilão…</div>
+      </div>
+    </div>
+    <div class="btn-row participar-actions">
+      <button type="button" class="btn btn-red" id="btnParticiparNao">NÃO</button>
+      <button type="button" class="btn btn-green" id="btnParticiparSim">SIM</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: COFRE — ADICIONAR / EDITAR ============ -->
+<div id="cofreOverlay" aria-hidden="true">
+  <div class="docs-modal-card cofre-modal-card" role="dialog" aria-modal="true" aria-labelledby="cofreModalTitle">
+    <h3 id="cofreModalTitle">Adicionar documento</h3>
+    <p id="cofreModalLead">Informe os dados do documento. Arquivo (PDF/imagem) ou link externo.</p>
+    <div id="cofreModalAlert" class="alert"></div>
+    <input type="hidden" id="cofreEditId" value="" />
+    <div class="form-row">
+      <div>
+        <label class="fld" for="cofreNome">Nome do documento</label>
+        <input type="text" id="cofreNome" placeholder="ex.: CND Federal" maxlength="220" autocomplete="off" />
+      </div>
+      <div>
+        <label class="fld" for="cofreTipo">Tipo / categoria</label>
+        <select id="cofreTipo">
+          <option value="habilitacao">Habilitação</option>
+          <option value="certidao">Certidão</option>
+          <option value="contrato">Contrato / Ato societário</option>
+          <option value="tecnica">Técnica</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label class="fld" for="cofreValidade">Validade (opcional)</label>
+        <input type="date" id="cofreValidade" />
+      </div>
+      <div>
+        <label class="fld" for="cofreLink">Link (opcional)</label>
+        <input type="url" id="cofreLink" placeholder="https://…" autocomplete="off" />
+      </div>
+    </div>
+    <label class="fld" for="cofreArquivo">Arquivo PDF ou imagem (opcional, máx. 1,5 MB — sem compressão)</label>
+    <input type="file" id="cofreArquivo" accept=".pdf,image/*,application/pdf" />
+    <div id="cofreArquivoInfo" class="muted small" style="margin:6px 0 10px"></div>
+    <label class="fld" for="cofreObs">Observações</label>
+    <textarea id="cofreObs" rows="2" maxlength="400" placeholder="ex.: renovar no site da Receita"></textarea>
+    <div class="btn-row">
+      <button type="button" class="btn btn-ghost" id="btnCofreModalCancel">Cancelar</button>
+      <button type="button" class="btn btn-green" id="btnCofreModalSave">💾 Salvar documento</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: COFRE — VER DOCUMENTO (nítido) ============ -->
+<div id="cofreViewOverlay" aria-hidden="true">
+  <div class="cofre-view-card" role="dialog" aria-modal="true" aria-labelledby="cofreViewTitle">
+    <div class="cofre-view-head">
+      <div class="cofre-view-head-text">
+        <h3 id="cofreViewTitle">Documento</h3>
+        <p id="cofreViewMeta" class="muted small"></p>
+      </div>
+      <div class="cofre-view-toolbar">
+        <button type="button" class="btn btn-ghost btn-sm" id="btnCofreViewZoomOut" title="Diminuir">−</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btnCofreViewZoomReset" title="Tamanho original">100%</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btnCofreViewZoomIn" title="Aumentar">+</button>
+        <button type="button" class="btn btn-primary btn-sm" id="btnCofreViewDownload">⬇️ Baixar</button>
+        <button type="button" class="btn btn-red btn-sm" id="btnCofreViewRemoveAnexo" title="Apagar só o arquivo anexado">🗑 Remover anexo</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btnCofreViewClose">Fechar</button>
+      </div>
+    </div>
+    <div id="cofreViewBody" class="cofre-view-body"></div>
+  </div>
+</div>

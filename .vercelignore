@@ -1,0 +1,23 @@
+# Não enviar segredos / lixo no deploy CLI
+.env
+.env.*
+.env.local
+node_modules
+.vercel
+.git
+EDITAIS
+docs
+.cursor
+chave api
+chave id mercado livre
+FIREBASE CHAVE KEY.txt
+*.backup.html
+licitacao.backup.html
+cruzamento-fuzzy.html
+*.log
+testar-local.bat
+testar-vite.bat
+# APIs removidas (não reintroduzir — Hobby max 12)
+api/extract-itens.js
+api/chat-editais.js
+api/firebase-config.js

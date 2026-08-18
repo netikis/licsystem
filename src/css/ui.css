@@ -1,0 +1,42 @@
+/* LICSYSTEM — badges · alerts · dropzone */
+  /* ---------------- Badges / pills ---------------- */
+  .badge-status{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+  .b-green{background:var(--ls-green-bg);color:var(--ls-green)}
+  .b-yellow{background:var(--ls-yellow-bg);color:var(--ls-yellow)}
+  .b-red{background:var(--ls-red-bg);color:var(--ls-red)}
+  .pill-group{display:inline-flex;flex-wrap:wrap;background:#eef1f6;border-radius:10px;padding:3px;gap:2px;max-width:100%}
+  .pill-group label{cursor:pointer;padding:7px 14px;border-radius:8px;font-size:12.5px;font-weight:600;color:var(--ls-muted)}
+  .pill-group input{display:none}
+  .pill-group input:checked + span{color:var(--ls-navy)}
+  .pill-group label:has(input:checked){background:#fff;box-shadow:var(--shadow);color:var(--ls-navy)}
+  /* ---------------- Alerts ---------------- */
+  .alert{display:none;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:600;margin-bottom:14px;word-break:break-word}
+  .alert.show{display:block}
+  .alert-info{background:#e8f0fe;color:#1a4fa0;border:1px solid #c5d8fb}
+  .alert-warn{background:var(--ls-yellow-bg);color:#8a6410;border:1px solid #f0dca0}
+  .alert-error{background:var(--ls-red-bg);color:#a12626;border:1px solid #f2c4c4}
+  .alert-ok{background:var(--ls-green-bg);color:#136c3d;border:1px solid #b6e3ca}
+  #orcAlert.show{
+    position:sticky;top:8px;z-index:30;
+    box-shadow:0 8px 24px rgba(19,108,61,.18);
+    font-size:14px;padding:14px 16px;
+  }
+  #orcSaveToast{
+    display:none;position:fixed;top:72px;left:50%;transform:translateX(-50%);
+    z-index:1200;padding:14px 22px;border-radius:12px;
+    background:#1e9e5a;color:#fff;font-weight:800;font-size:15px;letter-spacing:.3px;
+    box-shadow:0 12px 32px rgba(21,38,66,.28);pointer-events:none;
+  }
+  #orcSaveToast.show{display:block;animation:orcToastIn .25s ease}
+  @keyframes orcToastIn{
+    from{opacity:0;transform:translateX(-50%) translateY(-8px)}
+    to{opacity:1;transform:translateX(-50%) translateY(0)}
+  }
+  /* ---------------- Dropzone ---------------- */
+  .dropzone{
+    border:2px dashed var(--ls-line);border-radius:14px;padding:26px;text-align:center;
+    color:var(--ls-muted);background:#fbfcfe;cursor:pointer;transition:border .15s,background .15s;
+    width:100%;max-width:100%;box-sizing:border-box;
+  }
+  .dropzone.drag{border-color:var(--ls-gold);background:var(--ls-yellow-bg);color:var(--ls-navy)}
+  .dropzone .big{font-size:30px;display:block;margin-bottom:8px}
