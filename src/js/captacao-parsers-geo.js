@@ -1,7 +1,8 @@
-/* LICSYSTEM — parser geométrico de tabela (camada universal)
+/* LICSYSTEM — parser geométrico de tabela (camada universal) v2
  *
  * Usa X/Y do pdf.js para achar colunas (item, descrição, qtd, und, v.unit, v.total)
  * sem depender do nome do município.
+ * Suporta Lote X: Y + Item N -> lote "X.N" (ex: Vitorino 05.08).
  */
 (function (LICSYSTEM) {
   "use strict";
