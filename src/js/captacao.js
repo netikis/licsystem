@@ -112,6 +112,13 @@ BLACKLIST: BLACKLIST,
         if (Number(it && it.qtd) > 0 && desc.length >= 4) good++;
       }
       if (good < 2) return true;
+
+      // Se a extração geométrica já trouxe uma quantidade relevante de itens com
+      // campos mínimos válidos, não force fallback para IA/OCR (isso pode
+      // “perder” linhas e mostrar só parte dos lotes).
+      var ratio = good / Math.max(1, items.length);
+      if (items.length >= 12 && ratio >= 0.85) return false;
+
       var cand = 0;
       try {
         var bag = LICSYSTEM.captacaoParsers;
