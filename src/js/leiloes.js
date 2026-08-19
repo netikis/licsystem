@@ -172,6 +172,52 @@
       LICSYSTEM.leiloesParticipo.render();
       showAlert("leiloesAlert", "ok", "Leilão removido.");
     },
+    _sortOrder: "data",
+    orcStatus: function(it){
+      // Retorna "ok" (verde), "parcial" (amarelo) ou "" (sem orçamento)
+      var orc = it && it.workspace && it.workspace.orcamento;
+      var rows = (orc && Array.isArray(orc.items) ? orc.items : []).filter(function(r){
+        return String(r.produto || "").trim().length > 0;
+      });
+      if(!rows.length) return "";
+      var total = rows.length;
+      var preenchidos = rows.filter(function(r){ return Number(r.vunit) > 0; }).length;
+      if(preenchidos === total) return "ok";
+      if(preenchidos > 0) return "parcial";
+      return "parcial";
+    },
+    sortItems: function(arr, order){
+      var copy = arr.slice();
+      if(order === "alfa"){
+        copy.sort(function(a,b){
+          return String(a.titulo||"").localeCompare(String(b.titulo||""), "pt-BR", {sensitivity:"base"});
+        });
+      } else if(order === "anexo"){
+        // dataAnalise é quando o PDF foi analisado/anexado
+        copy.sort(function(a,b){ return (b.dataAnalise||0) - (a.dataAnalise||0); });
+      } else {
+        // "data" = data do edital extraída do título (formato DD/MM) ou createdAt
+        copy.sort(function(a,b){
+          var da = LICSYSTEM.leiloesParticipo._extractEditalDate(a);
+          var db = LICSYSTEM.leiloesParticipo._extractEditalDate(b);
+          if(da && db) return db - da;
+          if(da) return -1;
+          if(db) return 1;
+          return (b.createdAt||0) - (a.createdAt||0);
+        });
+      }
+      return copy;
+    },
+    _extractEditalDate: function(it){
+      // Tenta extrair data no formato DD/MM ou DD.MM do título ou filename
+      var str = String(it.titulo||"") + " " + String(it.filename||"");
+      var m = str.match(/(\d{1,2})[\/\.](\d{1,2})(?:[\/\.](\d{2,4}))?/);
+      if(!m) return null;
+      var now = new Date();
+      var year = m[3] ? (m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])) : now.getFullYear();
+      var d = new Date(year, Number(m[2])-1, Number(m[1]));
+      return isNaN(d.getTime()) ? null : d.getTime();
+    },
     render: function(){
       var box = el("leiloesList");
       var sum = el("leiloesSummary");
@@ -179,6 +225,8 @@
 
       var active = LICSYSTEM.leiloesParticipo.items.filter(function(it){ return it.status !== "arquivado"; });
       var archived = LICSYSTEM.leiloesParticipo.items.filter(function(it){ return it.status === "arquivado"; });
+      var order = LICSYSTEM.leiloesParticipo._sortOrder || "data";
+      active = LICSYSTEM.leiloesParticipo.sortItems(active, order);
 
       if(sum){
         if(!LICSYSTEM.leiloesParticipo.items.length){
@@ -186,7 +234,13 @@
         } else {
           sum.innerHTML =
             '<span class="docs-pill">' + active.length + " participando</span>" +
-            (archived.length ? '<span class="docs-pill pend">' + archived.length + " arquivado" + (archived.length === 1 ? "" : "s") + "</span>" : "");
+            (archived.length ? '<span class="docs-pill pend">' + archived.length + " arquivado" + (archived.length === 1 ? "" : "s") + "</span>" : "") +
+            '<span style="margin-left:auto;display:flex;gap:6px;align-items:center">' +
+              '<span class="muted small" style="margin-right:2px">Ordenar:</span>' +
+              '<button type="button" class="btn btn-ghost btn-sm lpSort' + (order==="data"?" btn-sort-active":"") + '" data-sort="data" title="Ordenar por data do edital">📅 Data</button>' +
+              '<button type="button" class="btn btn-ghost btn-sm lpSort' + (order==="alfa"?" btn-sort-active":"") + '" data-sort="alfa" title="Ordenar alfabeticamente">🔤 A-Z</button>' +
+              '<button type="button" class="btn btn-ghost btn-sm lpSort' + (order==="anexo"?" btn-sort-active":"") + '" data-sort="anexo" title="Ordenar por data do PDF anexado">📎 Anexo</button>' +
+            "</span>";
         }
       }
 
@@ -203,6 +257,13 @@
         if(it.orgao && it.orgao !== it.titulo) sub.push(it.orgao);
         if(it.municipio) sub.push(it.municipio);
         if(it.filename) sub.push(it.filename);
+        var orcSt = !isArch ? LICSYSTEM.leiloesParticipo.orcStatus(it) : "";
+        var orcBadge = "";
+        if(orcSt === "ok"){
+          orcBadge = '<button type="button" class="btn btn-sm" style="background:#1e9e5a;color:#fff;cursor:default;pointer-events:none" title="Todos os preços preenchidos">✓ ORÇADO</button>';
+        } else if(orcSt === "parcial"){
+          orcBadge = '<button type="button" class="btn btn-sm" style="background:#e0a800;color:#fff;cursor:default;pointer-events:none" title="Orçamento incompleto — faltam preços">⚠ INCOMPLETO</button>';
+        }
         return (
           '<div class="leilao-item' + (isArch ? " is-archived" : "") + '" data-id="' + utils.escapeHtml(it.id) + '"' +
             (isArch ? "" : ' title="Clique para abrir o painel deste edital"') + ">" +
@@ -220,6 +281,7 @@
               (!isArch ? '<button type="button" class="btn btn-gold btn-sm lpOrcar" title="Abrir orçamento deste edital">Orçar</button>' : "") +
               (!isArch ? '<button type="button" class="btn btn-ghost btn-sm lpEncaminhar" title="Encaminhar para Entrega">Encaminhar</button>' : "") +
               (docsN ? '<button type="button" class="btn btn-ghost btn-sm lpDocs" title="Abrir checklist">📑 Docs</button>' : "") +
+              orcBadge +
               (!isArch ? '<button type="button" class="btn btn-ghost btn-sm lpArchive" title="Arquivar">Arquivar</button>' : "") +
               '<button type="button" class="btn btn-ghost btn-sm lpRemove" title="Remover">✕</button>' +
             "</div>" +
@@ -282,6 +344,15 @@
           LICSYSTEM.leiloesParticipo.remove(id);
         });
       });
+
+      if(sum){
+        sum.querySelectorAll(".lpSort").forEach(function(btn){
+          btn.addEventListener("click", function(){
+            LICSYSTEM.leiloesParticipo._sortOrder = btn.getAttribute("data-sort") || "data";
+            LICSYSTEM.leiloesParticipo.render();
+          });
+        });
+      }
     },
     encaminharParaEntrega: function(id){
       var item = LICSYSTEM.leiloesParticipo.findById(id);
