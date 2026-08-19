@@ -59,12 +59,23 @@
 
   function splitLeadingItem(t) {
     var s = String(t || "").trim();
-    var m = s.match(/^(\d{1,4})(?:\s+(.+))?$/);
+    var m = s.match(/^(\d{1,4})\.?(?:\s+(.+))?$/);
     if (!m) return null;
     var n = Number(m[1]);
     if (!(n >= 1 && n < 5000)) return null;
     var rest = String(m[2] || "").trim();
     if (rest && (UND_RE.test(rest) || isMoneyText(rest) || isQtyText(rest))) return null;
+    return { lote: String(n), rest: rest };
+  }
+
+  function splitItemHeading(t) {
+    var s = String(t || "").trim();
+    var m = s.match(/^item\s*0*(\d{1,4})\s*[–\-:]\s*(.+)$/i);
+    if (!m) return null;
+    var n = Number(m[1]);
+    if (!(n >= 1 && n < 5000)) return null;
+    var rest = String(m[2] || "").trim();
+    if (rest.length < 3) return null;
     return { lote: String(n), rest: rest };
   }
 
@@ -209,6 +220,15 @@
     var used = {};
     var lote = "";
     if (cells.length) {
+      var heading = splitItemHeading(cells[0].text);
+      if (heading) {
+        lote = heading.lote;
+        cells[0] = {
+          x: cells[0].x,
+          w: cells[0].w,
+          text: heading.rest
+        };
+      } else {
       var lead = splitLeadingItem(cells[0].text);
       if (lead) {
         lote = lead.lote;
@@ -221,6 +241,7 @@
         } else {
           used[0] = 1;
         }
+      }
       }
     }
 
@@ -308,6 +329,7 @@
       produto: produto,
       editalVunit: vunit,
       editalTotal: vtotal || (vunit && qtd ? vunit * qtd : 0),
+      headingOnly: !!(heading && !vunit && !vtotal && !qtd),
       hasPrices: vunit > 0 || vtotal > 0,
       hasQty: qtd > 0,
       hasDesc: produto.length >= 3
@@ -368,12 +390,26 @@
     var items = [];
     var open = null;
     var currentGroup = "";
+    var pendingByLote = {};
+    var currentPendingLote = "";
 
     function applyGroup(row) {
       if (!row) return row;
       var itemNo = String(row.lote || "").trim();
       if (currentGroup && itemNo && itemNo.indexOf(".") === -1) {
         row.lote = currentGroup + "." + itemNo;
+      }
+      var key = String(row.lote || "").trim();
+      if (key && pendingByLote[key]) {
+        if (!row.produto || row.produto.length < pendingByLote[key].length) {
+          row.produto = pendingByLote[key];
+        } else if (
+          row.produto &&
+          pendingByLote[key] &&
+          row.produto.toLowerCase().indexOf(pendingByLote[key].toLowerCase()) === -1
+        ) {
+          row.produto = (pendingByLote[key] + " " + row.produto).replace(/\s+/g, " ").trim();
+        }
       }
       return row;
     }
@@ -393,12 +429,20 @@
           return;
         }
 
-        var newItem = !!(c.lote && (c.hasQty || c.hasPrices) && c.hasDesc);
+        if (c.headingOnly && c.lote && c.hasDesc) {
+          if (open && open.hasPrices && open.hasQty) flush();
+          currentPendingLote = String(c.lote).trim();
+          pendingByLote[currentPendingLote] = String(c.produto || "").trim();
+          return;
+        }
+
+        var newItem = !!(c.lote && (c.hasQty || c.hasPrices || c.headingOnly) && c.hasDesc);
         if (!newItem && c.hasPrices && c.hasDesc && !(open && !open.hasPrices)) {
           newItem = true;
         }
         if (newItem) {
           flush();
+          currentPendingLote = "";
           open = applyGroup(c);
           return;
         }
@@ -422,6 +466,12 @@
           if (c.und && open.und === "UN") open.und = c.und;
         }
         if (c.hasDesc) {
+          if (currentPendingLote && !c.lote && !c.hasPrices && !c.hasQty) {
+            pendingByLote[currentPendingLote] = (
+              (pendingByLote[currentPendingLote] || "") + " " + c.produto
+            ).replace(/\s+/g, " ").trim();
+            return;
+          }
           var legalTail =
             /^(concord[aâ]ncia|havendo|ser[aã]o observados|nos termos)\b/i.test(c.produto) ||
             /\b(concord[aâ]ncia das partes|limites da lei|reequil[ií]brio|compet[eê]ncia tribut[aá]ria)\b/i.test(
@@ -438,6 +488,25 @@
       });
     });
     flush();
+
+    var withLote = items.filter(function (it) {
+      return String(it && it.lote || "").trim();
+    });
+    if (withLote.length >= 3) {
+      var keep = [];
+      var seenByLote = {};
+      for (var k = items.length - 1; k >= 0; k--) {
+        var lotek = String(items[k] && items[k].lote || "").trim();
+        if (!lotek) continue;
+        if (seenByLote[lotek]) continue;
+        seenByLote[lotek] = 1;
+        keep.push(items[k]);
+      }
+      if (keep.length >= 2) {
+        keep.reverse();
+        return keep;
+      }
+    }
     return items;
   };
 })(window.LICSYSTEM || (window.LICSYSTEM = {}));
