@@ -106,18 +106,22 @@ BLACKLIST: BLACKLIST,
     extracaoFraca: function (items, geom) {
       items = items || [];
       var good = 0;
+      var withPrice = 0;
       for (var i = 0; i < items.length; i++) {
         var it = items[i];
         var desc = String((it && it.produto) || "").replace(/\s+/g, " ").trim();
-        if (Number(it && it.qtd) > 0 && desc.length >= 4) good++;
+        if (Number(it && it.qtd) > 0 && desc.length >= 4) {
+          good++;
+          if (Number(it.editalVunit) > 0 || Number(it.editalTotal) > 0) withPrice++;
+        }
       }
       if (good < 2) return true;
 
-      // Se a extração geométrica já trouxe uma quantidade relevante de itens com
-      // campos mínimos válidos, não force fallback para IA/OCR (isso pode
-      // “perder” linhas e mostrar só parte dos lotes).
+      // Se extracao geo trouxe muitos itens COM preco, nao vai para fallback IA.
+      // Sem preco na maioria = capturou clausulas (ex: Antonio Olinto).
       var ratio = good / Math.max(1, items.length);
-      if (items.length >= 12 && ratio >= 0.85) return false;
+      var priceRatio = withPrice / Math.max(1, good);
+      if (items.length >= 12 && ratio >= 0.85 && priceRatio >= 0.5) return false;
 
       var cand = 0;
       try {
