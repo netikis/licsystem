@@ -193,29 +193,34 @@
           return String(a.titulo||"").localeCompare(String(b.titulo||""), "pt-BR", {sensitivity:"base"});
         });
       } else if(order === "anexo"){
-        // dataAnalise é quando o PDF foi analisado/anexado
+        // mais recente primeiro
         copy.sort(function(a,b){ return (b.dataAnalise||0) - (a.dataAnalise||0); });
       } else {
-        // "data" = data do edital extraída do título (formato DD/MM) ou createdAt
+        // "data" = data do edital (DD/MM) — crescente: Janeiro primeiro, Dezembro por último
         copy.sort(function(a,b){
           var da = LICSYSTEM.leiloesParticipo._extractEditalDate(a);
           var db = LICSYSTEM.leiloesParticipo._extractEditalDate(b);
-          if(da && db) return db - da;
+          if(da && db) return da - db;   // crescente: menor data primeiro
           if(da) return -1;
           if(db) return 1;
-          return (b.createdAt||0) - (a.createdAt||0);
+          return (a.createdAt||0) - (b.createdAt||0);
         });
       }
       return copy;
     },
     _extractEditalDate: function(it){
-      // Tenta extrair data no formato DD/MM ou DD.MM do título ou filename
+      // Extrai data no formato DD/MM ou DD.MM do título ou filename
+      // Ex: "EDITAL GODOY MOREIRA 02.09" → dia=02, mês=09
       var str = String(it.titulo||"") + " " + String(it.filename||"");
-      var m = str.match(/(\d{1,2})[\/\.](\d{1,2})(?:[\/\.](\d{2,4}))?/);
+      // Busca padrão DD.MM ou DD/MM (dia 1-31, mês 1-12)
+      var m = str.match(/\b(\d{1,2})[\/\.](\d{1,2})(?:[\/\.](\d{2,4}))?\b/);
       if(!m) return null;
+      var day = Number(m[1]);
+      var mon = Number(m[2]);
+      if(day < 1 || day > 31 || mon < 1 || mon > 12) return null;
       var now = new Date();
       var year = m[3] ? (m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])) : now.getFullYear();
-      var d = new Date(year, Number(m[2])-1, Number(m[1]));
+      var d = new Date(year, mon - 1, day);
       return isNaN(d.getTime()) ? null : d.getTime();
     },
     render: function(){
