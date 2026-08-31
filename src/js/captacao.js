@@ -121,8 +121,15 @@ BLACKLIST: BLACKLIST,
       // Sem preco na maioria = capturou clausulas (ex: Antonio Olinto).
       var ratio = good / Math.max(1, items.length);
       var priceRatio = withPrice / Math.max(1, good);
+
+      // countGeoCandidates conta quase toda linha com letra+número (infla muito).
+      // Extração sólida com dezenas de itens precificados NÃO é fraca — senão a IA
+      // (máx. 4 páginas) sobrescreve 95 itens por ~13 (ex.: Mauá da Serra).
+      if (good >= 40 && priceRatio >= 0.55) return false;
+      if (good >= 20 && ratio >= 0.9 && priceRatio >= 0.7) return false;
+
       if (items.length >= 12 && ratio >= 0.85 && priceRatio >= 0.5) {
-        // Ainda assim: tabela enorme no PDF e só uma fatia importada = fraca
+        // Fatia fina: só marca fraca se veio poucos itens E o PDF parece ter tabela grande
         var candEarly = 0;
         try {
           var bagEarly = LICSYSTEM.captacaoParsers;
@@ -130,7 +137,8 @@ BLACKLIST: BLACKLIST,
             candEarly = bagEarly.countGeoCandidates(geom);
           }
         } catch (e1) {}
-        if (!(candEarly >= 40 && items.length < candEarly * 0.35)) return false;
+        if (!(candEarly >= 40 && items.length < 40 && items.length < candEarly * 0.35))
+          return false;
       }
 
       var cand = 0;
@@ -140,7 +148,8 @@ BLACKLIST: BLACKLIST,
           cand = bag.countGeoCandidates(geom);
         }
       } catch (e) {}
-      if (cand >= 8 && items.length < cand * 0.35) return true;
+      // Só "fraca por candidatos" quando a fatia é pequena (<40). Não comparar 95 vs 1500.
+      if (cand >= 8 && items.length < 40 && items.length < cand * 0.35) return true;
       if (cand >= 40 && items.length < 40) return true;
       return false;
     },
@@ -430,7 +439,8 @@ BLACKLIST: BLACKLIST,
                     .extractItensViaIa(images, hint, fileName)
                     .then(function (iaItems) {
                       var iaLen = (iaItems && iaItems.length) || 0;
-                      if (iaLen >= 2 && (fraca || iaLen > items.length)) {
+                      // Nunca trocar extração textual maior por fatia da IA (4 páginas).
+                      if (iaLen >= 2 && iaLen > items.length) {
                         LICSYSTEM.captacao.lastModelo = {
                           id: "ia-imagem",
                           label: "Tabela lida por IA (layout não cadastrado)",
