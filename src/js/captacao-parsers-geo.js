@@ -9,7 +9,7 @@
 
   var bag = LICSYSTEM.captacaoParsers || (LICSYSTEM.captacaoParsers = {});
   var UND_RE =
-    /^(UN|UND|UNID\.?|UNIDADE|PC|PCT|PCTE|P[CÇ]|KG|G|M|M2|M3|ML|L|LT|CX|PAR|JG|KIT|RL|ROLO|GL|GAL|SC|SACO|TON|HR|VB|SERV|PR|POTE|CJ|CONJ|METRO|MT|FARDO|FD)$/i;
+    /^(UN|UND|UNID\.?|UNIDADE|UNIDAD|PC|PCT|PCTE|P[CÇ]|PE[CÇ]A|PE[CÇ]AS|PCS|KG|G|M|M2|M3|ML|L|LT|CX|PAR|JG|KIT|RL|ROLO|ROLOS|GL|GAL|SC|SACO|TON|HR|VB|SERV|PR|POTE|CJ|CONJ|METRO|METROS|MT|FARDO|FD)$/i;
   var HEADER_RE =
     /^(item|lote|qtd|qtde|quant|und\.?|unid|descri|especif|valor|unit|total|c[oó]d|produto|ordem|n[ºo°]|max\.?|c[oó]digo)$/i;
   var SKIP_ROW_RE =
@@ -345,7 +345,37 @@
     }
 
     var und = undIdx >= 0 ? String(cells[undIdx].text || "UN").toUpperCase().replace(/\.$/, "") : "UN";
-    if (und.length > 6) und = "UN";
+    // UNIDADE/METROS/PEÇAS passam de 5–7 letras; só rejeita lixo longo
+    if (und.length > 8 && !UND_RE.test(und)) und = "UN";
+    if (/^PE[CÇ]AS?$/i.test(und)) und = "PEÇA";
+    if (/^ROLOS$/i.test(und)) und = "ROLO";
+    if (/^METROS$/i.test(und)) und = "METRO";
+    if (/^UNIDADE$/i.test(und)) und = "UN";
+
+    // Fragmento de quebra de linha tipo "10" (fim de "1,5-10"): não é qtd isolada
+    if (!lote && !vunit && !vtotal && undIdx < 0 && qtd > 0 && cells.length <= 2) {
+      var frag = cells
+        .map(function (c) {
+          return String(c.text || "").trim();
+        })
+        .filter(Boolean)
+        .join(" ");
+      if (frag) {
+        return {
+          skip: false,
+          lote: "",
+          qtd: 0,
+          und: "UN",
+          produto: frag,
+          editalVunit: 0,
+          editalTotal: 0,
+          headingOnly: false,
+          hasPrices: false,
+          hasQty: false,
+          hasDesc: frag.length >= 1
+        };
+      }
+    }
 
     // Fragmento de quebra de linha tipo "10" (fim de "1,5-10"): não é qtd isolada
     if (!lote && !vunit && !vtotal && undIdx < 0 && qtd > 0 && cells.length <= 2) {
