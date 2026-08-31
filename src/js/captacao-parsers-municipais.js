@@ -459,6 +459,9 @@
     /**
      * Termo de Referência / BLL: ITEM DESCRIÇÃO UNID QTDE VALOR UNIT. VALOR TOTAL
      * Ex.: Mauá da Serra — METROS/PEÇAS/ROLOS/UNIDADE + preços (95 itens).
+     *
+     * Não depende de sequência rígida 1..N (quebrava no 1º item difícil).
+     * Âncoras = UND + QTD + VU + VT com qtd×vu ≈ vt; depois associa o nº do item.
      */
     function splitTermoReferenciaUndBlocks(full) {
       var t = limparPagina(full).replace(/\r\n?/g, "\n");
@@ -470,23 +473,25 @@
           /\b1\s+CABO\s+EL[EÉ]TRICO[\s\S]{0,400}?METROS\s+\d{2,}\s+\d+,\d{2}/i
         );
       }
+      if (start < 0) {
+        start = t.search(
+          /\b(?:METROS|PE[CÇ]AS|ROLOS)\s+\d{2,}\s+\d{1,3}(?:\.\d{3})*,\d{2}\s+\d{1,3}(?:\.\d{3})*,\d{2}/i
+        );
+      }
       if (start < 0) return [];
 
       var region = t.slice(start);
-      // Corta no total do TR (antes do modelo de proposta / cláusulas seguintes)
       var end = region.search(
-        /O\s+valor\s+total\s+estimado\s+da\s+contrata[cç][aã]o|ANEXO\s+II\s+MODELO\s+DE\s+PROPOSTA|MODELO\s+DE\s+PROPOSTA\s+COMERCIAL/i
+        /O\s+valor\s+total\s+estimado\s+da\s+contrata[cç][aã]o|TOTAL\s+939[\d.,]*|ANEXO\s+II\s+MODELO\s+DE\s+PROPOSTA|MODELO\s+DE\s+PROPOSTA\s+COMERCIAL/i
       );
       if (end > 200) region = region.slice(0, end);
 
-      // Títulos de seção que vazam no meio da tabela (layout BLL)
       region = region.replace(
-        /\n?\s*\d{1,2}\.\s*(?:FUNDAMENTA[CÇ][AÃ]O|DOS\s+REQUISITOS|ADEQUA[CÇ][AÃ]O|EXECU[CÇ][AÃ]O)[\s\S]{0,220}?(?=\n\s*\d{1,3}\s+[A-Za-zÀ-ú]|\n\s*[A-ZÁ-Ú]{3,})/gi,
+        /\n?\s*\d{1,2}\.\s*(?:FUNDAMENTA[CÇ][AÃ]O|DOS\s+REQUISITOS|ADEQUA[CÇ][AÃ]O|EXECU[CÇ][AÃ]O)[^\n]{0,180}/gi,
         "\n"
       );
 
-      var flat = region.replace(/\s+/g, " ").trim();
-      flat = flat
+      var flat = region
         .replace(/--\s*\d+\s+of\s+\d+\s*--/gi, " ")
         .replace(/\bUNIDAD\s*E\b/gi, "UNIDADE")
         .replace(/\bITEM\s+DESCRI[CÇ][AÃ]O\s+UNID\.?\s+QTDE\.?\s+VALOR\s+UNIT\.?\s*R\$\s*VALOR\s+TOTAL\s*R\$/gi, " ")
@@ -495,81 +500,171 @@
         .replace(/\s+/g, " ")
         .trim();
 
-      var unds = "METROS|METRO|PE[CÇ]AS|PE[CÇ]A|PCS|ROLOS|ROLO|UNIDADE|UNIDAD|UNID\\.?|UND\\.?|UN";
+      var unds = "METROS|METRO|PE[CÇ]AS|PE[CÇ]A|PCS|ROLOS|ROLO|UNIDADE|UNIDAD|UNID\\.?|UND\\.?";
       var money = "(\\d{1,3}(?:\\.\\d{3})*,\\d{2}|\\d+,\\d{2})";
-      var out = [];
-      var expected = 1;
-      var cursor = 0;
-      var guard = 0;
+      var anchorRe = new RegExp(
+        "\\b(" + unds + ")\\s+(\\d{1,6}(?:\\.\\d{3})?)\\s+" + money + "\\s+" + money,
+        "gi"
+      );
 
-      while (expected <= 300 && guard < 400) {
-        guard++;
-        var slice = flat.slice(cursor);
-        var re = new RegExp(
-          "(?:^|\\s)" +
-            expected +
-            "\\s+([\\s\\S]*?)\\s+(" +
-            unds +
-            ")\\s+(\\d{1,6}(?:\\.\\d{3})?)\\s+" +
-            money +
-            "\\s+" +
-            money +
-            "(?=\\s+(?:" +
-            (expected + 1) +
-            "\\s+|TOTAL\\b|O\\s+valor|$))",
-          "i"
-        );
-        var m = re.exec(slice);
-        if (!m) break;
-
-        var qtd = utils.parseBrNum(m[3]);
-        var vu = utils.parseBrNum(m[4]);
-        var vt = utils.parseBrNum(m[5]);
-        var und = String(m[2] || "UN").toUpperCase().replace(/\.$/, "");
-        if (/^PE[CÇ]AS?$/i.test(und)) und = "PEÇA";
+      var anchors = [];
+      var am;
+      while ((am = anchorRe.exec(flat)) !== null) {
+        var qtd = utils.parseBrNum(am[2]);
+        var vu = utils.parseBrNum(am[3]);
+        var vt = utils.parseBrNum(am[4]);
+        if (!(qtd > 0) || !(vu > 0) || !(vt > 0)) continue;
+        var rel = Math.abs(qtd * vu - vt) / Math.max(vt, 1);
+        // tolerante a arredondamento (ex.: 2 × 1785,66)
+        if (rel > 0.08) continue;
+        var und = String(am[1] || "UN").toUpperCase().replace(/\.$/, "");
+        if (/^PE[CÇ]AS?$/i.test(und) || und === "PCS" || und === "PC" || und === "PÇ") und = "PEÇA";
         if (/^ROLOS$/i.test(und)) und = "ROLO";
         if (/^METROS$/i.test(und)) und = "METRO";
-        if (/^UNIDAD(E)?$/i.test(und) || /^UNID$/i.test(und) || /^UND$/i.test(und)) und = "UN";
+        if (/^UNIDAD(E)?$/i.test(und) || /^UNID$/i.test(und) || /^UND$/i.test(und) || und === "UNI")
+          und = "UN";
+        anchors.push({
+          und: und,
+          qtd: qtd,
+          vu: vu,
+          vt: vt,
+          index: am.index,
+          end: am.index + am[0].length,
+          undLen: am[1].length
+        });
+      }
+      if (anchors.length < 2) return [];
 
-        var desc = String(m[1] || "")
+      function findItemNo(before, prefer) {
+        // Nº do item imediatamente antes da descrição (último candidato plausível)
+        var re = /\b(\d{1,3})\s+(?=[A-Za-zÀ-ú(])/g;
+        var last = null;
+        var m;
+        while ((m = re.exec(before)) !== null) {
+          var n = parseInt(m[1], 10);
+          if (n < 1 || n > 500) continue;
+          // evita capturar "80 Ampères", "12 Polos", bitolas etc. no meio da desc
+          // preferimos o que está mais à esquerda só se for o esperado
+          last = { n: n, at: m.index, len: m[0].length };
+        }
+        if (!last) return null;
+        if (prefer > 0) {
+          // Se há "prefer" (próximo esperado) no fim do trecho, use-o
+          var prefRe = new RegExp(
+            "\\b" + prefer + "\\s+(?=[A-Za-zÀ-ú(])(?![\\s\\S]{0,40}\\b" + prefer + "\\s+)",
+            "i"
+          );
+          // busca a última ocorrência de `prefer` no before
+          var p;
+          var best = null;
+          var prefScan = new RegExp("\\b(" + prefer + ")\\s+(?=[A-Za-zÀ-ú(])", "g");
+          while ((p = prefScan.exec(before)) !== null) {
+            best = { n: prefer, at: p.index, len: p[0].length };
+          }
+          if (best) return best;
+        }
+        return last;
+      }
+
+      var byItem = {};
+      var expected = 1;
+      for (var a = 0; a < anchors.length; a++) {
+        var prevEnd = a > 0 ? anchors[a - 1].end : 0;
+        var before = flat.slice(prevEnd, anchors[a].index);
+        var hit = findItemNo(before, expected);
+        // fallback: procura expected em toda a janela antes do âncora (até 500 chars)
+        if (!hit || (hit.n !== expected && expected <= 200)) {
+          var win = before.slice(Math.max(0, before.length - 500));
+          var expHit = null;
+          var er = new RegExp("\\b(" + expected + ")\\s+(?=[A-Za-zÀ-ú(])", "g");
+          var em;
+          while ((em = er.exec(win)) !== null) {
+            expHit = {
+              n: expected,
+              at: prevEnd + Math.max(0, before.length - 500) + em.index,
+              len: em[0].length
+            };
+          }
+          if (expHit) hit = { n: expected, at: expHit.at - prevEnd, len: expHit.len };
+        }
+        if (!hit) continue;
+
+        var descStart = prevEnd + hit.at + hit.len;
+        var desc = flat.slice(descStart, anchors[a].index).replace(/\s+/g, " ").trim();
+        desc = desc
           .replace(/\b\d{1,2}\.\s*(?:FUNDAMENTA[CÇ][AÃ]O|DOS\s+REQUISITOS)[\s\S]{0,180}$/gi, " ")
           .replace(/\s+/g, " ")
           .trim();
-
-        // Continuidade da descrição após preços (quebra de página), antes do próximo item
-        var afterPos = cursor + m.index + m[0].length;
-        var between = flat.slice(afterPos);
-        var nextMark = between.search(new RegExp("\\s" + (expected + 1) + "\\s+[A-Za-zÀ-ú0-9]", "i"));
-        if (nextMark < 0 && expected === 95) nextMark = between.search(/\sTOTAL\b/i);
-        if (nextMark > 0) {
-          var tail = between.slice(0, nextMark).replace(/\s+/g, " ").trim();
-          // Evita anexar lixo (cláusulas); só fragmentos curtos de especificação
-          if (
-            tail &&
-            tail.length <= 220 &&
-            !/^(TOTAL|O valor|ANEXO|FUNDAMENT|DOS REQUISITOS)\b/i.test(tail) &&
-            /[A-Za-zÀ-ú0-9]/.test(tail)
-          ) {
-            if (desc.toLowerCase().indexOf(tail.toLowerCase()) === -1) {
-              desc = (desc + " " + tail).replace(/\s+/g, " ").trim();
-            }
-          }
-        }
+        if (desc.length < 3) continue;
 
         if (utils && typeof utils.enxugarDescricaoEdital === "function") {
           var slim = utils.enxugarDescricaoEdital(desc);
           if (slim && slim.length >= 8) desc = slim;
         }
 
-        var rel = vt > 0 ? Math.abs(qtd * vu - vt) / Math.max(vt, 1) : 1;
-        // Item 16: unitário 1.785,66 — milhar com ponto
-        if (qtd > 0 && vu > 0 && vt > 0 && desc.length >= 4 && rel <= 0.08) {
-          var packed = packMunicipioRow(expected, qtd, und, desc, vu, vt);
-          if (utils.isLinhaProdutoEdital(packed)) out.push(packed);
+        var itemNo = hit.n;
+        // Evita sobrescrever item já bom com âncora falsa posterior
+        if (byItem[itemNo] && byItem[itemNo].produto.length >= desc.length) {
+          expected = itemNo + 1;
+          continue;
         }
 
-        cursor = afterPos;
-        expected++;
+        var packed = packMunicipioRow(
+          itemNo,
+          anchors[a].qtd,
+          anchors[a].und,
+          desc,
+          anchors[a].vu,
+          anchors[a].vt
+        );
+        if (utils.isLinhaProdutoEdital(packed)) {
+          byItem[itemNo] = packed;
+          expected = itemNo + 1;
+        }
+      }
+
+      var out = [];
+      var keys = Object.keys(byItem)
+        .map(function (k) {
+          return parseInt(k, 10);
+        })
+        .filter(function (n) {
+          return n > 0;
+        })
+        .sort(function (a, b) {
+          return a - b;
+        });
+      for (var k = 0; k < keys.length; k++) out.push(byItem[keys[k]]);
+
+      // Fallback: muitas âncoras válidas (qtd×vu≈vt) mas poucos nºs associados
+      // (pdf.js embaralha "12 Polos" / quebras). Usa ordem das âncoras = itens 1..N.
+      if (anchors.length >= 40 && out.length < Math.floor(anchors.length * 0.7)) {
+        var seq = [];
+        for (var s = 0; s < anchors.length; s++) {
+          var prev = s > 0 ? anchors[s - 1].end : 0;
+          var chunk = flat.slice(prev, anchors[s].index).replace(/\s+/g, " ").trim();
+          // remove nº do item no início, se houver
+          chunk = chunk.replace(/^\d{1,3}\s+/, "").trim();
+          chunk = chunk
+            .replace(/\b\d{1,2}\.\s*(?:FUNDAMENTA[CÇ][AÃ]O|DOS\s+REQUISITOS)[\s\S]{0,180}/gi, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+          if (chunk.length < 3) chunk = "Item " + (s + 1);
+          if (utils && typeof utils.enxugarDescricaoEdital === "function") {
+            var slim2 = utils.enxugarDescricaoEdital(chunk);
+            if (slim2 && slim2.length >= 8) chunk = slim2;
+          }
+          var packed2 = packMunicipioRow(
+            s + 1,
+            anchors[s].qtd,
+            anchors[s].und,
+            chunk,
+            anchors[s].vu,
+            anchors[s].vt
+          );
+          if (utils.isLinhaProdutoEdital(packed2)) seq.push(packed2);
+        }
+        if (seq.length > out.length) out = seq;
       }
 
       return out;

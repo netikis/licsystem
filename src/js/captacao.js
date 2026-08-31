@@ -121,7 +121,17 @@ BLACKLIST: BLACKLIST,
       // Sem preco na maioria = capturou clausulas (ex: Antonio Olinto).
       var ratio = good / Math.max(1, items.length);
       var priceRatio = withPrice / Math.max(1, good);
-      if (items.length >= 12 && ratio >= 0.85 && priceRatio >= 0.5) return false;
+      if (items.length >= 12 && ratio >= 0.85 && priceRatio >= 0.5) {
+        // Ainda assim: tabela enorme no PDF e só uma fatia importada = fraca
+        var candEarly = 0;
+        try {
+          var bagEarly = LICSYSTEM.captacaoParsers;
+          if (geom && bagEarly && typeof bagEarly.countGeoCandidates === "function") {
+            candEarly = bagEarly.countGeoCandidates(geom);
+          }
+        } catch (e1) {}
+        if (!(candEarly >= 40 && items.length < candEarly * 0.35)) return false;
+      }
 
       var cand = 0;
       try {
@@ -131,6 +141,7 @@ BLACKLIST: BLACKLIST,
         }
       } catch (e) {}
       if (cand >= 8 && items.length < cand * 0.35) return true;
+      if (cand >= 40 && items.length < 40) return true;
       return false;
     },
 

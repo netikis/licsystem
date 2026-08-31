@@ -138,7 +138,7 @@
       label: "Termo de Referência — ITEM/UNID/QTDE/valores (Mauá da Serra e similares)",
       family: "municipais",
       split: "splitTermoReferenciaUndBlocks",
-      minItems: 5,
+      minItems: 8,
       priority: 75,
       tryWithoutHint: true,
       hint: function (raw) {
@@ -334,6 +334,12 @@
       }
     }
     if (good < 2) return null;
+    // Evita aceitar fatia (ex.: 13 itens) quando o PDF tem dezenas de linhas de tabela
+    var cand = 0;
+    try {
+      if (typeof bag.countGeoCandidates === "function") cand = bag.countGeoCandidates(geom);
+    } catch (e) {}
+    if (cand >= 40 && out.length < Math.max(20, Math.floor(cand * 0.35))) return null;
     setLastModelo(
       {
         id: "geometrico",
