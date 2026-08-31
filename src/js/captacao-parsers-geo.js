@@ -9,18 +9,18 @@
 
   var bag = LICSYSTEM.captacaoParsers || (LICSYSTEM.captacaoParsers = {});
   var UND_RE =
-    /^(UN|UND|UNID\.?|UNIDADE|PC|PCT|P[CÇ]|KG|G|M|M2|M3|ML|L|LT|CX|PAR|JG|KIT|RL|ROLO|GL|GAL|SC|SACO|TON|HR|VB|SERV|PR|POTE|CJ|CONJ)$/i;
+    /^(UN|UND|UNID\.?|UNIDADE|PC|PCT|PCTE|P[CÇ]|KG|G|M|M2|M3|ML|L|LT|CX|PAR|JG|KIT|RL|ROLO|GL|GAL|SC|SACO|TON|HR|VB|SERV|PR|POTE|CJ|CONJ|METRO|MT|FARDO|FD)$/i;
   var HEADER_RE =
-    /^(item|lote|qtd|qtde|quant|und\.?|unid|descri|especif|valor|unit|total|c[oó]d|produto|ordem|n[ºo°]|max\.?)$/i;
+    /^(item|lote|qtd|qtde|quant|und\.?|unid|descri|especif|valor|unit|total|c[oó]d|produto|ordem|n[ºo°]|max\.?|c[oó]digo)$/i;
   var SKIP_ROW_RE =
-    /^(prefeitura|estado|munic[ií]pio|edital|p[aá]gina|cnpj|e-mail|processo|anexo|rela[cç][aã]o dos itens)\b/i;
-  var GROUP_LOTE_RE = /^lote\s+(\d+)\s*:/i;
+    /^(prefeitura|estado|munic[ií]pio|edital|p[aá]gina|cnpj|e-mail|processo|anexo|rela[cç][aã]o dos itens|pa[cç]o municipal|total)\b/i;
+  var GROUP_LOTE_RE = /^lote\s*:?\s*(\d+)\b/i;
   var LEGEND_ROW_RE = /^(ptl|pum[aá]x|ptm[aá]x|und|qtd|abrevia[cç][oõ]es)\s*:/i;
   var CLAUSE_HEAD_RE =
     /^(da|do|dos|das)\s+(fase|recurso|disposi[cç]|penalidade|habilita|julgamento|objeto)\b/i;
   var DOTACAO_RE = /^\d{2}\.\d{2,3}\.\d+/;
   var SECTION_TITLE_RE =
-    /^(?:\d{1,2}\s+)?(objeto|requisitos da contrata[cç][aã]o|subcontrata[cç][aã]o|especifica[cç][aã]o do objeto)\b/i;
+    /^(?:\d{1,2}\.?\s+)?(objeto|requisitos da contrata[cç][aã]o|subcontrata[cç][aã]o|especifica[cç][aã]o do objeto|estimativa|estudo de viabilidade|justificativa)\b/i;
 
   function parseNum(utils, raw) {
     var s = String(raw || "").replace(/R\$/gi, "").trim();
@@ -302,6 +302,34 @@
       var inferred = vtotal / vunit;
       if (inferred >= 0.5 && inferred < 1e6) qtd = Math.round(inferred * 1000) / 1000;
     }
+    // Código do produto (ex: 5341) não pode vencer a qtd real (total/unitário)
+    if (qtd > 0 && vunit > 0 && vtotal > 0 && !almostEq(qtd * vunit, vtotal)) {
+      var inferred2 = vtotal / vunit;
+      if (inferred2 >= 0.5 && inferred2 < 1e6 && almostEq(inferred2 * vunit, vtotal)) {
+        qtd = Math.round(inferred2 * 1000) / 1000;
+      }
+    }
+    // Qtd no fim da descrição: "... PACOTE COM 50 3.300,00"
+    if (undIdx > 0) {
+      var descCell = String(cells[undIdx - 1] && cells[undIdx - 1].text || "").trim();
+      var mQtyTail = descCell.match(/(\d{1,3}(?:\.\d{3})+|\d+)(?:,\d{2})?\s*$/);
+      if (mQtyTail) {
+        var tailRaw = mQtyTail[0];
+        var tailQty = parseNum(utils, /,\d{2}$/.test(tailRaw) ? tailRaw : mQtyTail[1]);
+        if (tailQty > 0) {
+          if (!qtd || (vunit > 0 && vtotal > 0 && !almostEq(qtd * vunit, vtotal) && almostEq(tailQty * vunit, vtotal))) {
+            qtd = tailQty;
+          }
+          if (!used[undIdx - 1] && (!qtd || almostEq(tailQty, qtd) || (vunit > 0 && vtotal > 0 && almostEq(tailQty * vunit, vtotal)))) {
+            cells[undIdx - 1] = {
+              x: cells[undIdx - 1].x,
+              w: cells[undIdx - 1].w,
+              text: descCell.replace(mQtyTail[0], "").replace(/\s+/g, " ").trim()
+            };
+          }
+        }
+      }
+    }
 
     var descParts = [];
     for (i = 0; i < cells.length; i++) {
@@ -319,6 +347,31 @@
     var und = undIdx >= 0 ? String(cells[undIdx].text || "UN").toUpperCase().replace(/\.$/, "") : "UN";
     if (und.length > 6) und = "UN";
 
+    // Fragmento de quebra de linha tipo "10" (fim de "1,5-10"): não é qtd isolada
+    if (!lote && !vunit && !vtotal && undIdx < 0 && qtd > 0 && cells.length <= 2) {
+      var frag = cells
+        .map(function (c) {
+          return String(c.text || "").trim();
+        })
+        .filter(Boolean)
+        .join(" ");
+      if (frag) {
+        return {
+          skip: false,
+          lote: "",
+          qtd: 0,
+          und: "UN",
+          produto: frag,
+          editalVunit: 0,
+          editalTotal: 0,
+          headingOnly: false,
+          hasPrices: false,
+          hasQty: false,
+          hasDesc: frag.length >= 1
+        };
+      }
+    }
+
     if (!vunit && !vtotal && CLAUSE_HEAD_RE.test(produto)) return { skip: true };
 
     return {
@@ -332,7 +385,7 @@
       headingOnly: !!(heading && !vunit && !vtotal && !qtd),
       hasPrices: vunit > 0 || vtotal > 0,
       hasQty: qtd > 0,
-      hasDesc: produto.length >= 3
+      hasDesc: produto.length >= 2
     };
   }
 
@@ -392,6 +445,13 @@
     var currentGroup = "";
     var pendingByLote = {};
     var currentPendingLote = "";
+    var pendingDesc = "";
+
+    function looksLikeDescContinuation(t) {
+      return /^(MATERIAL|CARACTER|TIPO\b|COR\b|TAMANHO|APLICA|OBS\.?|FORMA\b|MODELO|COM\b|REFOR|\*|FECHAMENTO|PROTE[CÇ]|POLICARBONATO|BISNAGA|INDIVIDUAL|QU[IÍ]MICOS|USO:|FORMATO|ESPESSURA|COMPRIMENTO|GALVON|SCHUMACHER|CINFLEX|\d{1,4}$)/i.test(
+        String(t || "").trim()
+      );
+    }
 
     function applyGroup(row) {
       if (!row) return row;
@@ -403,13 +463,24 @@
       if (key && pendingByLote[key]) {
         if (!row.produto || row.produto.length < pendingByLote[key].length) {
           row.produto = pendingByLote[key];
+          row.hasDesc = true;
         } else if (
           row.produto &&
           pendingByLote[key] &&
           row.produto.toLowerCase().indexOf(pendingByLote[key].toLowerCase()) === -1
         ) {
           row.produto = (pendingByLote[key] + " " + row.produto).replace(/\s+/g, " ").trim();
+          row.hasDesc = true;
         }
+      }
+      if (pendingDesc) {
+        if (!row.produto || !String(row.produto).trim()) {
+          row.produto = pendingDesc;
+        } else if (row.produto.toLowerCase().indexOf(pendingDesc.toLowerCase()) === -1) {
+          row.produto = (pendingDesc + " " + row.produto).replace(/\s+/g, " ").trim();
+        }
+        row.hasDesc = true;
+        pendingDesc = "";
       }
       return row;
     }
@@ -426,6 +497,7 @@
         if (c.groupLote) currentGroup = c.groupLote;
         if (c.skip) {
           if (open && open.hasPrices && open.hasQty) flush();
+          if (c.header || SECTION_TITLE_RE.test(rowText(row))) pendingDesc = "";
           return;
         }
 
@@ -436,11 +508,47 @@
           return;
         }
 
-        var newItem = !!(c.lote && (c.hasQty || c.hasPrices || c.headingOnly) && c.hasDesc);
+        // Descrição sozinha depois de item já completo:
+        // pode ser wrap do item atual OU início do próximo (Tuneiras).
+        // Guardamos em pendingDesc e decidimos na próxima linha com lote.
+        if (
+          c.hasDesc &&
+          !c.lote &&
+          !c.hasPrices &&
+          !c.hasQty &&
+          open &&
+          open.hasPrices &&
+          open.hasQty &&
+          open.hasDesc
+        ) {
+          pendingDesc = pendingDesc
+            ? (pendingDesc + " " + c.produto).replace(/\s+/g, " ").trim()
+            : String(c.produto || "").trim();
+          return;
+        }
+
+        // Item com lote + qtd/preço: exige descrição na linha OU pendingDesc
+        // (Tuneiras: descrição vem na linha anterior; evita falsos itens de cláusulas)
+        var newItem = !!(
+          c.lote &&
+          (c.hasQty || c.hasPrices || c.headingOnly) &&
+          (c.hasDesc || !!pendingDesc || c.headingOnly)
+        );
         if (!newItem && c.hasPrices && c.hasDesc && !(open && !open.hasPrices)) {
           newItem = true;
         }
         if (newItem) {
+          if (pendingDesc && open) {
+            if (!c.hasDesc) {
+              // pending vai para o novo item via applyGroup
+            } else if (looksLikeDescContinuation(pendingDesc)) {
+              // wrap do item atual (ex: GALVONIZADO, MATERIAL SOLA, 10)
+              open.produto = (open.produto + " " + pendingDesc).replace(/\s+/g, " ").trim();
+              open.hasDesc = true;
+              pendingDesc = "";
+            }
+            // senão: pending é título do próximo (ex: BOTINA SEGURANÇA) → applyGroup
+          }
           flush();
           currentPendingLote = "";
           open = applyGroup(c);
