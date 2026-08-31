@@ -1,4 +1,4 @@
-/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP) */
+/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID) */
 (function (LICSYSTEM) {
   "use strict";
   var ctx = LICSYSTEM._ctx || (LICSYSTEM._ctx = {});
@@ -13,9 +13,12 @@
     function packMunicipioRow(lote, qtd, und, produto, vu, vt) {
       und = String(und || "UN").toUpperCase().replace(/\.$/, "");
       if (und === "PR" || und === "PAR") und = "PAR";
-      if (und === "UNID" || und === "UND" || und === "UNI") und = "UN";
+      if (und === "UNID" || und === "UND" || und === "UNI" || und === "UNIDADE") und = "UN";
       if (und === "CONJ" || und === "CJ") und = "CJ";
-      if (und === "ROL") und = "ROLO";
+      if (und === "ROL" || und === "ROLOS") und = "ROLO";
+      if (und === "METROS") und = "METRO";
+      if (/^PE[CÇ]AS?$/i.test(und)) und = "PEÇA";
+      if (und === "PCS" || und === "PC" || und === "PÇ") und = "PEÇA";
       produto = String(produto || "").replace(/\s+/g, " ").trim();
       qtd = Number(qtd) || 0;
       vu = Number(vu) || 0;
@@ -453,6 +456,125 @@
       return out;
     }
 
+    /**
+     * Termo de Referência / BLL: ITEM DESCRIÇÃO UNID QTDE VALOR UNIT. VALOR TOTAL
+     * Ex.: Mauá da Serra — METROS/PEÇAS/ROLOS/UNIDADE + preços (95 itens).
+     */
+    function splitTermoReferenciaUndBlocks(full) {
+      var t = limparPagina(full).replace(/\r\n?/g, "\n");
+      var start = t.search(
+        /ITEM\s+DESCRI[CÇ][AÃ]O\s+UNID\.?\s+QTDE|1\.2\.\s*Do\s+Quantitativo\s+e\s+Valor\s+Estimado/i
+      );
+      if (start < 0) {
+        start = t.search(
+          /\b1\s+CABO\s+EL[EÉ]TRICO[\s\S]{0,400}?METROS\s+\d{2,}\s+\d+,\d{2}/i
+        );
+      }
+      if (start < 0) return [];
+
+      var region = t.slice(start);
+      // Corta no total do TR (antes do modelo de proposta / cláusulas seguintes)
+      var end = region.search(
+        /O\s+valor\s+total\s+estimado\s+da\s+contrata[cç][aã]o|ANEXO\s+II\s+MODELO\s+DE\s+PROPOSTA|MODELO\s+DE\s+PROPOSTA\s+COMERCIAL/i
+      );
+      if (end > 200) region = region.slice(0, end);
+
+      // Títulos de seção que vazam no meio da tabela (layout BLL)
+      region = region.replace(
+        /\n?\s*\d{1,2}\.\s*(?:FUNDAMENTA[CÇ][AÃ]O|DOS\s+REQUISITOS|ADEQUA[CÇ][AÃ]O|EXECU[CÇ][AÃ]O)[\s\S]{0,220}?(?=\n\s*\d{1,3}\s+[A-Za-zÀ-ú]|\n\s*[A-ZÁ-Ú]{3,})/gi,
+        "\n"
+      );
+
+      var flat = region.replace(/\s+/g, " ").trim();
+      flat = flat
+        .replace(/--\s*\d+\s+of\s+\d+\s*--/gi, " ")
+        .replace(/\bUNIDAD\s*E\b/gi, "UNIDADE")
+        .replace(/\bITEM\s+DESCRI[CÇ][AÃ]O\s+UNID\.?\s+QTDE\.?\s+VALOR\s+UNIT\.?\s*R\$\s*VALOR\s+TOTAL\s*R\$/gi, " ")
+        .replace(/\bVALOR\s+UNIT\.?\s*R\$/gi, " ")
+        .replace(/\bVALOR\s+TOTAL\s*R\$/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      var unds = "METROS|METRO|PE[CÇ]AS|PE[CÇ]A|PCS|ROLOS|ROLO|UNIDADE|UNIDAD|UNID\\.?|UND\\.?|UN";
+      var money = "(\\d{1,3}(?:\\.\\d{3})*,\\d{2}|\\d+,\\d{2})";
+      var out = [];
+      var expected = 1;
+      var cursor = 0;
+      var guard = 0;
+
+      while (expected <= 300 && guard < 400) {
+        guard++;
+        var slice = flat.slice(cursor);
+        var re = new RegExp(
+          "(?:^|\\s)" +
+            expected +
+            "\\s+([\\s\\S]*?)\\s+(" +
+            unds +
+            ")\\s+(\\d{1,6}(?:\\.\\d{3})?)\\s+" +
+            money +
+            "\\s+" +
+            money +
+            "(?=\\s+(?:" +
+            (expected + 1) +
+            "\\s+|TOTAL\\b|O\\s+valor|$))",
+          "i"
+        );
+        var m = re.exec(slice);
+        if (!m) break;
+
+        var qtd = utils.parseBrNum(m[3]);
+        var vu = utils.parseBrNum(m[4]);
+        var vt = utils.parseBrNum(m[5]);
+        var und = String(m[2] || "UN").toUpperCase().replace(/\.$/, "");
+        if (/^PE[CÇ]AS?$/i.test(und)) und = "PEÇA";
+        if (/^ROLOS$/i.test(und)) und = "ROLO";
+        if (/^METROS$/i.test(und)) und = "METRO";
+        if (/^UNIDAD(E)?$/i.test(und) || /^UNID$/i.test(und) || /^UND$/i.test(und)) und = "UN";
+
+        var desc = String(m[1] || "")
+          .replace(/\b\d{1,2}\.\s*(?:FUNDAMENTA[CÇ][AÃ]O|DOS\s+REQUISITOS)[\s\S]{0,180}$/gi, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+
+        // Continuidade da descrição após preços (quebra de página), antes do próximo item
+        var afterPos = cursor + m.index + m[0].length;
+        var between = flat.slice(afterPos);
+        var nextMark = between.search(new RegExp("\\s" + (expected + 1) + "\\s+[A-Za-zÀ-ú0-9]", "i"));
+        if (nextMark < 0 && expected === 95) nextMark = between.search(/\sTOTAL\b/i);
+        if (nextMark > 0) {
+          var tail = between.slice(0, nextMark).replace(/\s+/g, " ").trim();
+          // Evita anexar lixo (cláusulas); só fragmentos curtos de especificação
+          if (
+            tail &&
+            tail.length <= 220 &&
+            !/^(TOTAL|O valor|ANEXO|FUNDAMENT|DOS REQUISITOS)\b/i.test(tail) &&
+            /[A-Za-zÀ-ú0-9]/.test(tail)
+          ) {
+            if (desc.toLowerCase().indexOf(tail.toLowerCase()) === -1) {
+              desc = (desc + " " + tail).replace(/\s+/g, " ").trim();
+            }
+          }
+        }
+
+        if (utils && typeof utils.enxugarDescricaoEdital === "function") {
+          var slim = utils.enxugarDescricaoEdital(desc);
+          if (slim && slim.length >= 8) desc = slim;
+        }
+
+        var rel = vt > 0 ? Math.abs(qtd * vu - vt) / Math.max(vt, 1) : 1;
+        // Item 16: unitário 1.785,66 — milhar com ponto
+        if (qtd > 0 && vu > 0 && vt > 0 && desc.length >= 4 && rel <= 0.08) {
+          var packed = packMunicipioRow(expected, qtd, und, desc, vu, vt);
+          if (utils.isLinhaProdutoEdital(packed)) out.push(packed);
+        }
+
+        cursor = afterPos;
+        expected++;
+      }
+
+      return out;
+    }
+
     function splitSaoJosePinhaisBlocks(full) {
       var t = limparPagina(full).replace(/\r\n?/g, "\n");
       var start = t.search(/ANEXO\s+II\s+OR[CÇ]AMENTO DA ADMINISTRA[CÇ][AÃ]O/i);
@@ -520,6 +642,7 @@
     deps.splitCambeBlocks = splitCambeBlocks;
     deps.splitItapejaraBlocks = splitItapejaraBlocks;
     deps.splitSaoJosePinhaisBlocks = splitSaoJosePinhaisBlocks;
+    deps.splitTermoReferenciaUndBlocks = splitTermoReferenciaUndBlocks;
   };
 
 })(window.LICSYSTEM || (window.LICSYSTEM = {}));

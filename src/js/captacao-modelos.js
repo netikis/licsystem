@@ -134,6 +134,27 @@
       }
     },
     {
+      id: "termo-referencia-und",
+      label: "Termo de Referência — ITEM/UNID/QTDE/valores (Mauá da Serra e similares)",
+      family: "municipais",
+      split: "splitTermoReferenciaUndBlocks",
+      minItems: 5,
+      priority: 75,
+      tryWithoutHint: true,
+      hint: function (raw) {
+        return (
+          (/Mau[aá]\s+da\s+Serra/i.test(raw) &&
+            /\b(?:METROS|PE[CÇ]AS|ROLOS)\s+\d{2,}\s+\d{1,3}(?:\.\d{3})*,\d{2}\s+\d{1,3}(?:\.\d{3})*,\d{2}/i.test(
+              raw
+            )) ||
+          (/ITEM\s+DESCRI[CÇ][AÃ]O\s+UNID\.?\s+QTDE/i.test(raw) &&
+            /\b(?:METROS|PE[CÇ]AS|ROLOS)\s+\d{2,}\s+\d+,\d{2}\s+\d{1,3}(?:\.\d{3})*,\d{2}/i.test(
+              raw
+            ))
+        );
+      }
+    },
+    {
       id: "relacao-itens",
       label: "Relação dos Itens (OCR / tabela em imagem)",
       family: "classico",
