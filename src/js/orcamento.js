@@ -414,7 +414,7 @@
             '<td class="td-lote"><input type="text" class="orc-lote" data-i="'+i+'" data-f="lote" value="'+utils.escapeHtml(it.lote)+'" placeholder="—" title="Lote ou Item do edital"></td>'+
             '<td class="td-qtd"><input type="number" class="orc-qtd" data-i="'+i+'" data-f="qtd" value="'+utils.escapeHtml(it.qtd)+'" step="1" min="0" title="Quantidade"></td>'+
             '<td><div class="orc-desc-wrap'+(risco.length?' risk-cell':'')+'">'+flag+
-              '<div class="orc-produto-locked" data-i="'+i+'" title="'+utils.escapeHtml(it.produto)+'">'+(utils.escapeHtml(it.produto)||'<span class="orc-desc-vazia">Descrição do edital</span>')+'</div>'+
+              '<div class="orc-produto-locked" data-i="'+i+'" role="button" tabindex="0" title="Clique para ler a descrição completa" aria-label="Clique para ler a descrição completa do item '+(it.lote||(i+1))+'">'+(utils.escapeHtml(it.produto)||'<span class="orc-desc-vazia">Descrição do edital</span>')+'</div>'+
             '</div></td>'+
             '<td class="td-money"><input type="number" data-i="'+i+'" data-f="editalVunit" value="'+utils.escapeHtml(editalUnitShow)+'" step="0.0001" min="0" title="Valor unitário do edital"></td>'+
             '<td class="td-money split-end"><span class="cell-ro" data-edital-total="'+i+'">'+utils.formatBrl(totalEdital)+'</span></td>'+
@@ -445,6 +445,33 @@
       LICSYSTEM.state._orcRendered = true;
       LICSYSTEM.orcamento.updatePager();
       if(opts.save !== false) LICSYSTEM.orcamento.save();
+    },
+    abrirDescricaoItem:function(idx){
+      var it = LICSYSTEM.state.orcItems && LICSYSTEM.state.orcItems[idx];
+      var ov = el("orcDescOverlay");
+      if(!ov || !it) return;
+      var lote = String(it.lote || "").trim() || String(idx + 1);
+      var qtd = Number(it.qtd) || 0;
+      var texto = String(it.produto || "").trim();
+      if(el("orcDescTitle")) el("orcDescTitle").textContent = "Item " + lote;
+      if(el("orcDescMeta")){
+        el("orcDescMeta").textContent =
+          (qtd ? "Qtd " + qtd.toLocaleString("pt-BR") : "") +
+          (it.und ? " · " + String(it.und).toUpperCase() : "");
+      }
+      if(el("orcDescBody")){
+        el("orcDescBody").textContent = texto || "Sem descrição neste item.";
+      }
+      ov.classList.add("open");
+      ov.setAttribute("aria-hidden","false");
+      var closeBtn = el("btnOrcDescClose");
+      setTimeout(function(){ if(closeBtn) closeBtn.focus(); }, 30);
+    },
+    fecharDescricaoItem:function(){
+      var ov = el("orcDescOverlay");
+      if(!ov) return;
+      ov.classList.remove("open");
+      ov.setAttribute("aria-hidden","true");
     },
     addLinha:function(){
       LICSYSTEM.state.orcItems.push(LICSYSTEM.orcamento.emptyItem());

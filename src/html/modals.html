@@ -161,6 +161,20 @@
 </aside>
 </div>
 
+<!-- ============ MODAL: DESCRIÇÃO COMPLETA DO ITEM (ORÇAMENTO) ============ -->
+<div id="orcDescOverlay" aria-hidden="true">
+  <div class="orc-desc-card" role="dialog" aria-modal="true" aria-labelledby="orcDescTitle">
+    <div class="orc-desc-head">
+      <div>
+        <h3 id="orcDescTitle">Descrição do item</h3>
+        <p id="orcDescMeta" class="orc-desc-meta"></p>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" id="btnOrcDescClose" aria-label="Fechar">✕</button>
+    </div>
+    <div id="orcDescBody" class="orc-desc-body"></div>
+  </div>
+</div>
+
 <!-- ============ MODAL: SALVAR ORÇAMENTO NO CATÁLOGO ============ -->
 <div id="orcSaveOverlay" aria-hidden="true">
   <div class="orc-save-card" role="dialog" aria-modal="true" aria-labelledby="orcSaveTitle">

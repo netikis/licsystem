@@ -62,7 +62,7 @@
     ".orc-title-edital", ".orc-title-meus"
   ].join(",");
 
-  var ROOT_SEL = "#app, #authGate, #entregaOverlay, #orcSaveOverlay, #docsOverlay, #participarOverlay, #cofreOverlay";
+  var ROOT_SEL = "#app, #authGate, #entregaOverlay, #orcSaveOverlay, #orcDescOverlay, #docsOverlay, #participarOverlay, #cofreOverlay";
 
   function normalizeLang(code) {
     code = String(code || "").trim();

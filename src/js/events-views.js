@@ -133,6 +133,11 @@
     });
     document.addEventListener("keydown", function(e){
       if(e.key === "Escape"){
+        var dov = el("orcDescOverlay");
+        if(dov && dov.classList.contains("open")){
+          LICSYSTEM.orcamento.fecharDescricaoItem();
+          return;
+        }
         var pov = el("participarOverlay");
         if(pov && pov.classList.contains("open")){
           LICSYSTEM.leiloesParticipo.confirmNao();
@@ -185,7 +190,10 @@
     });
     on("orcBody","click", function(e){
       var desc = e.target.closest(".orc-produto-locked");
-      if(desc){ desc.classList.toggle("is-open"); return; }
+      if(desc){
+        LICSYSTEM.orcamento.abrirDescricaoItem(Number(desc.getAttribute("data-i")));
+        return;
+      }
       var del = e.target.closest(".orcDel");
       if(del){ var i=Number(del.getAttribute("data-i")); LICSYSTEM.state.orcItems.splice(i,1); if(!LICSYSTEM.state.orcItems.length) LICSYSTEM.state.orcItems.push(LICSYSTEM.orcamento.emptyItem()); LICSYSTEM.orcamento.render(); return; }
       var g = e.target.closest(".orcGoogle");
@@ -201,6 +209,17 @@
         }
         return;
       }
+    });
+    on("orcBody","keydown", function(e){
+      if(e.key !== "Enter" && e.key !== " ") return;
+      var desc = e.target.closest(".orc-produto-locked");
+      if(!desc) return;
+      e.preventDefault();
+      LICSYSTEM.orcamento.abrirDescricaoItem(Number(desc.getAttribute("data-i")));
+    });
+    on("btnOrcDescClose","click", function(){ LICSYSTEM.orcamento.fecharDescricaoItem(); });
+    on("orcDescOverlay","click", function(e){
+      if(e.target === el("orcDescOverlay")) LICSYSTEM.orcamento.fecharDescricaoItem();
     });
     wireOrcFileInput();
 

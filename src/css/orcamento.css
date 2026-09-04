@@ -110,7 +110,7 @@
   .orc-table .cell-total{font-weight:800}
   .orc-desc-wrap{display:flex;align-items:flex-start;gap:4px;min-width:0;width:100%}
   .orc-desc-wrap input{flex:1;min-width:0}
-  /* A descrição do edital é longa: quebra em 2 linhas e abre inteira ao clicar. */
+  /* Descrição compacta na tabela; clique abre o modal com o texto inteiro. */
   .orc-desc-wrap .orc-produto-locked{
     flex:1;min-width:0;
     background:#f3f5f8;color:var(--ls-navy);font-weight:600;
@@ -119,8 +119,8 @@
     display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;
   }
   .orc-desc-wrap .orc-produto-locked:hover{background:#eaeef4}
-  .orc-desc-wrap .orc-produto-locked.is-open{
-    display:block;background:#fff;box-shadow:inset 0 0 0 1px var(--ls-line);
+  .orc-desc-wrap .orc-produto-locked:focus{
+    outline:0;box-shadow:0 0 0 3px rgba(201,162,39,.18);
   }
   .orc-desc-vazia{color:var(--ls-muted);font-weight:500}
   .orc-table tbody td.td-link input{
@@ -225,6 +225,28 @@
     display:none;align-items:center;justify-content:center;padding:18px;
   }
   #orcSaveOverlay.open{display:flex}
+  #orcDescOverlay{
+    position:fixed;inset:0;z-index:125;background:rgba(21,38,66,.45);
+    display:none;align-items:center;justify-content:center;padding:18px;
+  }
+  #orcDescOverlay.open{display:flex}
+  .orc-desc-card{
+    width:100%;max-width:720px;max-height:min(86vh,760px);
+    background:#fff;border-radius:16px;box-shadow:var(--shadow-lg);
+    padding:18px 20px 16px;display:flex;flex-direction:column;min-height:0;
+  }
+  .orc-desc-head{
+    display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+    margin-bottom:12px;
+  }
+  .orc-desc-head h3{margin:0;font-size:17px;color:var(--ls-navy)}
+  .orc-desc-meta{margin:4px 0 0;font-size:12px;color:var(--ls-muted)}
+  .orc-desc-body{
+    flex:1;min-height:0;overflow:auto;padding:12px 14px;
+    background:#f7f9fc;border:1px solid var(--ls-line);border-radius:12px;
+    font-size:14px;line-height:1.55;color:var(--ls-navy);white-space:pre-wrap;
+    overflow-wrap:anywhere;
+  }
   .orc-save-card{
     width:100%;max-width:440px;background:#fff;border-radius:16px;
     box-shadow:var(--shadow-lg);padding:22px 22px 18px;
