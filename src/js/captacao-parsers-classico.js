@@ -249,6 +249,9 @@
       return chunk;
     }
 
+    var RE_CASTRO_PRODUTO =
+      /\b(?:ABAFADOR|AVENTAL|BLUS[AÃ]O|BON[EÉ]|BOTINA|BOTA|CAL[CÇ]ADO|CAL[CÇ]A|CAPACETE|CAPA|CINTO|COLETE|CONE|CREME|LUVA|M[AÁ]SCARA|ÓCULOS|OCULOS|PERNEIRA|PROTETOR|RESPIRADOR|REPELENTE|MACAC[AÃ]O|SAPATO)\b/i;
+
     function limparDescCastroProposta(desc) {
       desc = String(desc || "")
         .replace(/Munic[ií]pio de Castro\s+Diretoria de Suprimentos/gi, " ")
@@ -267,13 +270,62 @@
           ""
         )
         .replace(/^\d{1,3}\s+/, "")
+        .replace(/^(?:UNID\.?|UND\.?|UN|PAR|CAIXA|CXA|CX)\s+(?=[A-Za-zÀ-ú])/i, "")
+        .replace(/\s+R\$\s*\d{1,3}(?:\.\d{3})*,\d{2}\s*$/g, "")
+        .replace(/\s+(?:2[4-9]|30)\s+(?=[A-ZÀ-Ú]{5,})/g, " ")
         .replace(/\s+/g, " ")
         .trim();
-      var prod = desc.search(
-        /\b(?:ABAFADOR|AVENTAL|BLUS[AÃ]O|BON[EÉ]|BOTA|BOTINA|CAL[CÇ]A|CAL[CÇ]ADO|CAPA|CAPACETE|CINTO|COLETE|CONE|CREME|LUVA|M[AÁ]SCARA|OCULOS|ÓCULOS|PERNEIRA|PROTETOR|RESPIRADOR|REPELENTE|MACAC[AÃ]O|SAPATO)\b/i
-      );
+      var prod = desc.search(RE_CASTRO_PRODUTO);
       if (prod > 12) desc = desc.slice(prod).trim();
       return desc;
+    }
+
+    function acharSplitProdutoCastro(text) {
+      var re = new RegExp(RE_CASTRO_PRODUTO.source, "gi");
+      var valid = [];
+      var m;
+      while ((m = re.exec(text)) !== null) {
+        var before16 = text.slice(Math.max(0, m.index - 16), m.index);
+        var skip = /\b(?:DO|DA|DE|DOS|DAS|COM|TIPO|PARA|EM|AO|À|NO|NA|ATIVO|PELO|PELA)\s+$/i.test(
+          before16
+        );
+        if (skip) continue;
+        var before24 = text.slice(Math.max(0, m.index - 24), m.index);
+        var boundary =
+          m.index < 8 ||
+          /(?:^|[.!;]|\b(?:PEDIDO|COMPRA|UNIDADES|PRODUTO|CM|MM|ML|P2)\s+)$/i.test(
+            before24
+          );
+        valid.push({ index: m.index, boundary: boundary });
+      }
+      if (!valid.length) return -1;
+      var titled = [];
+      for (var i = 0; i < valid.length; i++) {
+        if (valid[i].boundary) titled.push(valid[i]);
+      }
+      var list = titled.length ? titled : valid;
+      return list[0].index;
+    }
+
+    /**
+     * Depois do R$ o pdf.js mistura: continuação do item atual + início do próximo
+     * (ex.: "...ATO DO PEDIDO SAPATO/ CALÇADO ANTIDERRAPANTE").
+     */
+    function partirSobraCastro(after) {
+      after = String(after || "")
+        .replace(/Munic[ií]pio de Castro\s+Diretoria de Suprimentos/gi, " ")
+        .replace(/R\$\s*\d{1,3}(?:\.\d{3})*,\d{2}/g, " ")
+        .replace(/^\d{1,3}\s+(?=[A-Za-zÀ-ú])/, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!after) return { cont: "", nextPrefix: "" };
+      var pos = acharSplitProdutoCastro(after);
+      if (pos < 0) return { cont: after, nextPrefix: "" };
+      if (pos < 8) return { cont: "", nextPrefix: after };
+      return {
+        cont: after.slice(0, pos).trim(),
+        nextPrefix: after.slice(pos).trim()
+      };
     }
 
     function packCastroPropostaRow(lote, qtd, und, produto, vu, vt) {
@@ -322,7 +374,7 @@
       if (!head) return [];
       var region = t.slice(head.index);
       var end = region.search(
-        /\n\s*3\.\s*A empresa vencedora|\nANEXO\s*5\b|\nOUTORGANTE:|\nMODELO DE PROCURA[CÇ][AÃ]O/i
+        /\n\s*3\.\s*A empresa vencedora|3\.\s*A empresa vencedora|\nANEXO\s*5\b|\nOUTORGANTE:|\nMODELO DE PROCURA[CÇ][AÃ]O/i
       );
       if (end > 120) region = region.slice(0, end);
       var flat = region.replace(/\s+/g, " ").trim();
@@ -410,13 +462,10 @@
         }
         mid = String(mid || "").replace(/\s+/g, " ").trim();
         prefix = String(prefix || "").replace(/\s+/g, " ").trim();
-        var desc;
-        if (mid.length >= 12 && /^[A-Za-zÀ-ú]/.test(mid) && !/^\d+:\d+/.test(mid)) {
-          desc = (prefix.length > 80 ? mid : (prefix + " " + mid).trim());
-        } else {
-          desc = (prefix + " " + mid).replace(/\s+/g, " ").trim();
-        }
-        prefix = after;
+        var desc = (prefix + " " + mid).replace(/\s+/g, " ").trim();
+        var parted = partirSobraCastro(after);
+        if (parted.cont) desc = (desc + " " + parted.cont).replace(/\s+/g, " ").trim();
+        prefix = parted.nextPrefix;
         if (!desc || desc.length < 3) continue;
         var packed = packCastroPropostaRow(seq[i].itemNo, seq[i].qtd, seq[i].und, desc, vu, vt);
         if (packed && packed.produto && packed.produto.length >= 2) out.push(packed);
