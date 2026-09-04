@@ -14,12 +14,12 @@ for (const rel of [
   "src/js/shell.js",
   "src/js/utils.js",
   "src/js/utils-edital.js",
+  "src/js/captacao-modelos.js",
   "src/js/captacao-parsers-elotech.js",
   "src/js/captacao-parsers-maringa.js",
   "src/js/captacao-parsers-municipais.js",
   "src/js/captacao-parsers-classico.js",
   "src/js/captacao-parsers-geo.js",
-  "src/js/captacao-modelos.js",
   "src/js/captacao-parsers.js",
 ]) {
   vm.runInContext(fs.readFileSync(path.join(root, rel), "utf8"), context, { filename: rel });

@@ -424,6 +424,68 @@
     deps.splitTheoBlocks = splitTheoBlocks;
     deps.splitCastroBlocks = splitCastroBlocks;
     deps.splitChunkPlanilha = splitChunkPlanilha;
+
+    if (typeof bag.registerModelos === "function") {
+      bag.registerModelos([
+        {
+          id: "relacao-itens",
+          label: "Relação dos Itens (OCR / tabela em imagem)",
+          family: "classico",
+          split: "splitRelacaoItensBlocks",
+          minItems: 1,
+          priority: 80,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return (
+              /RELA[CÇ][AÃ]O\s+DOS\s+ITENS/i.test(raw) ||
+              (/COTA\s+RESERVADA/i.test(raw) &&
+                /\b\d{1,4}\s+\d{1,3}(?:\.\d{3})*,\d{3}\s+(?:UN|UND)\b/i.test(raw))
+            );
+          }
+        },
+        {
+          id: "castro",
+          label: "Castro — portal cotas Exclusivo/Ampla",
+          family: "classico",
+          split: "splitCastroBlocks",
+          minItems: 2,
+          priority: 90,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return (
+              /Exclusivo\s+ME\/?EPP\/?MEI|Ampla\s+Concorr/i.test(raw) ||
+              /Exclusivo[\s\S]{0,80}ME\/?EPP\/?MEI|Ampla[\s\S]{0,80}Concorr/i.test(raw)
+            );
+          }
+        },
+        {
+          id: "theo",
+          label: "THEO / compras (Pinhalão e similares)",
+          family: "classico",
+          split: "splitTheoBlocks",
+          minItems: 2,
+          priority: 200,
+          always: true,
+          tryWithoutHint: false,
+          hint: function () {
+            return false;
+          }
+        },
+        {
+          id: "planilha-classica",
+          label: "Planilha clássica (linha a linha)",
+          family: "classico",
+          split: "splitChunkPlanilha",
+          minItems: 1,
+          priority: 900,
+          classic: true,
+          tryWithoutHint: false,
+          hint: function () {
+            return false;
+          }
+        }
+      ]);
+    }
   };
 
 })(window.LICSYSTEM || (window.LICSYSTEM = {}));

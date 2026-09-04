@@ -738,6 +738,111 @@
     deps.splitItapejaraBlocks = splitItapejaraBlocks;
     deps.splitSaoJosePinhaisBlocks = splitSaoJosePinhaisBlocks;
     deps.splitTermoReferenciaUndBlocks = splitTermoReferenciaUndBlocks;
+
+    if (typeof bag.registerModelos === "function") {
+      bag.registerModelos([
+        {
+          id: "godoy-moreira",
+          label: "Godoy Moreira (1Doc — LOTE ORDEM CÓD)",
+          family: "municipais",
+          split: "splitGodoyMoreiraBlocks",
+          minItems: 2,
+          priority: 30,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return (
+              /LOTE\s+ORDEM\s+C[OÓ]D\.?\s*ITEM\s+DESCRICAO/i.test(raw) ||
+              (/Godoy\s+Moreira/i.test(raw) &&
+                /\b\d{1,2}\s+1\s+\d{5}\s+\S[\s\S]{0,80}?\s+(?:UNID|PR)\s+\d+\s+\d{1,3}(?:\.\d{3})*,\d{2}/i.test(
+                  raw
+                ))
+            );
+          }
+        },
+        {
+          id: "sao-joao-ivai",
+          label: "São João do Ivaí (Lote/Especificação)",
+          family: "municipais",
+          split: "splitSaoJoaoIvaiBlocks",
+          minItems: 2,
+          priority: 40,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return (
+              /Lote\/\s*Especifica[cç][aã]o/i.test(raw) ||
+              (/S[aã]o\s+Jo[aã]o\s+do\s+Iva[ií]/i.test(raw) &&
+                /M[aá]x\.?\s*Unit\.?\s+M[aá]x\.?\s*Total/i.test(raw))
+            );
+          }
+        },
+        {
+          id: "cambe",
+          label: "Cambé — tabela municipal ITEM/ESPECIFICAÇÕES",
+          family: "municipais",
+          split: "splitCambeBlocks",
+          minItems: 2,
+          priority: 50,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return (
+              /3\.\s*DESCRI\s*ÇÃ\s*O DETALHADA DO OBJETO/i.test(raw) &&
+              /ITEM\s+ESPECIFICA\s*ÇÕ\s*ES\s+UNID\.\s+QTDE\./i.test(raw)
+            );
+          }
+        },
+        {
+          id: "itapejara",
+          label: "Itapejara D'Oeste — LOTE materiais",
+          family: "municipais",
+          split: "splitItapejaraBlocks",
+          minItems: 2,
+          priority: 60,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return (
+              /Itapejara\s+D[’']?Oeste/i.test(raw) &&
+              /LOTE\s+N[º°]\s*0?1\s*[–-]\s*MATERIAIS/i.test(raw)
+            );
+          }
+        },
+        {
+          id: "sao-jose-pinhais",
+          label: "São José dos Pinhais — Anexo II orçamento",
+          family: "municipais",
+          split: "splitSaoJosePinhaisBlocks",
+          minItems: 2,
+          priority: 70,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return (
+              /S[aã]o\s+Jos[eé]\s+dos\s+Pinhais/i.test(raw) &&
+              /ANEXO\s+II\s+OR[CÇ]AMENTO DA ADMINISTRA[CÇ][AÃ]O/i.test(raw)
+            );
+          }
+        },
+        {
+          id: "termo-referencia-und",
+          label: "Termo de Referência — ITEM/UNID/QTDE/valores (Mauá da Serra e similares)",
+          family: "municipais",
+          split: "splitTermoReferenciaUndBlocks",
+          minItems: 8,
+          priority: 75,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return (
+              (/Mau[aá]\s+da\s+Serra/i.test(raw) &&
+                /\b(?:METROS|PE[CÇ]AS|ROLOS)\s+\d{2,}\s+\d{1,3}(?:\.\d{3})*,\d{2}\s+\d{1,3}(?:\.\d{3})*,\d{2}/i.test(
+                  raw
+                )) ||
+              (/ITEM\s+DESCRI[CÇ][AÃ]O\s+UNID\.?\s+QTDE/i.test(raw) &&
+                /\b(?:METROS|PE[CÇ]AS|ROLOS)\s+\d{2,}\s+\d+,\d{2}\s+\d{1,3}(?:\.\d{3})*,\d{2}/i.test(
+                  raw
+                ))
+            );
+          }
+        }
+      ]);
+    }
   };
 
 })(window.LICSYSTEM || (window.LICSYSTEM = {}));

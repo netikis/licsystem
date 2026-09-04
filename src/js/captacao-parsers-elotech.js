@@ -608,6 +608,61 @@
     deps.splitSaoMateusBlocks = splitSaoMateusBlocks;
     deps.splitContendaBlocks = splitContendaBlocks;
     deps.splitTresBarrasBlocks = splitTresBarrasBlocks;
+
+    if (typeof bag.registerModelos === "function") {
+      bag.registerModelos([
+        {
+          id: "sao-mateus",
+          label: "São Mateus do Sul — Elotech LOTE+ITEM+R$",
+          family: "elotech",
+          split: "splitSaoMateusBlocks",
+          minItems: 2,
+          priority: 100,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return (
+              /LOTE\s+ITEM\s+DESCRI[CÇ][AÃ]O\s+DO\s+OBJETO\s+UND\s+QTD/i.test(raw) ||
+              (/S[aã]o\s+Mateus\s+do\s+Sul/i.test(raw) &&
+                /(?:PCT|POTE|UND)\s+\d{2,}\s+R\$\s*[\d.,]+\s+R\$/i.test(raw))
+            );
+          }
+        },
+        {
+          id: "contenda",
+          label: "Contenda — Elotech UND R$ / QTD R$",
+          family: "elotech",
+          split: "splitContendaBlocks",
+          minItems: 2,
+          priority: 110,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return (
+              /ITEM\s+DESCRI[CÇ][AÃ]O\s+UNIDADE\s+QUANTIDADE/i.test(raw) ||
+              (/(?:Munic[ií]pio de Contenda|CONTENDA\/PR)/i.test(raw) &&
+                /\b(?:PAR|UN|UND)\s+R\$\s*[\d.,]+\s+\d{1,5}\s+R\$\s*[\d.,]+/i.test(raw))
+            );
+          }
+        },
+        {
+          id: "tres-barras",
+          label: "Três Barras do Paraná — ITEM/PRODUTO/UND",
+          family: "elotech",
+          split: "splitTresBarrasBlocks",
+          minItems: 2,
+          priority: 120,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return (
+              /ITEM\s+PRODUTO\s+UND\.?\s*QTDE\.?\s*UNIT/i.test(raw) ||
+              (/Tr[eê]s\s+Barras\s+do\s+Paran[aá]/i.test(raw) &&
+                /\b(?:UND\.?|M)\s+\d{1,5}\s+\d{1,3}(?:\.\d{3})*,\d{2}\s+\d{1,3}(?:\.\d{3})*,\d{2}/i.test(
+                  raw
+                ))
+            );
+          }
+        }
+      ]);
+    }
   };
 
 })(window.LICSYSTEM || (window.LICSYSTEM = {}));

@@ -345,6 +345,50 @@
 
     deps.splitMaringaBlocks = splitMaringaBlocks;
     deps.splitCampoTenenteBlocks = splitCampoTenenteBlocks;
+
+    if (typeof bag.registerModelos === "function") {
+      bag.registerModelos([
+        {
+          id: "maringa",
+          label: "Maringá SEI (PMM/CATMAT)",
+          family: "maringa",
+          split: "splitMaringaBlocks",
+          minItems: 2,
+          priority: 10,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return (
+              (/\bPMM\b/i.test(raw) &&
+                /\bCATMAT\b/i.test(raw) &&
+                /\b(?:AMPLA|COTA\s+ME\/?EPP|EXCLUSIVO\s+ME\/?EPP)\s+\d{1,3}\s+\d{5,7}\s+\d{5,7}/i.test(
+                  raw
+                )) ||
+              (/Maring[aá]/i.test(raw) &&
+                /\b(?:AMPLA|COTA\s+ME\/?EPP|EXCLUSIVO\s+ME\/?EPP)\s+\d{1,3}\s+\d{5,7}\s+\d{5,7}\s+\d+\s+Unid/i.test(
+                  raw
+                ))
+            );
+          }
+        },
+        {
+          id: "campo-tenente",
+          label: "Campo do Tenente / BLL (por lote)",
+          family: "maringa",
+          split: "splitCampoTenenteBlocks",
+          minItems: 2,
+          priority: 20,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return (
+              /Lote:\s*\d+\s*-\s*Lote\s*\d+/i.test(raw) &&
+              (/C[oó]digo\s+do\s+produto/i.test(raw) ||
+                /Campo\s+do\s+Tenente/i.test(raw) ||
+                /bllcompras/i.test(raw))
+            );
+          }
+        }
+      ]);
+    }
   };
 
 })(window.LICSYSTEM || (window.LICSYSTEM = {}));

@@ -94,7 +94,6 @@
     }
 
   function ensureSplitters() {
-    if (bag._installed) return bag;
     var deps = {
       limparPagina: limparPagina,
       pushParsed: pushParsed,
@@ -106,10 +105,24 @@
       RE_EDITAL_THEO_HEAD: RE_EDITAL_THEO_HEAD,
       RE_INICIO_SPEC_EDITAL: RE_INICIO_SPEC_EDITAL
     };
-    if (typeof bag.installElotech === "function") bag.installElotech(deps);
-    if (typeof bag.installMaringa === "function") bag.installMaringa(deps);
-    if (typeof bag.installMunicipais === "function") bag.installMunicipais(deps);
-    if (typeof bag.installClassico === "function") bag.installClassico(deps);
+    // Sempre reaplica install*: novos parsers somam sem depender de flag única.
+    var installers = [
+      "installElotech",
+      "installMaringa",
+      "installMunicipais",
+      "installClassico"
+    ];
+    Object.keys(bag).forEach(function (k) {
+      if (/^install[A-Z]/.test(k) && installers.indexOf(k) === -1) installers.push(k);
+    });
+    for (var i = 0; i < installers.length; i++) {
+      var name = installers[i];
+      if (typeof bag[name] === "function") {
+        try {
+          bag[name](deps);
+        } catch (e) {}
+      }
+    }
     Object.keys(deps).forEach(function (k) {
       bag[k] = deps[k];
     });
