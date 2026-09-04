@@ -623,7 +623,8 @@
             return (
               /LOTE\s+ITEM\s+DESCRI[CÇ][AÃ]O\s+DO\s+OBJETO\s+UND\s+QTD/i.test(raw) ||
               (/S[aã]o\s+Mateus\s+do\s+Sul/i.test(raw) &&
-                /(?:PCT|POTE|UND)\s+\d{2,}\s+R\$\s*[\d.,]+\s+R\$/i.test(raw))
+                /(?:PCT|POTE|UND)\s+\d{2,}\s+R\$\s*[\d.,]+\s+R\$/i.test(raw) &&
+                !/ITEM\s+QUANT\s+UND\s+C[OÓ]D\s+DESCRI/i.test(raw))
             );
           }
         },

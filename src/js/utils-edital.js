@@ -71,7 +71,7 @@
 
   /** Unidades comuns em editais (THEO / compras / portais municipais). */
   var EDITAL_UNDS =
-    "UNID\\.?|UND\\.?|UNI|UN|Unid\\.?|UNIDADE|QUILO|METROS|METRO|ROLOS|ROLO|PE[CÇ]AS|PE[CÇ]A|PCS|BARRA|LT|L|BL|BAL|GAL|KG|MT|M³|M²|M3|M2|M|PC|PÇ|CX|PAR|CJ|KIT|PCT|POTE|RL|BD|SC|GL|JOGO|PAR|SV|HR|VB|DZ";
+    "UNID\\.?|UND\\.?|UNI|UN|Unid\\.?|UNIDADE|CAIXA|QUILO|METROS|METRO|ROLOS|ROLO|PE[CÇ]AS|PE[CÇ]A|PCS|BARRA|LT|L|BL|BAL|GAL|KG|MT|M³|M²|M3|M2|M|PC|PÇ|CX|PAR|CJ|KIT|PCT|POTE|RL|BD|SC|GL|JOGO|PAR|SV|HR|VB|DZ";
 
   /** Cotas textuais (Castro / portais): Exclusivo ME/EPP/MEI | Ampla Concorrência */
   var EDITAL_COTAS_TXT =

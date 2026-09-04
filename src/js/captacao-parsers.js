@@ -80,6 +80,7 @@
         var priced = Number(item.editalVunit) > 0 && Number(item.qtd) > 0;
         if (!priced && !utils.sanitizar(item.line || item.produto)) return;
         if (
+          !priced &&
           /^(P[aá]gina|Total|Subtotal|Valor|Prefeitura|Estado|Munic[ií]pio|Especifica|ANEXO|RELA|Destaco)\b/i.test(
             item.produto
           )

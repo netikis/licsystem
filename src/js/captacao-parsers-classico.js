@@ -249,6 +249,181 @@
       return chunk;
     }
 
+    function limparDescCastroProposta(desc) {
+      desc = String(desc || "")
+        .replace(/Munic[ií]pio de Castro\s+Diretoria de Suprimentos/gi, " ")
+        .replace(
+          /Pra[cç]a\s+Pedro\s+Kaled[\s\S]{0,240}?(?:licitacao\.castro@gmail\.com|www\.castro\.pr\.gov\.br)/gi,
+          " "
+        )
+        .replace(/\bCNPJ\s+[\d.\/-]+/gi, " ")
+        .replace(/\bTelefone:\s*\(?\d{2}\)?[\d\s.-]+/gi, " ")
+        .replace(/\bE-mail:\s*\S+/gi, " ")
+        .replace(/\bSite:\s*\S+/gi, " ")
+        .replace(/\bVALOR\s+M[AÁ]XIMO(?:\s+TOTAL)?\b/gi, " ")
+        .replace(/\bITEM\s+QUANT\s+UND\s+C[OÓ]D\s+DESCRI[CÇ][AÃ]O\b/gi, " ")
+        .replace(
+          /^MUNICIPIO,?\s+CONFORME MODELO EM ANEXO[\s\S]{0,100}?PEDIDO\s+/i,
+          ""
+        )
+        .replace(/^\d{1,3}\s+/, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      var prod = desc.search(
+        /\b(?:ABAFADOR|AVENTAL|BLUS[AÃ]O|BON[EÉ]|BOTA|BOTINA|CAL[CÇ]A|CAL[CÇ]ADO|CAPA|CAPACETE|CINTO|COLETE|CONE|CREME|LUVA|M[AÁ]SCARA|OCULOS|ÓCULOS|PERNEIRA|PROTETOR|RESPIRADOR|REPELENTE|MACAC[AÃ]O|SAPATO)\b/i
+      );
+      if (prod > 12) desc = desc.slice(prod).trim();
+      return desc;
+    }
+
+    function packCastroPropostaRow(lote, qtd, und, produto, vu, vt) {
+      und = String(und || "UN").toUpperCase().replace(/\.$/, "");
+      if (und === "UND" || und === "UNID" || und === "UNI" || und === "UNIDADE") und = "UN";
+      if (und === "CAIXA" || und === "CXA") und = "CX";
+      produto = limparDescCastroProposta(produto);
+      if (typeof utils.enxugarDescricaoEdital === "function") {
+        var slim = utils.enxugarDescricaoEdital(produto);
+        if (slim && slim.length >= 8) produto = slim;
+      }
+      qtd = Number(qtd) || 0;
+      vu = Number(vu) || 0;
+      vt = Number(vt) || (vu && qtd ? vu * qtd : 0);
+      var packed = {
+        lote: String(lote),
+        qtd: qtd,
+        und: und,
+        produto: produto,
+        editalVunit: vu,
+        editalTotal: vt,
+        line: ""
+      };
+      packed.line =
+        packed.lote +
+        " " +
+        (Math.round(qtd * 1000) / 1000).toLocaleString("pt-BR", {
+          minimumFractionDigits: 3,
+          maximumFractionDigits: 3
+        }) +
+        " " +
+        packed.und +
+        " " +
+        packed.produto;
+      return packed;
+    }
+
+    /**
+     * Castro — ANEXO 4 / proposta BLL:
+     *   ITEM QUANT UND CÓD DESCRIÇÃO ... R$ 75,00 R$ 4.500,00
+     * O pdf.js quebra a descrição: trecho antes do nº + trecho após o código.
+     */
+    function splitCastroPropostaBlocks(full) {
+      var t = limparPagina(full).replace(/\r\n?/g, "\n");
+      var head = /ITEM\s+QUANT\s+UND\s+C[OÓ]D\s+DESCRI/i.exec(t);
+      if (!head) return [];
+      var region = t.slice(head.index);
+      var end = region.search(
+        /\n\s*3\.\s*A empresa vencedora|\nANEXO\s*5\b|\nOUTORGANTE:|\nMODELO DE PROCURA[CÇ][AÃ]O/i
+      );
+      if (end > 120) region = region.slice(0, end);
+      var flat = region.replace(/\s+/g, " ").trim();
+      if (!flat) return [];
+
+      var undAlt =
+        "UNID\\.?|UND\\.?|UNIDADE|UN|PAR|CAIXA|CXA|CX|KIT|CJ|PCT|POTE|KG|LT|GL|SC|JOGO|PE[CÇ]AS?";
+      var re = new RegExp(
+        "(?:^|\\s)(\\d{1,3})\\s+(\\d{1,4}(?:\\.\\d{3})?)\\s+(" +
+          undAlt +
+          ")\\s+(\\d{3,8})(?=\\s)",
+        "gi"
+      );
+      var anchors = [];
+      var m;
+      while ((m = re.exec(flat)) !== null) {
+        var itemNo = parseInt(m[1], 10);
+        var qtd = utils.parseBrNum(m[2]);
+        if (!(itemNo >= 1 && itemNo <= 300) || !(qtd > 0)) continue;
+        var pos = m.index;
+        if (m[0].charAt(0) === " " || m[0].charAt(0) === "\t") pos = m.index + 1;
+        anchors.push({
+          itemNo: itemNo,
+          qtd: qtd,
+          und: m[3],
+          cod: m[4],
+          index: pos,
+          headEnd: m.index + m[0].length
+        });
+      }
+      if (anchors.length < 2) return [];
+
+      // Sequência 1, 2, 3…; aceita furo de 1 item (pdf.js às vezes perde uma âncora)
+      var seq = [];
+      var expected = 1;
+      for (var a = 0; a < anchors.length; a++) {
+        var no = anchors[a].itemNo;
+        if (no === expected) {
+          seq.push(anchors[a]);
+          expected++;
+        } else if (no === expected + 1 && seq.length) {
+          seq.push(anchors[a]);
+          expected = no + 1;
+        } else if (!seq.length && no === 1) {
+          seq.push(anchors[a]);
+          expected = 2;
+        }
+      }
+      if (seq.length < 2) seq = anchors;
+      if (seq.length < 2) return [];
+
+      var rsRe =
+        /R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})\s+R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})/i;
+      var out = [];
+      var prefix = "";
+      for (var i = 0; i < seq.length; i++) {
+        var nextIdx = i + 1 < seq.length ? seq[i + 1].index : flat.length;
+        var body = flat.slice(seq[i].headEnd, nextIdx);
+        var rs = rsRe.exec(body);
+        var vu = 0;
+        var vt = 0;
+        var mid = body;
+        var after = "";
+        if (rs) {
+          vu = utils.parseBrNum(rs[1]);
+          vt = utils.parseBrNum(rs[2]);
+          mid = body.slice(0, rs.index);
+          after = body.slice(rs.index + rs[0].length);
+          var rel = Math.abs(seq[i].qtd * vu - vt) / Math.max(vt, 1);
+          if (rel > 0.12) {
+            var pair = utils.findEditalPricePair(body, seq[i].qtd);
+            if (pair) {
+              vu = pair.unit;
+              vt = pair.total;
+            }
+          }
+        } else {
+          var pair2 = utils.findEditalPricePair(body, seq[i].qtd);
+          if (pair2) {
+            vu = pair2.unit;
+            vt = pair2.total;
+            mid = body.slice(0, pair2.index);
+            after = body.slice(pair2.index + pair2.len);
+          }
+        }
+        mid = String(mid || "").replace(/\s+/g, " ").trim();
+        prefix = String(prefix || "").replace(/\s+/g, " ").trim();
+        var desc;
+        if (mid.length >= 12 && /^[A-Za-zÀ-ú]/.test(mid) && !/^\d+:\d+/.test(mid)) {
+          desc = (prefix.length > 80 ? mid : (prefix + " " + mid).trim());
+        } else {
+          desc = (prefix + " " + mid).replace(/\s+/g, " ").trim();
+        }
+        prefix = after;
+        if (!desc || desc.length < 3) continue;
+        var packed = packCastroPropostaRow(seq[i].itemNo, seq[i].qtd, seq[i].und, desc, vu, vt);
+        if (packed && packed.produto && packed.produto.length >= 2) out.push(packed);
+      }
+      return out;
+    }
+
     function splitCastroBlocks(full) {
       var t = limparPagina(full).replace(/\r\n?/g, "\n");
       var flat = t.replace(/\s+/g, " ").trim();
@@ -422,6 +597,7 @@
 
     deps.splitRelacaoItensBlocks = splitRelacaoItensBlocks;
     deps.splitTheoBlocks = splitTheoBlocks;
+    deps.splitCastroPropostaBlocks = splitCastroPropostaBlocks;
     deps.splitCastroBlocks = splitCastroBlocks;
     deps.splitChunkPlanilha = splitChunkPlanilha;
 
@@ -444,6 +620,18 @@
           }
         },
         {
+          id: "castro-proposta",
+          label: "Castro — proposta ITEM/QUANT/UND/CÓD (BLL)",
+          family: "classico",
+          split: "splitCastroPropostaBlocks",
+          minItems: 2,
+          priority: 82,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return /ITEM\s+QUANT\s+UND\s+C[OÓ]D\s+DESCRI/i.test(raw);
+          }
+        },
+        {
           id: "castro",
           label: "Castro — portal cotas Exclusivo/Ampla",
           family: "classico",
@@ -453,8 +641,9 @@
           tryWithoutHint: true,
           hint: function (raw) {
             return (
-              /Exclusivo\s+ME\/?EPP\/?MEI|Ampla\s+Concorr/i.test(raw) ||
-              /Exclusivo[\s\S]{0,80}ME\/?EPP\/?MEI|Ampla[\s\S]{0,80}Concorr/i.test(raw)
+              /Item\s+Cotas\s+Qtde\s+Und/i.test(raw) ||
+              /\b\d{1,5}\s+Exclusivo\s+ME\/?EPP\/?MEI\s+\d/i.test(raw) ||
+              /\b\d{1,5}\s+Ampla\s+Concorr/i.test(raw)
             );
           }
         },
