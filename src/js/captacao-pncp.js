@@ -104,19 +104,74 @@ _pncpDataFinalProposta:function(){
         return utils.parseApiResponse(r);
       });
     },
+    _stashEdital: function(o){
+      if(!this._editalStash) this._editalStash = Object.create(null);
+      var key = String((o && (o.numeroControlePNCP || o.link || o.key)) || ("tmp_" + Date.now() + "_" + Math.random()));
+      this._editalStash[key] = o;
+      return key;
+    },
+    _asAnexoEdital: function(o, uf){
+      o = o || {};
+      return {
+        id: o.numeroControlePNCP || o.link || o.key,
+        key: o.numeroControlePNCP || o.link || o.key,
+        numeroControlePNCP: o.numeroControlePNCP || null,
+        numeroCompra: o.numeroCompra || null,
+        orgao: (o.orgaoEntidade && o.orgaoEntidade.razaoSocial) || o.nomeOrgao || o.orgao || "",
+        municipio: (o.unidadeOrgao && o.unidadeOrgao.municipioNome) || o.municipio || "",
+        uf: (o.unidadeOrgao && o.unidadeOrgao.ufSigla) || o.uf || uf || "",
+        objeto: o.objetoCompra || o.objeto || o.objetoContratacao || "",
+        modalidade: o.modalidadeNome || o.modalidade || "",
+        valorEstimado: o.valorTotalEstimado != null ? o.valorTotalEstimado : o.valorEstimado,
+        dataAbertura: o.dataAbertura || null,
+        dataEncerramento: o.dataEncerramento || null,
+        link: o.link || null,
+        linkOrigem: o.linkOrigem || o.linkSistemaOrigem || null,
+        fonte: o.fonte || (LICSYSTEM.editalAnexo && LICSYSTEM.editalAnexo.detectFonte(o)) || "pncp"
+      };
+    },
     buscarPncp:function(){
-      var rawKw = (el("pncpKeywords") && el("pncpKeywords").value) || "";
-      var uf = (el("pncpUf") && el("pncpUf").value) || "";
+      return LICSYSTEM.captacao._buscarRadar({
+        fonte: "",
+        boxId: "pncpResults",
+        alertId: "pncpAlert",
+        kwId: "pncpKeywords",
+        ufId: "pncpUf",
+        leiloesId: "pncpIncluirLeiloes"
+      });
+    },
+    buscarBll:function(){
+      return LICSYSTEM.captacao._buscarRadar({
+        fonte: "bll",
+        boxId: "bllResults",
+        alertId: "bllAlert",
+        kwId: "bllKeywords",
+        ufId: "bllUf",
+        leiloesId: "bllIncluirLeiloes"
+      });
+    },
+    _buscarRadar:function(opts){
+      opts = opts || {};
+      var rawKw = (el(opts.kwId) && el(opts.kwId).value) || "";
+      var uf = (el(opts.ufId) && el(opts.ufId).value) || "";
+      var leiloesEl = el(opts.leiloesId);
       var incluirLeiloes =
-        !el("pncpIncluirLeiloes") ||
-        !!(el("pncpIncluirLeiloes") && el("pncpIncluirLeiloes").checked) ||
+        !leiloesEl ||
+        !!leiloesEl.checked ||
         LICSYSTEM.captacao._pncpLooksLikeLeilao(rawKw);
       var modalidades = incluirLeiloes ? [1, 13, 6] : [6];
-      hideAlert("pncpAlert");
-      el("pncpResults").innerHTML =
-        '<div class="muted small"><span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Consultando PNCP via proxy (mods ' +
-        utils.escapeHtml(modalidades.join(", ")) +
-        ")…</div>";
+      var boxId = opts.boxId || "pncpResults";
+      var alertId = opts.alertId || "pncpAlert";
+      hideAlert(alertId);
+      var box = el(boxId);
+      if(box){
+        box.innerHTML =
+          '<div class="muted small"><span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Consultando PNCP via proxy' +
+          (opts.fonte === "bll" ? " (origem BLL)" : "") +
+          " (mods " +
+          utils.escapeHtml(modalidades.join(", ")) +
+          ")…</div>";
+      }
 
       var url =
         "/api/radar-pncp?q=" +
@@ -124,7 +179,8 @@ _pncpDataFinalProposta:function(){
         "&uf=" +
         encodeURIComponent(uf) +
         "&incluirLeiloes=" +
-        (incluirLeiloes ? "1" : "0");
+        (incluirLeiloes ? "1" : "0") +
+        (opts.fonte ? "&fonte=" + encodeURIComponent(opts.fonte) : "");
 
       var radarCtrl =
         typeof AbortController !== "undefined" ? new AbortController() : null;
@@ -142,16 +198,16 @@ _pncpDataFinalProposta:function(){
           return utils.parseApiResponse(r);
         })
         .then(function (j) {
-          LICSYSTEM.captacao._renderRadarPncp(j, rawKw, uf);
+          LICSYSTEM.captacao._renderRadarPncp(j, rawKw, uf, opts);
         })
         .catch(function (err) {
-          el("pncpResults").innerHTML = "";
+          if(box) box.innerHTML = "";
           var aborted =
             err &&
             (err.name === "AbortError" ||
               /aborted|timeout/i.test(String(err.message || "")));
           showAlert(
-            "pncpAlert",
+            alertId,
             "error",
             aborted
               ? "A consulta ao PNCP excedeu o tempo limite. Tente novamente ou reduza o escopo (UF)."
@@ -166,14 +222,14 @@ _pncpDataFinalProposta:function(){
         });
     },
 
-    _renderRadarPncp:function(j, rawKw, uf){
+    _renderRadarPncp:function(j, rawKw, uf, opts){
+      opts = opts || {};
       var list = (j && (j.editais || j.data)) || [];
       var kwGroups = LICSYSTEM.captacao._pncpExpandKeywordGroups(
         LICSYSTEM.captacao._pncpParseKeywords(rawKw || (j && j.rawKeywords) || ""),
         rawKw || (j && j.rawKeywords) || ""
       );
-      /* API já filtra; _handlePncp ainda renderiza (aceita itens mapeados). */
-      LICSYSTEM.captacao._handlePncp(list, [], uf || (j && j.uf) || "", {
+      LICSYSTEM.captacao._handlePncp(list, kwGroups, uf || (j && j.uf) || "", {
         dataFinal: (j && j.dataFinalPncp) || "",
         pagesFetched: (j && j.pagesFetched) || 0,
         totalRegistros: (j && j.totalRegistrosPncp) || (j && j.totalBrutoPncp) || list.length,
@@ -182,12 +238,11 @@ _pncpDataFinalProposta:function(){
         rawKeywords: rawKw || (j && j.rawKeywords) || "",
         fromProxy: true,
         totalBruto: (j && j.totalBrutoPncp) || 0,
-        avisos: (j && j.avisos) || []
+        avisos: (j && j.avisos) || [],
+        boxId: opts.boxId,
+        alertId: opts.alertId,
+        fonte: opts.fonte || (j && j.fonte) || ""
       });
-      /* Se API já filtrou e passou lista vazia com bruto > 0, _handlePncp trata. */
-      if (kwGroups && !list.length && j && j.totalBrutoPncp) {
-        /* noop — _handlePncp já mostra mensagem */
-      }
     },
 
     _handlePncp:function(arr, kwGroups, uf, meta){
@@ -195,6 +250,8 @@ _pncpDataFinalProposta:function(){
       if(!Array.isArray(arr)) arr = [];
       var fromProxy = !!meta.fromProxy;
       var wantVeiculo = LICSYSTEM.captacao._pncpLooksLikeVeiculoSucata(meta.rawKeywords || "");
+      var boxId = meta.boxId || "pncpResults";
+      var alertId = meta.alertId || "pncpAlert";
       /* Proxy /api/radar-pncp já filtra no servidor — não refiltrar. */
       var matches = fromProxy
         ? arr.slice()
@@ -204,7 +261,8 @@ _pncpDataFinalProposta:function(){
             if(wantVeiculo && !LICSYSTEM.captacao._pncpHaystackVeiculoSucata(hay)) return false;
             return true;
           });
-      var box = el("pncpResults");
+      var box = el(boxId);
+      if(!box) return;
       var kwLabel = (meta.rawKeywords || "")
         .trim() ||
         (kwGroups || [])
@@ -232,6 +290,18 @@ _pncpDataFinalProposta:function(){
           ? " (PNCP informa ~" + meta.totalRegistros + " no total nas modalidades)"
           : "");
       if(!matches.length){
+        if(meta.fonte === "bll"){
+          box.innerHTML =
+            '<div class="muted small">Nenhum edital com origem BLL nesta busca. Processos 14.133 da BLL entram no PNCP em tempo real — tente outras palavras-chave ou UF. O PDF, quando existir, continua sendo o arquivo oficial do PNCP.</div>';
+          showAlert(
+            alertId,
+            "info",
+            bruto
+              ? "Consulta concluída — " + bruto + " registro(s) no PNCP, nenhum com origem BLL nesta amostra."
+              : "Consulta concluída — nenhum edital com origem BLL no horizonte."
+          );
+          return;
+        }
         if(!bruto){
           box.innerHTML =
             '<div class="muted small">PNCP não retornou propostas abertas para os filtros (' +
@@ -241,7 +311,7 @@ _pncpDataFinalProposta:function(){
             utils.escapeHtml(modLabel) +
             ").</div>";
           showAlert(
-            "pncpAlert",
+            alertId,
             "info",
             "Consulta concluída — nenhuma proposta aberta no horizonte PNCP."
           );
@@ -256,7 +326,7 @@ _pncpDataFinalProposta:function(){
           utils.escapeHtml(horizonte) +
           ").</div>";
         showAlert(
-          "pncpAlert",
+          alertId,
           "info",
           "Consulta concluída — " +
             bruto +
@@ -274,28 +344,46 @@ _pncpDataFinalProposta:function(){
       LICSYSTEM.updateBell();
       LICSYSTEM.dashboard.renderPncp();
       showAlert(
-        "pncpAlert",
+        alertId,
         "ok",
         "🎯 " +
           matches.length +
-          " oportunidade(s) PNCP encontradas! Alertas adicionados ao sino. (" +
+          (meta.fonte === "bll" ? " oportunidade(s) BLL" : " oportunidade(s) PNCP") +
+          " encontradas! O PDF oficial será anexado automaticamente. (" +
           scanned +
           ")"
       );
+      try{
+        if(LICSYSTEM.editalAnexo){
+          LICSYSTEM.editalAnexo.enqueueMany(
+            matches.slice(0, 8).map(function(o){
+              return LICSYSTEM.captacao._asAnexoEdital(o, uf);
+            })
+          );
+        }
+      }catch(e){}
       var html='<div style="display:flex;flex-direction:column;gap:10px">';
       matches.forEach(function(o){
         var orgao=(o.orgaoEntidade && o.orgaoEntidade.razaoSocial) || o.nomeOrgao || o.orgao || "Órgão público";
         var objeto=o.objetoCompra || o.objeto || o.objetoContratacao || "";
-        var link=o.linkSistemaOrigem || o.link || "";
-        var val=o.valorTotalEstimado || o.valorGlobal || null;
-        var modNome = o.modalidadeNome || (o._lsModalidade != null ? ("Mod. " + o._lsModalidade) : "");
-        html+='<div class="result-item r-green">'+
+        var origem=o.linkOrigem || o.linkSistemaOrigem || "";
+        var pncp=o.link || "";
+        var fonte=o.fonte || (LICSYSTEM.editalAnexo && LICSYSTEM.editalAnexo.detectFonte(o)) || "pncp";
+        var val=o.valorTotalEstimado || o.valorGlobal || o.valorEstimado || null;
+        var modNome = o.modalidadeNome || o.modalidade || (o._lsModalidade != null ? ("Mod. " + o._lsModalidade) : "");
+        var stashKey = LICSYSTEM.captacao._stashEdital(o);
+        html+='<div class="result-item r-green" data-edital-key="'+utils.escapeHtml(stashKey)+'">'+
           '<div class="ri-title">'+utils.escapeHtml(orgao)+' <span class="badge-status b-yellow">'+utils.escapeHtml((o.unidadeOrgao&&o.unidadeOrgao.ufSigla)||o.uf||uf||"")+'</span>'+
           (modNome ? ' <span class="badge-status b-blue">'+utils.escapeHtml(modNome)+'</span>' : '')+
+          (fonte === "bll" ? ' <span class="badge-status b-blue">BLL</span>' : '')+
           '</div>'+
           '<div class="ri-sub">'+utils.escapeHtml(objeto)+'</div>'+
           (val?'<div class="small" style="margin-top:6px"><b>Estimado:</b> '+utils.formatBrl(val)+'</div>':'')+
-          (link?'<div style="margin-top:8px"><a class="link" target="_blank" href="'+utils.escapeHtml(link)+'">Ver no sistema de origem ↗</a></div>':'')+
+          '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">'+
+            (pncp?'<a class="link" target="_blank" rel="noopener" href="'+utils.escapeHtml(pncp)+'">Abrir no PNCP ↗</a>':'')+
+            (origem && origem !== pncp ? '<a class="link" target="_blank" rel="noopener" href="'+utils.escapeHtml(origem)+'">Consulta origem ↗</a>' : '')+
+            '<button type="button" class="btn btn-ghost btn-sm" data-edital-anexar="1">Anexar PDF</button>'+
+          '</div>'+
           '</div>';
       });
       html+='</div>';

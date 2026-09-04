@@ -57,6 +57,30 @@
     on("btnGoogleSel","click", LICSYSTEM.captacao.googleSelecionados);
     on("btnParaOrcamento","click", LICSYSTEM.captacao.paraOrcamento);
     on("btnPncp","click", LICSYSTEM.captacao.buscarPncp);
+    on("btnBll","click", LICSYSTEM.captacao.buscarBll);
+    on("bllKeywords","keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); LICSYSTEM.captacao.buscarBll(); } });
+    document.addEventListener("click", function(e){
+      var btn = e.target && e.target.closest && e.target.closest("[data-edital-anexar]");
+      if(!btn) return;
+      e.preventDefault();
+      var wrap = btn.closest("[data-edital-key]");
+      var key = wrap && wrap.getAttribute("data-edital-key");
+      var raw = LICSYSTEM.captacao && LICSYSTEM.captacao._editalStash && LICSYSTEM.captacao._editalStash[key];
+      if(!raw || !LICSYSTEM.editalAnexo){
+        btn.textContent = "Sem PDF";
+        return;
+      }
+      var ed = LICSYSTEM.captacao._asAnexoEdital(raw);
+      btn.disabled = true;
+      btn.textContent = "Anexando…";
+      LICSYSTEM.editalAnexo.anexar(ed).then(function(file){
+        btn.textContent = file && file.name ? "PDF anexado" : "PDF anexado";
+      }).catch(function(err){
+        btn.disabled = false;
+        btn.textContent = "Tentar PDF";
+        btn.title = (err && err.message) || "Falha ao anexar";
+      });
+    });
     on("btnProxBuscar","click", LICSYSTEM.captacao.buscarProximos);
     on("btnChatEdital","click", LICSYSTEM.captacao.buscarChatEditais);
     if(LICSYSTEM.alertas && LICSYSTEM.alertas.wire) LICSYSTEM.alertas.wire();
@@ -337,6 +361,7 @@
     perguntarEditais:'Perguntar editais',
     editaisProximos:'Editais próximos',
     radarPncp:'Radar PNCP',
+    bllEditais:'Editais BLL',
     captacao:'Pesquisas de Editais',
     analiseIa:'Análise Inteligente de Editais',
     leiloesParticipo:'Licitações que Participo',

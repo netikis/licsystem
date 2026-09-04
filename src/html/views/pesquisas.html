@@ -230,4 +230,42 @@
             <div id="pncpResults"></div>
           </div>
         </div>
+
+        <!-- Editais BLL (origem no PNCP; PDF oficial pelo PNCP) -->
+        <div class="card is-collapsed" id="cardBllEditais" data-collapse-key="bll-editais">
+          <div class="card-head">
+            <div class="card-head-main">
+              <h2>🟣 Editais BLL</h2>
+              <span class="tag">PNCP + origem BLL</span>
+              <span class="card-collapse-summary muted small" id="bllCollapseSummary" hidden></span>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm card-collapse-btn" id="btnCollapseBll" aria-expanded="false" aria-controls="bllCardBody" title="Expandir painel">▸ Expandir</button>
+          </div>
+          <div class="card-collapsible-body" id="bllCardBody">
+            <p class="desc" style="margin-top:0">
+              Processos 14.133 da BLL entram no PNCP em tempo real. Esta busca filtra a origem BLL no PNCP e anexa o PDF oficial — sem login na BLL e sem raspar site de agregador.
+            </p>
+            <div id="bllAlert" class="alert"></div>
+            <div class="form-row">
+              <div style="flex:2">
+                <label class="fld">Palavras-chave (separadas por vírgula)</label>
+                <input type="text" id="bllKeywords" placeholder="ex.: uniforme, cesta basica, medicamento" />
+              </div>
+              <div style="max-width:160px">
+                <label class="fld">UF</label>
+                <select id="bllUf"></select>
+              </div>
+              <div style="max-width:170px;display:flex;align-items:flex-end">
+                <button class="btn btn-gold" id="btnBll" style="width:100%">🔍 Buscar BLL</button>
+              </div>
+            </div>
+            <div class="btn-row" style="margin-top:0;flex-wrap:wrap;gap:8px;align-items:center">
+              <label class="small" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="bllIncluirLeiloes" />
+                Incluir leilões
+              </label>
+            </div>
+            <div id="bllResults"></div>
+          </div>
+        </div>
       </section>

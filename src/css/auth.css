@@ -213,6 +213,13 @@
     display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:4px;
   }
   .alerta-balloon-actions .btn{flex:1;min-width:120px;justify-content:center}
+  .alerta-balloon-pdf{
+    font-size:11px;font-weight:700;align-self:flex-start;
+    padding:3px 9px;border-radius:999px;border:1px solid #dbe4f0;color:#334155;background:#f8fafc;
+  }
+  .alerta-balloon-pdf.is-ok{color:#166534;background:#dcfce7;border-color:#86efac}
+  .alerta-balloon-pdf.is-pending{color:#9a6b00;background:#fff6db;border-color:#f0d48a}
+  .alerta-balloon-pdf.is-fail{color:#9b1c1c;background:#fee2e2;border-color:#fca5a5}
   .ia-pending-wrap{margin-bottom:18px}
   .ia-pending-editais-track{
     display:flex;flex-wrap:nowrap;gap:12px;align-items:stretch;

@@ -105,11 +105,18 @@
         dataAbertura: LICSYSTEM.alertas.pickDataAbertura(raw),
         dataEncerramento: LICSYSTEM.alertas.pickDataPrazo(raw),
         link: raw.link || null,
+        linkOrigem: raw.linkOrigem || raw.linkSistemaOrigem || null,
+        fonte: raw.fonte || null,
         watchId: String(raw.watchId || ""),
         watchLabel: String(raw.watchLabel || "").slice(0, 160),
         foundAt: Number(raw.foundAt || Date.now()),
         readAt: raw.readAt != null ? Number(raw.readAt) || null : null,
-        interessadoAt: raw.interessadoAt != null ? Number(raw.interessadoAt) || null : null
+        interessadoAt: raw.interessadoAt != null ? Number(raw.interessadoAt) || null : null,
+        pdfStatus: raw.pdfStatus || null,
+        pdfName: raw.pdfName ? String(raw.pdfName).slice(0, 180) : null,
+        pdfSource: raw.pdfSource || null,
+        pdfAt: raw.pdfAt != null ? Number(raw.pdfAt) || null : null,
+        pdfError: raw.pdfError ? String(raw.pdfError).slice(0, 180) : null
       };
     },
     pickDataPrazo: function(raw){
@@ -157,6 +164,11 @@
           changed = true;
         }
         if(src.link && !a.link){ a.link = src.link; changed = true; }
+        if((src.linkOrigem || src.linkSistemaOrigem) && !a.linkOrigem){
+          a.linkOrigem = src.linkOrigem || src.linkSistemaOrigem;
+          changed = true;
+        }
+        if(src.fonte && !a.fonte){ a.fonte = src.fonte; changed = true; }
         if(src.numeroCompra != null && !a.numeroCompra){
           a.numeroCompra = String(src.numeroCompra).slice(0, 80);
           changed = true;

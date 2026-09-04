@@ -13,12 +13,14 @@ COLLAPSE_KEY: "licsystem_captacao_collapse_v1",
     PESQUISAS_CARD_IDS: [
       "cardChatEditais",
       "cardProxEditais",
-      "cardRadarPncp"
+      "cardRadarPncp",
+      "cardBllEditais"
     ],
 
     collapseSummaryIdForKey: function (key) {
       if (key === "prox-editais") return "proxCollapseSummary";
       if (key === "radar-pncp") return "radarCollapseSummary";
+      if (key === "bll-editais") return "bllCollapseSummary";
       if (key === "alertas-pncp") return "alertasCollapseSummary";
       return "chatCollapseSummary";
     },
@@ -27,11 +29,13 @@ COLLAPSE_KEY: "licsystem_captacao_collapse_v1",
       var id =
         which === "prox"
           ? "proxCollapseSummary"
-          : which === "radar"
-            ? "radarCollapseSummary"
-            : which === "alertas"
-              ? "alertasCollapseSummary"
-              : "chatCollapseSummary";
+            : which === "radar"
+              ? "radarCollapseSummary"
+              : which === "bll"
+                ? "bllCollapseSummary"
+              : which === "alertas"
+                ? "alertasCollapseSummary"
+                : "chatCollapseSummary";
       var sum = el(id);
       if (!sum) return;
       sum.textContent = text || "";
@@ -40,6 +44,8 @@ COLLAPSE_KEY: "licsystem_captacao_collapse_v1",
           ? el("cardProxEditais")
           : which === "radar"
             ? el("cardRadarPncp")
+            : which === "bll"
+              ? el("cardBllEditais")
             : which === "alertas"
               ? el("cardAlertasPncp")
               : el("cardChatEditais");

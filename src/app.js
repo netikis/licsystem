@@ -10,6 +10,7 @@ import "./js/state.js";
 import "./js/cloud-sync.js";
 import "./js/ui.js";
 import "./js/edital-pdf.js";
+import "./js/edital-anexo.js";
 import "./js/dashboard.js";
 import "./js/captacao-modelos.js";
 import "./js/captacao-parsers-elotech.js";

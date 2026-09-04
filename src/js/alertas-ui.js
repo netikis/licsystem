@@ -96,6 +96,19 @@
       var diff = t - Date.now();
       return diff >= 0 && diff <= 3 * 24 * 60 * 60 * 1000;
     },
+    pdfBadgeHtml: function(a){
+      if(!a) return "";
+      if(a.pdfStatus === "ok"){
+        return '<div class="alerta-balloon-pdf is-ok">📎 PDF anexado'+(a.pdfName ? " · "+utils.escapeHtml(String(a.pdfName).slice(0, 48)) : "")+'</div>';
+      }
+      if(a.pdfStatus === "pending"){
+        return '<div class="alerta-balloon-pdf is-pending">⏳ Buscando PDF oficial…</div>';
+      }
+      if(a.pdfStatus === "fail"){
+        return '<div class="alerta-balloon-pdf is-fail">Sem PDF no PNCP</div>';
+      }
+      return "";
+    },
     balloonHtml: function(a, opts){
       opts = opts || {};
       var self = this;
@@ -111,6 +124,8 @@
       var meta = [];
       if(a.municipio) meta.push(a.municipio);
       if(a.uf) meta.push(a.uf);
+      var fonte = a.fonte || (LICSYSTEM.editalAnexo && LICSYSTEM.editalAnexo.detectFonte(a));
+      if(fonte === "bll") meta.push("BLL");
       if(a.watchLabel) meta.push(a.watchLabel);
       var actions = "";
       if(opts.mode === "interessado"){
@@ -120,6 +135,9 @@
             '<button type="button" class="btn btn-ghost btn-sm" data-interessado-pdf="'+utils.escapeHtml(a.id)+'"'+(a.link ? "" : " disabled title=\"Sem link PNCP\"")+'>Baixar PDF</button>'+
             (a.link
               ? '<a class="btn btn-ghost btn-sm" href="'+utils.escapeHtml(a.link)+'" target="_blank" rel="noopener">Abrir no PNCP</a>'
+              : '')+
+            (a.linkOrigem && a.linkOrigem !== a.link
+              ? '<a class="btn btn-ghost btn-sm" href="'+utils.escapeHtml(a.linkOrigem)+'" target="_blank" rel="noopener">Consulta origem</a>'
               : '')+
             '<button type="button" class="btn btn-ghost btn-sm" data-interessado-rm="'+utils.escapeHtml(a.id)+'">Remover</button>'+
           '</div>';
@@ -139,6 +157,7 @@
             (a.objeto ? ' — '+utils.escapeHtml(a.objeto) : '')+
           '</div>'+
           '<div class="alerta-balloon-prazo-line"><span class="label">Prazo</span> '+utils.escapeHtml(self.formatPrazo(a.dataEncerramento))+'</div>'+
+          self.pdfBadgeHtml(a)+
           actions+
         '</div>'
       );

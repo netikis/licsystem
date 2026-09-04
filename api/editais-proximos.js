@@ -280,6 +280,16 @@ function mapItem(o, distKm) {
   var uo = o.unidadeOrgao || {};
   var oe = o.orgaoEntidade || {};
   var esfera = oe.esferaId || "";
+  var origem =
+    queryLib && queryLib.origemMeta
+      ? queryLib.origemMeta(o)
+      : {
+          linkOrigem:
+            String(o.linkSistemaOrigem || o.linkProcessoEletronico || "").trim() ||
+            null,
+          fonte: "pncp",
+        };
+  if (/bllcompras|\.bll\./i.test(origem.linkOrigem || "")) origem.fonte = "bll";
   return {
     orgao: oe.razaoSocial || o.nomeOrgao || "Órgão público",
     municipio: uo.municipioNome || "",
@@ -297,6 +307,9 @@ function mapItem(o, distKm) {
     numeroControlePNCP: o.numeroControlePNCP || null,
     distanciaKm: distKm != null ? Math.round(distKm * 10) / 10 : null,
     link: pncpLink(o),
+    linkOrigem: origem.linkOrigem,
+    fonte: origem.fonte,
+    linkSistemaOrigem: origem.linkOrigem,
   };
 }
 

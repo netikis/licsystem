@@ -7,6 +7,7 @@
  *   uf               UF opcional (ex.: PR)
  *   incluirLeiloes | leiloes   1|true → modalidades 1,13 + 6
  *   paginas          máx. páginas pregão (default 6, máx. 10)
+ *   fonte            bll → só itens cuja origem no PNCP aponta para a BLL
  *
  * Sempre JSON: { ok, editais, total, ... } ou { ok:false, error }.
  */
@@ -78,6 +79,9 @@ function mergeOpts(query, body) {
     paginas: b.paginas || b.pages || q.paginas || q.pages,
     janela: b.janela || q.janela,
     dias: b.dias != null ? b.dias : q.dias,
+    fonte: String(b.fonte || q.fonte || "")
+      .trim()
+      .toLowerCase(),
   };
 }
 
@@ -104,6 +108,10 @@ function pncpLink(item) {
 function mapItem(o) {
   var uo = o.unidadeOrgao || {};
   var oe = o.orgaoEntidade || {};
+  var origem =
+    queryLib.origemMeta
+      ? queryLib.origemMeta(o)
+      : { linkOrigem: String(o.linkSistemaOrigem || "").trim() || null, fonte: "pncp" };
   return {
     orgao: oe.razaoSocial || o.nomeOrgao || "Órgão público",
     municipio: uo.municipioNome || "",
@@ -115,14 +123,17 @@ function mapItem(o) {
     valorEstimado:
       o.valorTotalEstimado != null ? Number(o.valorTotalEstimado) : null,
     numeroControlePNCP: o.numeroControlePNCP || null,
-    link: pncpLink(o) || o.linkSistemaOrigem || null,
+    numeroCompra: o.numeroCompra != null ? String(o.numeroCompra) : null,
+    link: pncpLink(o) || origem.linkOrigem || null,
     /* Campos brutos p/ UI legado que lê orgaoEntidade etc. */
     orgaoEntidade: oe,
     unidadeOrgao: uo,
     objetoCompra: o.objetoCompra || o.objeto || "",
     nomeOrgao: o.nomeOrgao,
     valorTotalEstimado: o.valorTotalEstimado,
-    linkSistemaOrigem: o.linkSistemaOrigem || pncpLink(o),
+    linkSistemaOrigem: origem.linkOrigem,
+    linkOrigem: origem.linkOrigem,
+    fonte: origem.fonte,
     modalidadeNome: o.modalidadeNome,
     _lsModalidade: o._lsModalidade,
   };
@@ -427,6 +438,17 @@ async function handler(req, res) {
       matches.push(mapItem(row));
     }
 
+    var fonteFiltro = String(opts.fonte || "").trim().toLowerCase();
+    var bllCount = 0;
+    for (var bi = 0; bi < matches.length; bi++) {
+      if (matches[bi] && matches[bi].fonte === "bll") bllCount++;
+    }
+    if (fonteFiltro === "bll") {
+      matches = matches.filter(function (m) {
+        return m && m.fonte === "bll";
+      });
+    }
+
     var avisos = [
       "Fonte: PNCP via proxy /api/radar-pncp.",
       "Horizonte: " +
@@ -436,6 +458,11 @@ async function handler(req, res) {
         ").",
       "Modalidades: " + modalidades.join(", ") + " (6=pregão; 13=leilão presencial).",
     ];
+    if (fonteFiltro === "bll") {
+      avisos.push(
+        "Filtro BLL: só editais cuja origem no PNCP aponta para a BLL. Processos 14.133 da BLL entram no PNCP em tempo real."
+      );
+    }
     if (truncated) {
       avisos.push(
         "Consulta interrompida por limite de tempo — resultados podem estar incompletos."
@@ -460,6 +487,8 @@ async function handler(req, res) {
       totalRegistrosPncp: totalRegistros || undefined,
       totalBrutoPncp: all.length,
       total: matches.length,
+      bllCount: bllCount,
+      fonte: fonteFiltro || undefined,
       editais: matches,
       /* Alias p/ cliente que espera `data` */
       data: matches,

@@ -377,6 +377,9 @@
 
     /** Baixa o PDF oficial do PNCP como File (mesmo conteúdo da análise completa). */
     fetchPdfFileDeInteresse: function(ed){
+      if(LICSYSTEM.editalAnexo && typeof LICSYSTEM.editalAnexo.anexar === "function"){
+        return LICSYSTEM.editalAnexo.anexar(ed);
+      }
       var url = LICSYSTEM.analiseIa.pncpPdfApiUrl(ed, true);
       if(!url){
         return Promise.reject(new Error("Este edital não tem link PNCP para baixar o PDF."));
@@ -494,7 +497,9 @@
       showAlert(
         "iaAlert",
         "info",
-        '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Baixando PDF oficial do PNCP…'
+        ed.pdfStatus === "ok"
+          ? '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Usando PDF já anexado…'
+          : '<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Baixando PDF oficial do PNCP…'
       );
 
       LICSYSTEM.analiseIa.fetchPdfFileDeInteresse(ed).then(function(file){

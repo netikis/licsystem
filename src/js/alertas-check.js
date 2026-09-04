@@ -124,10 +124,18 @@
         window.__lsActivateView("analiseIa");
       }
       try{
+        if(LICSYSTEM.editalAnexo && item.pdfStatus !== "ok"){
+          LICSYSTEM.editalAnexo.anexar(item).catch(function(){});
+        }
+      }catch(e0){}
+      try{
+        var temPdf = item.pdfStatus === "ok";
         showAlert(
           "iaAlert",
           "ok",
-          "Edital com interesse adicionado ao painel. Use <b>Analisar com IA</b> no balão (sem PDF) ou envie o PDF para análise completa."
+          temPdf
+            ? "Edital com interesse adicionado. PDF já anexado — use <b>Analisar com IA</b>."
+            : "Edital com interesse adicionado. O PDF oficial está sendo buscado no PNCP — use <b>Analisar com IA</b> quando o anexo aparecer, ou envie o arquivo."
         );
       }catch(e){}
       return item;
@@ -176,11 +184,16 @@
           dataAbertura: this.pickDataAbertura(row),
           dataEncerramento: this.pickDataPrazo(row),
           link: row.link,
+          linkOrigem: row.linkOrigem || row.linkSistemaOrigem || null,
+          fonte: row.fonte || null,
           watchId: watch.id,
           watchLabel: watch.label,
           foundAt: Date.now(),
           readAt: null
         }));
+        try{
+          if(LICSYSTEM.editalAnexo) LICSYSTEM.editalAnexo.enqueue(this.alerts[0]);
+        }catch(e){}
         added++;
       }
       this.trimSeen(watch);

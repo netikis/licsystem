@@ -20,11 +20,13 @@
 BLACKLIST: BLACKLIST,
 
     initUf:function(){
-      var sel = el("pncpUf");
-      if(!sel || sel.options.length) return;
       var html='<option value="">Todas</option>';
       UF_LIST.forEach(function(u){ html+='<option value="'+u+'">'+u+'</option>'; });
-      sel.innerHTML = html;
+      ["pncpUf", "bllUf"].forEach(function(id){
+        var sel = el(id);
+        if(!sel || sel.options.length) return;
+        sel.innerHTML = html;
+      });
     },
 
     // Planilha do edital PDF (THEO / Castro / São Mateus / Contenda / Três Barras / clássico)

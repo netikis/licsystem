@@ -7,13 +7,15 @@
       captacao: { view: "pesquisas" },
       perguntarEditais: { view: "pesquisas", section: "cardChatEditais" },
       editaisProximos: { view: "pesquisas", section: "cardProxEditais" },
-      radarPncp: { view: "pesquisas", section: "cardRadarPncp" }
+      radarPncp: { view: "pesquisas", section: "cardRadarPncp" },
+      bllEditais: { view: "pesquisas", section: "cardBllEditais" }
     };
-    var PESQUISAS_CARDS = ["cardChatEditais", "cardProxEditais", "cardRadarPncp"];
+    var PESQUISAS_CARDS = ["cardChatEditais", "cardProxEditais", "cardRadarPncp", "cardBllEditais"];
     var CHILD_TO_GROUP = {
       perguntarEditais: "pesquisas",
       editaisProximos: "pesquisas",
       radarPncp: "pesquisas",
+      bllEditais: "pesquisas",
       histEntregas: "entrega"
     };
     var PARENT_VIEWS = {
@@ -212,6 +214,7 @@
             perguntarEditais:"Perguntar editais",
             editaisProximos:"Editais próximos",
             radarPncp:"Radar PNCP",
+            bllEditais:"Editais BLL",
             captacao:"Pesquisas de Editais",
             analiseIa:"Análise Inteligente de Editais",
             leiloesParticipo:"Licitações que Participo",

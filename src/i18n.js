@@ -441,6 +441,7 @@
       perguntarEditais: t("view.perguntarEditais"),
       editaisProximos: t("view.editaisProximos"),
       radarPncp: t("view.radarPncp"),
+      bllEditais: t("view.bllEditais"),
       captacao: t("view.pesquisas"),
       analiseIa: t("view.analiseIa"),
       leiloesParticipo: t("view.leiloesParticipo"),

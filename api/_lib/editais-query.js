@@ -314,6 +314,17 @@ function pncpLink(item) {
   return item.linkSistemaOrigem || item.linkProcessoEletronico || null;
 }
 
+/** Origem real do processo (BLL, Licitanet…). Nunca cai no link do PNCP. */
+function origemMeta(o) {
+  o = o || {};
+  var orig = String(o.linkSistemaOrigem || o.linkProcessoEletronico || "").trim();
+  var fonte = "pncp";
+  if (/bllcompras|\.bll\.|bll\.org/i.test(orig)) fonte = "bll";
+  else if (/licitanet/i.test(orig)) fonte = "licitanet";
+  else if (/comprasnet|compras\.gov/i.test(orig)) fonte = "comprasnet";
+  return { linkOrigem: orig || null, fonte: fonte };
+}
+
 function sleep(ms) {
   return new Promise(function (resolve) {
     setTimeout(resolve, ms);
@@ -869,6 +880,7 @@ function mapItem(o) {
   var uo = o.unidadeOrgao || {};
   var oe = o.orgaoEntidade || {};
   var esfera = oe.esferaId || "";
+  var origem = origemMeta(o);
   return {
     orgao: oe.razaoSocial || o.nomeOrgao || "Órgão público",
     municipio: uo.municipioNome || "",
@@ -885,6 +897,9 @@ function mapItem(o) {
     dataEncerramento: o.dataEncerramentoProposta || null,
     numeroControlePNCP: o.numeroControlePNCP || null,
     link: pncpLink(o),
+    linkOrigem: origem.linkOrigem,
+    fonte: origem.fonte,
+    linkSistemaOrigem: origem.linkOrigem,
   };
 }
 
@@ -1350,6 +1365,7 @@ module.exports = {
   haystackVeiculoSucata: haystackVeiculoSucata,
   expandLeilaoKeywords: expandLeilaoKeywords,
   keywordMatchesObjeto: keywordMatchesObjeto,
+  origemMeta: origemMeta,
   JANELA_ANUAL_DIAS: JANELA_ANUAL_DIAS,
   JANELA_45_DIAS: JANELA_45_DIAS,
   PNCP_FETCH_TIMEOUT_MS: PNCP_FETCH_TIMEOUT_MS,
