@@ -14,6 +14,8 @@
       und = String(und || "UN").toUpperCase().replace(/\.$/, "");
       if (und === "PR" || und === "PAR") und = "PAR";
       if (und === "UNID" || und === "UND" || und === "UNI" || und === "UNIDADE") und = "UN";
+      if (und === "ROLO" || und === "ROLOS") und = "ROLO";
+      if (und === "PACOTE" || und === "PACOTES") und = "PACOTE";
       if (und === "CONJ" || und === "CJ") und = "CJ";
       if (und === "ROL" || und === "ROLOS") und = "ROLO";
       if (und === "METROS") und = "METRO";
@@ -670,6 +672,171 @@
       return out;
     }
 
+    /**
+     * Jandaia do Sul / Elotech Anexo I:
+     *   ITEM  UNIDADE  QTD  CATMAT  ESPECIFICAÇÃO  UNITÁRIO  TOTAL
+     *   01    Rolo     60   604126  Mangueira…     1.102,88  66.172,80
+     * O THEO pega "01 Rolo" e perde qtd/preço; números no meio da descrição
+     * (ex.: 19 Unidade, 40 metros) viram lote fora de ordem.
+     */
+    function splitJandaiaCatmatBlocks(full) {
+      var t = limparPagina(full).replace(/\r\n?/g, "\n");
+      if (
+        !/ITEM\s+CATMAT\s+ESPECIFICA/i.test(t) &&
+        !(/Jandaia\s+do\s+Sul/i.test(t) &&
+          /\b\d{1,2}\s+(?:Rolo|Unidade|Pacote)\s+\d{1,5}\s+\d{5,8}\s+/i.test(t))
+      ) {
+        return [];
+      }
+      var undAlt =
+        "ROLOS?|UNIDADE|UNID\\.?|UND\\.?|UN|PACOTES?|CAIXA|CX|PAR|KIT|METROS?|PE[CÇ]AS?";
+      var flat = t
+        .replace(
+          /CNPJ:\s*[\d.\/-]+[\s\S]{0,220}?(?:Elotech Assinatura[^\n]*|Verifique[^\n]*)/gi,
+          "\n"
+        )
+        .replace(
+          /PREFEITURA MUNICIPAL DE JANDAIA DO SUL[\s\S]{0,120}?www\.jandaiadosul\.pr\.gov\.br/gi,
+          "\n"
+        )
+        .replace(/\s+/g, " ")
+        .trim();
+      var re = new RegExp(
+        "(?:^|\\s)(\\d{1,2})\\s+(?:(" +
+          undAlt +
+          ")\\s+)?(\\d{1,5})\\s+(\\d{5,8})(?=\\s)",
+        "gi"
+      );
+      var anchors = [];
+      var m;
+      var lastUnd = "UN";
+      while ((m = re.exec(flat)) !== null) {
+        var itemNo = parseInt(m[1], 10);
+        var qtd = utils.parseBrNum(m[3]);
+        if (!(itemNo >= 1 && itemNo <= 80) || !(qtd > 0)) continue;
+        var und = m[2] ? m[2] : lastUnd;
+        if (m[2]) lastUnd = m[2];
+        var pos = m.index;
+        if (m[0].charAt(0) === " " || m[0].charAt(0) === "\t") pos = m.index + 1;
+        anchors.push({
+          itemNo: itemNo,
+          und: und,
+          qtd: qtd,
+          cod: m[4],
+          index: pos,
+          headEnd: m.index + m[0].length
+        });
+      }
+      if (anchors.length < 4) return [];
+
+      function firstPricePair(str, qtdHint) {
+        var all = [];
+        var reP =
+          /\s+(\d{1,3}(?:\.\d{3})*,\d{2,4}|\d+[.,]\d{2,4})\s+(\d{1,3}(?:\.\d{3})*,\d{2}|\d+[.,]\d{2})(?=\s|$)/g;
+        var pm;
+        var qtdN = Number(qtdHint) || 0;
+        while ((pm = reP.exec(str)) !== null) {
+          if (/^\d{1,3}(\.\d{3})+$/.test(pm[1])) {
+            reP.lastIndex = pm.index + 1;
+            continue;
+          }
+          var u = utils.parseBrNum(pm[1]);
+          var tot = utils.parseBrNum(pm[2]);
+          if (!(u > 0) || !(tot > 0)) continue;
+          var rel =
+            qtdN > 0
+              ? Math.abs(qtdN * u - tot) / Math.max(Math.abs(tot), Math.abs(qtdN * u), 1)
+              : 1;
+          all.push({
+            unit: u,
+            total: tot,
+            index: pm.index,
+            len: pm[0].length,
+            rel: rel
+          });
+        }
+        var exact = null;
+        for (var p = 0; p < all.length; p++) {
+          if (all[p].rel <= 0.02) {
+            exact = all[p];
+            break;
+          }
+        }
+        return exact || all[0] || null;
+      }
+
+      var byItem = {};
+      for (var i = 0; i < anchors.length; i++) {
+        var nextIdx = i + 1 < anchors.length ? anchors[i + 1].index : flat.length;
+        var body = flat.slice(anchors[i].headEnd, nextIdx);
+        var cut = body.search(
+          /\b(?:OBS\s*:|Total\s+\d{1,3}(?:\.\d{3})*,\d{2}|1\.2\.\d+\.|ITEM\s+CATMAT)\b/i
+        );
+        if (cut > 20) body = body.slice(0, cut);
+        var pair = firstPricePair(body, anchors[i].qtd);
+        var vu = pair ? pair.unit : 0;
+        var vt = pair ? pair.total : 0;
+        var desc = body;
+        var after = "";
+        if (pair) {
+          desc = body.slice(0, pair.index);
+          after = body.slice(pair.index + pair.len);
+        }
+        desc = String(desc || "").replace(/\s+/g, " ").trim();
+        after = String(after || "")
+          .replace(/\bCNPJ:\s*[\d.\/-]+[\s\S]{0,80}/gi, " ")
+          .replace(/\bFone:\s*\(?\d{2}\)?[\d\s.-]+/gi, " ")
+          .replace(/Pra[cç]a do Caf[eé][\s\S]{0,80}/gi, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (after && after.length >= 8) {
+          desc = (desc + " " + after).replace(/\s+/g, " ").trim();
+        }
+        desc = desc.replace(/\b\d{1,2}\s+\d{1,5}\s+\d{5,8}\b/g, " ").replace(/\s+/g, " ").trim();
+        if (desc.length > 700) desc = desc.slice(0, 700).replace(/\s+\S*$/, "");
+        if (!desc || desc.length < 4) {
+          desc = "Item " + anchors[i].itemNo + " CATMAT " + anchors[i].cod;
+        }
+        var packed = packMunicipioRow(
+          anchors[i].itemNo,
+          anchors[i].qtd,
+          anchors[i].und,
+          desc,
+          vu,
+          vt
+        );
+        if (!utils.isLinhaProdutoEdital(packed)) continue;
+        var n = anchors[i].itemNo;
+        var prev = byItem[n];
+        if (!prev) {
+          byItem[n] = packed;
+        } else if (packed.editalVunit > 0 && !prev.editalVunit) {
+          byItem[n] = packed;
+        } else if (
+          packed.editalVunit > 0 &&
+          prev.editalVunit > 0 &&
+          packed.produto.length > prev.produto.length &&
+          packed.produto.length < 420
+        ) {
+          byItem[n] = packed;
+        }
+      }
+
+      var keys = Object.keys(byItem)
+        .map(function (k) {
+          return parseInt(k, 10);
+        })
+        .filter(function (n) {
+          return n > 0;
+        })
+        .sort(function (a, b) {
+          return a - b;
+        });
+      var out = [];
+      for (var k = 0; k < keys.length; k++) out.push(byItem[keys[k]]);
+      return out;
+    }
+
     function splitSaoJosePinhaisBlocks(full) {
       var t = limparPagina(full).replace(/\r\n?/g, "\n");
       var start = t.search(/ANEXO\s+II\s+OR[CÇ]AMENTO DA ADMINISTRA[CÇ][AÃ]O/i);
@@ -738,6 +905,7 @@
     deps.splitItapejaraBlocks = splitItapejaraBlocks;
     deps.splitSaoJosePinhaisBlocks = splitSaoJosePinhaisBlocks;
     deps.splitTermoReferenciaUndBlocks = splitTermoReferenciaUndBlocks;
+    deps.splitJandaiaCatmatBlocks = splitJandaiaCatmatBlocks;
 
     if (typeof bag.registerModelos === "function") {
       bag.registerModelos([
@@ -817,6 +985,22 @@
             return (
               /S[aã]o\s+Jos[eé]\s+dos\s+Pinhais/i.test(raw) &&
               /ANEXO\s+II\s+OR[CÇ]AMENTO DA ADMINISTRA[CÇ][AÃ]O/i.test(raw)
+            );
+          }
+        },
+        {
+          id: "jandaia-catmat",
+          label: "Jandaia do Sul — ITEM/UNIDADE/QTD/CATMAT",
+          family: "municipais",
+          split: "splitJandaiaCatmatBlocks",
+          minItems: 6,
+          priority: 42,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return (
+              /ITEM\s+CATMAT\s+ESPECIFICA/i.test(raw) ||
+              (/Jandaia\s+do\s+Sul/i.test(raw) &&
+                /\b\d{1,2}\s+(?:Rolo|Unidade|Pacote)\s+\d{1,5}\s+\d{5,8}\s+/i.test(raw))
             );
           }
         },

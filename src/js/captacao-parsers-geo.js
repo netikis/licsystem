@@ -9,7 +9,7 @@
 
   var bag = LICSYSTEM.captacaoParsers || (LICSYSTEM.captacaoParsers = {});
   var UND_RE =
-    /^(UN|UND|UNID\.?|UNIDADE|UNIDAD|PC|PCT|PCTE|P[CÇ]|PE[CÇ]A|PE[CÇ]AS|PCS|KG|G|M|M2|M3|ML|L|LT|CX|PAR|JG|KIT|RL|ROLO|ROLOS|GL|GAL|SC|SACO|TON|HR|VB|SERV|PR|POTE|CJ|CONJ|METRO|METROS|MT|FARDO|FD)$/i;
+    /^(UN|UND|UNID\.?|UNIDADE|UNIDAD|PC|PCT|PCTE|P[CÇ]|PE[CÇ]A|PE[CÇ]AS|PCS|KG|G|M|M2|M3|ML|L|LT|CX|PAR|JG|KIT|RL|ROLO|ROLOS|PACOTE|PACOTES|GL|GAL|SC|SACO|TON|HR|VB|SERV|PR|POTE|CJ|CONJ|METRO|METROS|MT|FARDO|FD)$/i;
   var HEADER_RE =
     /^(item|lote|qtd|qtde|quant|und\.?|unid|descri|especif|valor|unit|total|c[oó]d|produto|ordem|n[ºo°]|max\.?|c[oó]digo)$/i;
   var SKIP_ROW_RE =
