@@ -9,7 +9,7 @@
 
   var bag = LICSYSTEM.captacaoParsers || (LICSYSTEM.captacaoParsers = {});
   var UND_RE =
-    /^(UN|UND|UNID\.?|UNIDADE|UNIDAD|PC|PCT|PCTE|P[CÇ]|PE[CÇ]A|PE[CÇ]AS|PCS|KG|G|M|M2|M3|ML|L|LT|CX|PAR|JG|KIT|RL|ROLO|ROLOS|PACOTE|PACOTES|GL|GAL|SC|SACO|TON|HR|VB|SERV|PR|POTE|CJ|CONJ|METRO|METROS|MT|FARDO|FD)$/i;
+    /^(UN|UND|UNI|UNID\.?|UNIDADE|UNIDAD|PC|PCT|PCTE|P[CÇ]|PE[CÇ]A|PE[CÇ]AS|PCS|KG|G|M|M2|M3|ML|L|LT|CX|PAR|JG|KIT|RL|ROLO|ROLOS|PACOTE|PACOTES|GL|GAL|SC|SACO|TON|HR|VB|SERV|PR|POTE|CJ|CONJ|METRO|METROS|MT|BR|BARRA|BARRAS|FARDO|FD)$/i;
   var HEADER_RE =
     /^(item|lote|qtd|qtde|quant|und\.?|unid|descri|especif|valor|unit|total|c[oó]d|produto|ordem|n[ºo°]|max\.?|c[oó]digo)$/i;
   var SKIP_ROW_RE =
@@ -37,12 +37,29 @@
   }
 
   function isMoneyText(t) {
-    var s = String(t || "").replace(/\s/g, "");
-    if (/^R\$/.test(s)) return true;
-    if (/^\d{1,3}(?:\.\d{3})+,\d{2}$/.test(s)) return true;
-    if (/^\d{1,6},\d{2}$/.test(s)) return true;
-    if (/^\d{1,4},\d{4}$/.test(s)) return true;
+    var s = String(t || "").replace(/\s/g, "").replace(/^R\$/, "");
+    if (/^\d{1,3}(?:\.\d{3})+,\d{2,4}$/.test(s)) return true;
+    if (/^\d{1,7},\d{2,4}$/.test(s)) return true;
     return false;
+  }
+
+  function splitDualMoneyCell(cells) {
+    var out = [];
+    var i;
+    for (i = 0; i < (cells || []).length; i++) {
+      var t = String(cells[i].text || "").trim();
+      var m = t.match(
+        /^(\d{1,3}(?:\.\d{3})*,\d{2,4}|\d+,\d{2,4})\s+(\d{1,3}(?:\.\d{3})*,\d{2,4}|\d+,\d{2,4})$/
+      );
+      if (m) {
+        var half = Math.max(4, Number(cells[i].w) / 2);
+        out.push({ x: cells[i].x, w: half, text: m[1] });
+        out.push({ x: cells[i].x + half, w: half, text: m[2] });
+      } else {
+        out.push(cells[i]);
+      }
+    }
+    return out;
   }
 
   function isQtyText(t) {
@@ -196,7 +213,7 @@
   };
 
   function classifyRow(row, utils) {
-    var cells = mergeRsCells((row && row.cells) || []);
+    var cells = splitDualMoneyCell(mergeRsCells((row && row.cells) || []));
     var text = rowText({ cells: cells });
     if (!text || SKIP_ROW_RE.test(text)) return { skip: true };
     var mGroup = GROUP_LOTE_RE.exec(text);

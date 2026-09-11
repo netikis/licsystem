@@ -1,4 +1,4 @@
-/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID) */
+/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID · Céu Azul) */
 (function (LICSYSTEM) {
   "use strict";
   var ctx = LICSYSTEM._ctx || (LICSYSTEM._ctx = {});
@@ -14,6 +14,7 @@
       und = String(und || "UN").toUpperCase().replace(/\.$/, "");
       if (und === "PR" || und === "PAR") und = "PAR";
       if (und === "UNID" || und === "UND" || und === "UNI" || und === "UNIDADE") und = "UN";
+      if (und === "BR" || und === "BARRA" || und === "BARRAS") und = "BARRA";
       if (und === "ROLO" || und === "ROLOS") und = "ROLO";
       if (und === "PACOTE" || und === "PACOTES") und = "PACOTE";
       if (und === "CONJ" || und === "CJ") und = "CJ";
@@ -837,6 +838,205 @@
       return out;
     }
 
+    /**
+     * Céu Azul / BLL — Anexo 01 Termo de Referência:
+     * ITEM | QTD | UN | DESCRIÇÃO | UNITÁRIO (3–4 casas) | TOTAL (3–4 casas)
+     * Ex.: 1 68 UN ABRAÇADEIRA UNIVERSAL PARA … 27,9200 1.898,5600
+     * A descrição quebra de linha e o THEO pega "N UN" virando lote lixo.
+     */
+    function splitCeuAzulBlocks(full) {
+      var t = limparPagina(full).replace(/\r\n?/g, "\n");
+      if (
+        !/C[eé]u\s+Azul/i.test(t) &&
+        !(/Lotes exclusivos ME EPP/i.test(t) &&
+          /Uni\.\s*Descri[cç][aã]o do produto/i.test(t))
+      ) {
+        return [];
+      }
+      var start = t.search(/Lotes exclusivos ME EPP/i);
+      if (start < 0) start = t.search(/N[ºo°]\s*Item[\s\S]{0,120}?Qtde\.?\s*Estima/i);
+      if (start < 0) {
+        start = t.search(
+          /(?:^|\n)\s*1\s+\d{1,5}\s+(?:UN|UNI|P[CÇ]|KG|MT|CX|BR)\s+\S/i
+        );
+      }
+      if (start < 0) return [];
+      var region = t.slice(start);
+      var end = region.search(
+        /Valor m[aá]ximo estimado do processo|1\.2\s*CRIT[EÉ]RIO DE JULGAMENTO/i
+      );
+      if (end > 80) region = region.slice(0, end);
+      region = region
+        .replace(
+          /MUNIC[IÍ]PIO DE C[EÉ]U AZUL[\s\S]{0,260}?P[aá]gina\s+\d+\s*\/\s*\d+/gi,
+          "\n"
+        )
+        .replace(
+          /Edital Preg[aã]o Eletr[oô]nico N[ºo°]?\s*[\d./]+[^\n]{0,100}/gi,
+          "\n"
+        )
+        .replace(
+          /PREG[AÃ]O ELETR[OÔ]NICO N[ºo°]?\s*[\d./]+[^\n]{0,120}/gi,
+          "\n"
+        )
+        .replace(/Forma Eletr[oô]nica\.?/gi, "\n")
+        .replace(/ANEXO\s*0?1[^\n]{0,80}/gi, "\n")
+        .replace(/TERMO DE REFER[EÊ]NCIA[^\n]{0,90}/gi, "\n")
+        .replace(/Aten[cç][aã]o:\s*Lotes exclusivos ME EPP/gi, "\n")
+        .replace(
+          /N[ºo°]\s*Item\s+Qtde\.?\s*Estima[^\n]{0,40}Uni\.\s*Descri[cç][aã]o[^\n]{0,80}Valor Total/gi,
+          "\n"
+        );
+      var flat = region.replace(/\s+/g, " ").trim();
+      var undAlt =
+        "UNI|UNID\\.?|UND\\.?|UN|P[CÇ]|PE[CÇ]AS?|PCS|KG|MT|METROS?|CX|CAIXA|BR|BARRA";
+      var re = new RegExp(
+        "(?:^|\\s)(\\d{1,3})\\s+(\\d{1,5})\\s+(" + undAlt + ")(?=\\s)",
+        "gi"
+      );
+      var anchors = [];
+      var m;
+      while ((m = re.exec(flat)) !== null) {
+        var itemNo = parseInt(m[1], 10);
+        var qtd = utils.parseBrNum(m[2]);
+        if (!(itemNo >= 1 && itemNo <= 400) || !(qtd > 0)) continue;
+        var pos = m.index;
+        if (m[0].charAt(0) === " " || m[0].charAt(0) === "\t") pos = m.index + 1;
+        anchors.push({
+          itemNo: itemNo,
+          qtd: qtd,
+          und: m[3],
+          index: pos,
+          headEnd: m.index + m[0].length
+        });
+      }
+      if (anchors.length < 8) return [];
+
+      function firstPricePairCeu(str, qtdHint) {
+        var all = [];
+        var reP =
+          /(\d{1,3}(?:\.\d{3})*,\d{3,4}|\d+,\d{3,4})\s+(\d{1,3}(?:\.\d{3})*,\d{3,4}|\d+,\d{3,4})(?=\s|$)/g;
+        var pm;
+        var qtdN = Number(qtdHint) || 0;
+        while ((pm = reP.exec(str)) !== null) {
+          var u = utils.parseBrNum(pm[1]);
+          var tot = utils.parseBrNum(pm[2]);
+          if (!(u > 0) || !(tot > 0)) continue;
+          var rel =
+            qtdN > 0
+              ? Math.abs(qtdN * u - tot) / Math.max(Math.abs(tot), Math.abs(qtdN * u), 1)
+              : 1;
+          all.push({
+            unit: u,
+            total: tot,
+            index: pm.index,
+            len: pm[0].length,
+            rel: rel
+          });
+        }
+        var glued = /(\d{1,3}(?:\.\d{3})*,\d{3})(\d{1,3}(?:\.\d{3})*,\d{3,4})/g;
+        var gm;
+        while ((gm = glued.exec(str)) !== null) {
+          var ug = utils.parseBrNum(gm[1]);
+          var tg = utils.parseBrNum(gm[2]);
+          if (!(ug > 0) || !(tg > 0)) continue;
+          var relg =
+            qtdN > 0
+              ? Math.abs(qtdN * ug - tg) / Math.max(Math.abs(tg), Math.abs(qtdN * ug), 1)
+              : 1;
+          all.push({
+            unit: ug,
+            total: tg,
+            index: gm.index,
+            len: gm[0].length,
+            rel: relg
+          });
+        }
+        var exact = null;
+        for (var p = 0; p < all.length; p++) {
+          if (all[p].rel <= 0.02) {
+            exact = all[p];
+            break;
+          }
+        }
+        return exact || all[0] || null;
+      }
+
+      var byItemC = {};
+      for (var i = 0; i < anchors.length; i++) {
+        var nextIdx = i + 1 < anchors.length ? anchors[i + 1].index : flat.length;
+        var body = flat.slice(anchors[i].headEnd, nextIdx);
+        var pair = firstPricePairCeu(body, anchors[i].qtd);
+        var vu = pair ? pair.unit : 0;
+        var vt = pair ? pair.total : 0;
+        var desc = body;
+        var after = "";
+        if (pair) {
+          desc = body.slice(0, pair.index);
+          after = body.slice(pair.index + pair.len);
+        }
+        desc = String(desc || "").replace(/\s+/g, " ").trim();
+        after = String(after || "")
+          .replace(
+            /\b(?:MUNIC[IÍ]PIO DE C[EÉ]U AZUL|P[aá]gina\s+\d+|Forma Eletr[oô]nica|ANEXO\s*0?1|TERMO DE REFER[EÊ]NCIA)\b[\s\S]{0,80}/gi,
+            " "
+          )
+          .replace(/\s+/g, " ")
+          .trim();
+        if (after && after.length >= 2) {
+          desc = (desc + " " + after).replace(/\s+/g, " ").trim();
+        }
+        desc = desc
+          .replace(/\bN[ºo°]\s*Item\b/gi, " ")
+          .replace(/\bQtde\.?\s*Estima\w*\b/gi, " ")
+          .replace(/\bValor\s+(?:Unit[aá]rio|Total)\b/gi, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (desc.length > 700) desc = desc.slice(0, 700).replace(/\s+\S*$/, "");
+        if (!desc || desc.length < 3) {
+          desc = "Item " + anchors[i].itemNo;
+        }
+        if (!(vu > 0) || !(vt > 0)) continue;
+        var packed = packMunicipioRow(
+          anchors[i].itemNo,
+          anchors[i].qtd,
+          anchors[i].und,
+          desc,
+          vu,
+          vt
+        );
+        if (!utils.isLinhaProdutoEdital(packed)) continue;
+        var n = anchors[i].itemNo;
+        var prev = byItemC[n];
+        if (!prev) {
+          byItemC[n] = packed;
+        } else if (packed.editalVunit > 0 && !prev.editalVunit) {
+          byItemC[n] = packed;
+        } else if (
+          packed.editalVunit > 0 &&
+          prev.editalVunit > 0 &&
+          packed.produto.length > prev.produto.length &&
+          packed.produto.length < 420
+        ) {
+          byItemC[n] = packed;
+        }
+      }
+
+      var keysC = Object.keys(byItemC)
+        .map(function (k) {
+          return parseInt(k, 10);
+        })
+        .filter(function (n) {
+          return n > 0;
+        })
+        .sort(function (a, b) {
+          return a - b;
+        });
+      var outC = [];
+      for (var kc = 0; kc < keysC.length; kc++) outC.push(byItemC[keysC[kc]]);
+      return outC.length >= 8 ? outC : [];
+    }
+
     function splitSaoJosePinhaisBlocks(full) {
       var t = limparPagina(full).replace(/\r\n?/g, "\n");
       var start = t.search(/ANEXO\s+II\s+OR[CÇ]AMENTO DA ADMINISTRA[CÇ][AÃ]O/i);
@@ -906,6 +1106,7 @@
     deps.splitSaoJosePinhaisBlocks = splitSaoJosePinhaisBlocks;
     deps.splitTermoReferenciaUndBlocks = splitTermoReferenciaUndBlocks;
     deps.splitJandaiaCatmatBlocks = splitJandaiaCatmatBlocks;
+    deps.splitCeuAzulBlocks = splitCeuAzulBlocks;
 
     if (typeof bag.registerModelos === "function") {
       bag.registerModelos([
@@ -1001,6 +1202,25 @@
               /ITEM\s+CATMAT\s+ESPECIFICA/i.test(raw) ||
               (/Jandaia\s+do\s+Sul/i.test(raw) &&
                 /\b\d{1,2}\s+(?:Rolo|Unidade|Pacote)\s+\d{1,5}\s+\d{5,8}\s+/i.test(raw))
+            );
+          }
+        },
+        {
+          id: "ceu-azul-tr",
+          label: "Céu Azul — Termo de Referência ITEM/QTD/UN (4 casas)",
+          family: "municipais",
+          split: "splitCeuAzulBlocks",
+          minItems: 20,
+          priority: 36,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return (
+              (/C[eé]u\s+Azul/i.test(raw) &&
+                (/\bValor\s+Unit[aá]rio\b/i.test(raw) ||
+                  /Lotes exclusivos ME EPP/i.test(raw) ||
+                  /\d{1,3}(?:\.\d{3})*,\d{4}\s+\d{1,3}(?:\.\d{3})*,\d{4}/.test(raw))) ||
+              (/Lotes exclusivos ME EPP/i.test(raw) &&
+                /Uni\.\s*Descri[cç][aã]o do produto/i.test(raw))
             );
           }
         },
