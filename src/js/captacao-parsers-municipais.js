@@ -1,4 +1,4 @@
-/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID · Céu Azul) */
+/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID · Céu Azul · Piraquara · Sarandi · Tomazina) */
 (function (LICSYSTEM) {
   "use strict";
   var ctx = LICSYSTEM._ctx || (LICSYSTEM._ctx = {});
@@ -15,11 +15,15 @@
       if (und === "PR" || und === "PAR") und = "PAR";
       if (und === "UNID" || und === "UND" || und === "UNI" || und === "UNIDADE") und = "UN";
       if (und === "BR" || und === "BARRA" || und === "BARRAS") und = "BARRA";
+      if (und === "GALAO" || und === "GALÃO" || und === "GALOES" || und === "GALÕES") und = "GALÃO";
+      if (und === "HORAS" || und === "HORA" || und === "HRS" || und === "HR") und = "HORA";
+      if (/^SERVI[CÇ]OS?$/i.test(und)) und = "SERVIÇO";
       if (und === "ROLO" || und === "ROLOS") und = "ROLO";
       if (und === "PACOTE" || und === "PACOTES") und = "PACOTE";
-      if (und === "CONJ" || und === "CJ") und = "CJ";
+      if (und === "CONJ" || und === "CJ" || und === "CONJUNTO" || und === "CONJUNTOS") und = "CJ";
       if (und === "ROL" || und === "ROLOS") und = "ROLO";
-      if (und === "METROS") und = "METRO";
+      if (und === "METROS" || und === "MT" || und === "MTS") und = "METRO";
+      if (und === "DIA" || und === "DIAS") und = "DIA";
       if (/^PE[CÇ]AS?$/i.test(und)) und = "PEÇA";
       if (und === "PCS" || und === "PC" || und === "PÇ") und = "PEÇA";
       produto = String(produto || "").replace(/\s+/g, " ").trim();
@@ -1034,6 +1038,525 @@
       return outC.length >= 8 ? outC : [];
     }
 
+    function repairSplitRs(s) {
+      s = String(s || "");
+      s = s.replace(/R\$\s*/g, " R$ ");
+      s = s.replace(/(\d),(\d)\s+(\d)(?=\s|$)/g, "$1,$2$3");
+      s = s.replace(/(\d),\s+(\d{2})(?=\s|$)/g, "$1,$2");
+      s = s.replace(/(\d{1,3})\s+(\d{3}),(\d{2})/g, "$1.$2,$3");
+      return s.replace(/\s+/g, " ").trim();
+    }
+
+    function moneyBrRe() {
+      return "(\\d{1,3}(?:\\.\\d{3})*,\\d{2}|\\d+,\\d{2})";
+    }
+
+    function collectBrMoney(s, requireRs) {
+      var out = [];
+      var re = requireRs
+        ? new RegExp("R\\$\\s*" + moneyBrRe(), "g")
+        : new RegExp(moneyBrRe() + "(?![mM]\\b)", "g");
+      String(s || "").replace(re, function (w, m, idx) {
+        var n = utils.parseBrNum(m);
+        if (n > 0) out.push({ n: n, idx: idx, raw: m });
+        return w;
+      });
+      return out;
+    }
+
+    function cleanPiraquaraDesc(raw, itemNo) {
+      var desc = String(raw || "")
+        .replace(/R\$\s*\d{1,3}(?:\.\d{3})*,\d{2}/g, " ")
+        .replace(/\bMat\.?\s*Item\b/gi, " ")
+        .replace(/\bItem\s*Descri[cç][aã]o\b/gi, " ")
+        .replace(/\bGrupo\s+\d+\b/gi, " ")
+        .replace(/\bC.MARA MUNICIPAL DE PIRAQUARA\b/gi, " ")
+        .replace(/\bPREG.O ELETR.NICO\b/gi, " ")
+        .replace(/\bValor unit\.?\b/gi, " ")
+        .replace(/\bValor total\b/gi, " ")
+        .replace(/\bQuant\.?\b/gi, " ")
+        .replace(/\bUnidade\b/gi, " ")
+        .replace(/\bDescri[cç][aã]o\b/gi, " ")
+        .replace(/\bMat\.\s*El[eé]trico\b/gi, " ")
+        .replace(/^[\s.\-–]*El[eé]trico\s+/i, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (desc.length > 420) {
+        var cut = desc.search(/[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõçA-Z]{3,}[^]{0,80}$/);
+        if (cut > 40) desc = desc.slice(cut);
+        else desc = desc.slice(-360).replace(/^\S*\s/, "");
+      }
+      if (!desc || desc.length < 3) desc = "Item " + itemNo;
+      return desc;
+    }
+
+    /**
+     * Câmara de Piraquara — TR Grupo/Item:
+     * descrição quebra ANTES do nº; depois QTD + R$ unit + R$ total.
+     */
+    function splitPiraquaraBlocks(full) {
+      var t = limparPagina(full).replace(/\r\n?/g, "\n");
+      var f = foldCeu(t);
+      if (f.indexOf("piraquara") < 0) return [];
+      if (f.indexOf("valor unit") < 0 && f.indexOf("descricao dos itens") < 0) return [];
+      var start = t.search(/DESCRI.AO DOS ITENS, QUANTIDADES E VALORES/i);
+      if (start < 0) start = t.search(/Grupo\s*1\b/i);
+      if (start < 0) return [];
+      var region = t.slice(start);
+      var end = region.search(/VALOR TOTAL M.XIMO ESTIMADO/i);
+      if (end > 200) region = region.slice(0, end);
+      var flat = repairSplitRs(region);
+      var pairs = [];
+      String(flat).replace(
+        new RegExp(
+          "(\\d{1,5})\\s+R\\$\\s*" + moneyBrRe() + "\\s+R\\$\\s*" + moneyBrRe(),
+          "g"
+        ),
+        function (whole, qtdRaw, uRaw, tRaw, idx) {
+          var qtd = utils.parseBrNum(qtdRaw);
+          var vu = utils.parseBrNum(uRaw);
+          var vt = utils.parseBrNum(tRaw);
+          if (!(qtd > 0) || !(vu > 0) || !(vt > 0)) return whole;
+          var rel = Math.abs(qtd * vu - vt) / Math.max(vt, qtd * vu, 1);
+          if (rel > 0.08) return whole;
+          pairs.push({ qtd: qtd, vu: vu, vt: vt, index: idx, len: whole.length });
+          return whole;
+        }
+      );
+      if (pairs.length < 8) return [];
+      var byItem = {};
+      var expected = 1;
+      var i;
+      for (i = 0; i < pairs.length; i++) {
+        var prevEnd = i ? pairs[i - 1].index + pairs[i - 1].len : 0;
+        var chunk = flat.slice(prevEnd, pairs[i].index);
+        var itemNo = expected;
+        var foundIdx = -1;
+        String(chunk).replace(/\b(\d{1,3})\b/g, function (w, n, idx) {
+          if (parseInt(n, 10) === expected) foundIdx = idx;
+          return w;
+        });
+        var desc = chunk;
+        if (foundIdx >= 0) {
+          var before = chunk.slice(0, foundIdx).replace(/\s+/g, " ").trim();
+          var after = chunk.slice(foundIdx + String(expected).length).replace(/\s+/g, " ").trim();
+          if (before.length > 200) {
+            var cap = before.search(/[A-ZÁÉÍÓÚÂÊÔÃÕÇ][^]{12,}$/);
+            if (cap < 0) cap = Math.max(0, before.length - 180);
+            before = before.slice(cap).replace(/^\S*[a-záéíóú]{2,}\s+/, "");
+          }
+          desc = (before + " " + after).trim();
+        }
+        desc = cleanPiraquaraDesc(desc, itemNo);
+        var packed = packMunicipioRow(
+          itemNo,
+          pairs[i].qtd,
+          "UN",
+          desc,
+          pairs[i].vu,
+          pairs[i].vt
+        );
+        if (utils.isLinhaProdutoEdital(packed)) {
+          byItem[itemNo] = packed;
+          expected++;
+        }
+      }
+      var keysP = Object.keys(byItem)
+        .map(function (k) {
+          return parseInt(k, 10);
+        })
+        .sort(function (a, b) {
+          return a - b;
+        });
+      var outP = [];
+      for (i = 0; i < keysP.length; i++) outP.push(byItem[keysP[i]]);
+      return outP.length >= 8 ? outP : [];
+    }
+
+    /**
+     * Águas de Sarandi — Item COD Produto Unid Quant R$ unit R$ total.
+     * Nº 110 vira "11 0 73794"; qtd 20 vira "2 0"; unidade pode ser UNID./ROLO/BARRA/MT.
+     */
+    function splitSarandiEletricosBlocks(full) {
+      var t = limparPagina(full).replace(/\r\n?/g, "\n");
+      var f = foldCeu(t);
+      if (f.indexOf("sarandi") < 0 && f.indexOf("929307") < 0) return [];
+      var start = t.search(/Item\s+COD\s+Produto/i);
+      if (start < 0) start = t.search(/1\s+77739\b/);
+      if (start < 0) return [];
+      var region = t.slice(start);
+      var end = region.search(/VALOR TOTAL DO CERTAME/i);
+      if (end > 200) region = region.slice(0, end);
+      var flat = repairSplitRs(region);
+      flat = flat.replace(/\b(UNID|UND|UNIDADE|UN|ROLO|BARRA|METRO|MT|M)\./gi, "$1");
+      flat = flat.replace(/(\d{2})\s+(\d)\s+(\d{5})/g, function (_, a, b, cod) {
+        var n = parseInt(a, 10) * 10 + parseInt(b, 10);
+        if (n >= 100 && n <= 250) return n + " " + cod;
+        return a + " " + b + " " + cod;
+      });
+      var undTok = "UNID|UND|UNIDADE|UN|ROLO|BARRA|METRO|MT|M";
+      flat = flat.replace(
+        new RegExp("\\b(" + undTok + ")\\b\\s+(\\d{1,3})\\s+(\\d{1,3})\\s+R\\$", "gi"),
+        function (w, u, a, b) {
+          if (b.length === 1 && b !== "0") return w;
+          var n = parseInt(String(a) + String(b), 10);
+          if (n >= 10 && n <= 20000) return u + " " + n + " R$";
+          return w;
+        }
+      );
+      var pairsS = [];
+      String(flat).replace(
+        new RegExp(
+          "\\b(" +
+            undTok +
+            ")\\b\\s+(\\d{1,5})\\s+R\\$\\s*" +
+            moneyBrRe() +
+            "\\s+R\\$\\s*" +
+            moneyBrRe(),
+          "gi"
+        ),
+        function (whole, und, qtdRaw, uRaw, tRaw, idx) {
+          var qtd = utils.parseBrNum(qtdRaw);
+          var vu = utils.parseBrNum(uRaw);
+          var vt = utils.parseBrNum(tRaw);
+          if (!(qtd > 0) || !(vu > 0) || !(vt > 0)) return whole;
+          var rel = Math.abs(qtd * vu - vt) / Math.max(vt, qtd * vu, 1);
+          if (rel > 0.08) return whole;
+          pairsS.push({
+            und: und,
+            qtd: qtd,
+            vu: vu,
+            vt: vt,
+            index: idx,
+            len: whole.length
+          });
+          return whole;
+        }
+      );
+      String(flat).replace(
+        new RegExp(
+          "(\\d{1,5})\\s+R\\$\\s*" + moneyBrRe() + "\\s+R\\$\\s*" + moneyBrRe(),
+          "g"
+        ),
+        function (whole, qtdRaw, uRaw, tRaw, idx) {
+          var qtd = utils.parseBrNum(qtdRaw);
+          var vu = utils.parseBrNum(uRaw);
+          var vt = utils.parseBrNum(tRaw);
+          if (!(qtd > 0) || !(vu > 0) || !(vt > 0)) return whole;
+          var rel = Math.abs(qtd * vu - vt) / Math.max(vt, qtd * vu, 1);
+          if (rel > 0.08) return whole;
+          var ov = false;
+          var oi;
+          for (oi = 0; oi < pairsS.length; oi++) {
+            if (idx < pairsS[oi].index + pairsS[oi].len && idx + whole.length > pairsS[oi].index) {
+              ov = true;
+              break;
+            }
+          }
+          if (ov) return whole;
+          pairsS.push({
+            und: "UN",
+            qtd: qtd,
+            vu: vu,
+            vt: vt,
+            index: idx,
+            len: whole.length
+          });
+          return whole;
+        }
+      );
+      pairsS.sort(function (a, b) {
+        return a.index - b.index;
+      });
+      if (pairsS.length < 8) return [];
+      var byItem = {};
+      var expected = 1;
+      var ps;
+      for (ps = 0; ps < pairsS.length; ps++) {
+        var prevEndS = ps ? pairsS[ps - 1].index + pairsS[ps - 1].len : 0;
+        var chunkS = flat.slice(prevEndS, pairsS[ps].index);
+        var itemNo = expected;
+        var cod = "";
+        var descS = chunkS;
+        var lastHead = null;
+        String(chunkS).replace(/(\d{1,3})\s+(\d{5})/g, function (w, n, c, idx) {
+          lastHead = {
+            n: parseInt(n, 10),
+            c: c,
+            rest: chunkS.slice(idx + w.length),
+            idx: idx
+          };
+          return w;
+        });
+        if (!lastHead) {
+          String(chunkS).replace(/(\d{5})\s+(\d{1,3})/g, function (w, c, n, idx) {
+            lastHead = {
+              n: parseInt(n, 10),
+              c: c,
+              rest: chunkS.slice(idx + w.length),
+              idx: idx
+            };
+            return w;
+          });
+        }
+        if (lastHead && lastHead.n >= 1 && lastHead.n <= 250) {
+          itemNo = lastHead.n;
+          cod = lastHead.c;
+          descS = chunkS.slice(0, lastHead.idx) + " " + lastHead.rest;
+        }
+        descS = String(descS || "")
+          .replace(/\bItem\s+COD\s+Produto[^\s]*/gi, " ")
+          .replace(/\bImagem\b/gi, " ")
+          .replace(/\bUnid\.?\s+Quant\s+(?:Valor\s+Max\.?\s+)*Unit\s+(?:Valor\s+Max\.?\s+)*Total\b/gi, " ")
+          .replace(/\bPreg.o Eletr.nico n.?\s*[\d/]+/gi, " ")
+          .replace(/\bP[aá]gina\s+\d+\s+de\s+\d+/gi, " ")
+          .replace(/\bVALOR TOTAL[^\d]{0,50}/gi, " ")
+          .replace(/\bGRUPO\s+\d+[^\d]{0,90}/gi, " ")
+          .replace(/\bImagem\b/gi, " ")
+          .replace(/\bANEXO I\b/gi, " ")
+          .replace(/\bTERMO DE REFER.NCIA\b/gi, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (descS.length > 700) descS = descS.slice(-700).replace(/^\S*\s/, "");
+        if (!descS || descS.length < 3) descS = "Item " + itemNo + (cod ? " COD " + cod : "");
+        var packedS = packMunicipioRow(
+          itemNo,
+          pairsS[ps].qtd,
+          pairsS[ps].und,
+          descS,
+          pairsS[ps].vu,
+          pairsS[ps].vt
+        );
+        if (utils.isLinhaProdutoEdital(packedS)) {
+          if (!byItem[itemNo]) byItem[itemNo] = packedS;
+          expected = itemNo + 1;
+        }
+      }
+      var keysS = Object.keys(byItem)
+        .map(function (k) {
+          return parseInt(k, 10);
+        })
+        .sort(function (a, b) {
+          return a - b;
+        });
+      var outS = [];
+      var ks;
+      for (ks = 0; ks < keysS.length; ks++) outS.push(byItem[keysS[ks]]);
+      return outS.length >= 8 ? outS : [];
+    }
+
+    /**
+     * Tomazina Natal — LOTE N + ITEM/UND/QTD/R$ (páginas 3–9; ignora repetição do TR).
+     * Rótulo "LOTE N" cai no meio do lote; item 1 seguinte (ou marca vizinha) troca o lote.
+     */
+    function splitTomazinaNatalBlocks(full) {
+      var t = limparPagina(full).replace(/\r\n?/g, "\n");
+      var f = foldCeu(t);
+      if (f.indexOf("tomazina") < 0) return [];
+      var start = t.search(/ITEM\s+UND\s+QTD\s+DESCRI/i);
+      if (start < 0) start = t.search(/LOTE\s*1\s+\d+\s+metros/i);
+      if (start < 0) return [];
+      var region = t.slice(start);
+      var end = region.search(/TOTAL DOS LOTES/i);
+      if (end > 80) region = region.slice(0, end);
+      region = region.replace(
+        /PREFEITURA MUNICIPAL DE TOMAZINA[\s\S]{0,280}?3563-1133/gi,
+        "\n"
+      );
+      var flat = repairSplitRs(region);
+      var loteMarks = [];
+      String(flat).replace(/LOTE\s+(\d+)/gi, function (w, n, idx) {
+        var num = parseInt(n, 10);
+        if (num >= 1 && num <= 40) loteMarks.push({ n: num, idx: idx });
+        return w;
+      });
+      var undWord =
+        "metros|und|unid|pe[cç]as|pe[cç]a|conjuntos|conjunto|gal[aã]o|galao|rolos|rolo|servi[cç]o|horas|hrs|hora|dia";
+      var heads = [];
+      String(flat).replace(
+        /\b12\s+(\d{1,5})\s+horas\s+horas\b/gi,
+        function (w, q, idx) {
+          heads.push({
+            itemNo: 1,
+            loteHint: 12,
+            qtd: utils.parseBrNum(q),
+            und: "HORA",
+            idx: idx,
+            len: w.length
+          });
+          return w;
+        }
+      );
+      String(flat).replace(
+        /\b(\d{1,2})\s+DIA\s+(\d{1,5})\s+DIAS\b/gi,
+        function (w, item, q, idx) {
+          heads.push({
+            itemNo: parseInt(item, 10),
+            loteHint: 0,
+            qtd: utils.parseBrNum(q),
+            und: "DIA",
+            idx: idx,
+            len: w.length
+          });
+          return w;
+        }
+      );
+      String(flat).replace(
+        new RegExp(
+          "\\b(\\d{1,2})\\s+(" + undWord + ")\\s+(\\d{1,5})\\b",
+          "gi"
+        ),
+        function (w, item, und, q, idx) {
+          heads.push({
+            itemNo: parseInt(item, 10),
+            loteHint: 0,
+            qtd: utils.parseBrNum(q),
+            und: und,
+            idx: idx,
+            len: w.length
+          });
+          return w;
+        }
+      );
+      String(flat).replace(
+        /\b(\d{1,2})\s+(\d{1,5})\s+(servi[cç]o|horas|hrs)\b/gi,
+        function (w, item, q, und, idx) {
+          heads.push({
+            itemNo: parseInt(item, 10),
+            loteHint: 0,
+            qtd: utils.parseBrNum(q),
+            und: und,
+            idx: idx,
+            len: w.length
+          });
+          return w;
+        }
+      );
+      String(flat).replace(
+        /\b(\d{1,2})\s+(\d{1,5})\s+HRS\s+horas\b/gi,
+        function (w, item, q, idx) {
+          heads.push({
+            itemNo: parseInt(item, 10),
+            loteHint: 0,
+            qtd: utils.parseBrNum(q),
+            und: "HORA",
+            idx: idx,
+            len: w.length
+          });
+          return w;
+        }
+      );
+      heads.sort(function (a, b) {
+        return a.idx - b.idx;
+      });
+      var uniq = [];
+      var hi;
+      for (hi = 0; hi < heads.length; hi++) {
+        var prevH = uniq[uniq.length - 1];
+        if (prevH && heads[hi].idx < prevH.idx + prevH.len) continue;
+        if (heads[hi].itemNo < 1 || heads[hi].itemNo > 20) continue;
+        if (!(heads[hi].qtd > 0)) continue;
+        uniq.push(heads[hi]);
+      }
+      heads = uniq;
+      if (heads.length < 4) return [];
+
+      function nearbyLote(idx) {
+        var best = 0;
+        var bm;
+        for (bm = 0; bm < loteMarks.length; bm++) {
+          var d = loteMarks[bm].idx - idx;
+          if (d >= -90 && d <= 50) best = loteMarks[bm].n;
+        }
+        return best;
+      }
+
+      function nextLoteAfter(idx) {
+        var bm;
+        for (bm = 0; bm < loteMarks.length; bm++) {
+          if (loteMarks[bm].idx >= idx) return loteMarks[bm].n;
+        }
+        return 0;
+      }
+
+      function pricesAfter(from, to, qtd) {
+        var slice = flat.slice(from, to);
+        function almost(a, b) {
+          return Math.abs(a - b) / Math.max(a, b, 1) <= 0.08;
+        }
+        function pickPair(list) {
+          var i;
+          var j;
+          for (i = 0; i < list.length; i++) {
+            for (j = i + 1; j < list.length; j++) {
+              var a = list[i].n;
+              var b = list[j].n;
+              if (!(a > 0) || b < a) continue;
+              if (almost(qtd * a, b)) return { vu: a, vt: b };
+            }
+          }
+          return null;
+        }
+        return (
+          pickPair(collectBrMoney(slice, true)) ||
+          pickPair(collectBrMoney(slice, false)) || { vu: 0, vt: 0 }
+        );
+      }
+
+      var outT = [];
+      var curLote = 1;
+      var prevItemNo = 0;
+      for (hi = 0; hi < heads.length; hi++) {
+        var h = heads[hi];
+        var nextIdx = hi + 1 < heads.length ? heads[hi + 1].idx : flat.length;
+        var pr = pricesAfter(h.idx, nextIdx, h.qtd);
+        var vu = pr.vu;
+        var vt = pr.vt;
+        var qtd = h.qtd;
+        if (!(qtd > 0) || !(vu > 0) || !(vt > 0)) continue;
+        var loteNo = h.loteHint || nearbyLote(h.idx);
+        if (!loteNo) {
+          if (h.itemNo === 1 && prevItemNo > 1) loteNo = curLote + 1;
+          else if (h.itemNo === 1 && prevItemNo === 1) loteNo = nextLoteAfter(h.idx) || curLote + 1;
+          else loteNo = curLote;
+        }
+        curLote = loteNo;
+        prevItemNo = h.itemNo;
+        var desc = flat.slice(h.idx + h.len, Math.min(nextIdx, h.idx + h.len + 900));
+        var headJunkPat =
+          "\\b\\d{1,2}\\s+(metros|und|unid|pe[cç]as|pe[cç]a|conjuntos|conjunto|gal[aã]o|galao|rolos|rolo|servi[cç]o|horas|hrs|hora|dia)\\s+\\d{1,5}\\b";
+        function stripTomazinaDesc(s) {
+          return String(s || "")
+            .replace(/R\$\s*\d{1,3}(?:\.\d{3})*,\d{2}/g, " ")
+            .replace(/LOTE\s+\d+/gi, " ")
+            .replace(/ITEM\s+UND\s+QTD\s+DESCRI[^\s]*/gi, " ")
+            .replace(/ITEM\s+QUANT\.?\s+UND\s+PRODUTO/gi, " ")
+            .replace(/PRE.O UNT/gi, " ")
+            .replace(/PRE.O TOTAL/gi, " ")
+            .replace(/\bPRE[CÇ]O\b/gi, " ")
+            .replace(new RegExp(headJunkPat, "gi"), " ")
+            .replace(/\s+/g, " ")
+            .trim();
+        }
+        desc = stripTomazinaDesc(desc);
+        var beforeD = stripTomazinaDesc(flat.slice(Math.max(0, h.idx - 220), h.idx));
+        if (beforeD.length > 160) beforeD = beforeD.slice(-160).replace(/^\S*\s/, "");
+        desc = (beforeD + " " + desc).replace(/\s+/g, " ").trim();
+        if (desc.length > 700) desc = desc.slice(0, 700).replace(/\s+\S*$/, "");
+        if (!desc || desc.length < 3) desc = "Lote " + loteNo + " item " + h.itemNo;
+        var packedT = packMunicipioRow(
+          loteNo + "." + h.itemNo,
+          qtd,
+          h.und,
+          desc,
+          vu,
+          vt
+        );
+        if (utils.isLinhaProdutoEdital(packedT)) outT.push(packedT);
+      }
+      return outT.length >= 4 ? outT : [];
+    }
+
     function splitSaoJosePinhaisBlocks(full) {
       var t = limparPagina(full).replace(/\r\n?/g, "\n");
       var start = t.search(/ANEXO\s+II\s+OR[CÇ]AMENTO DA ADMINISTRA[CÇ][AÃ]O/i);
@@ -1104,6 +1627,9 @@
     deps.splitTermoReferenciaUndBlocks = splitTermoReferenciaUndBlocks;
     deps.splitJandaiaCatmatBlocks = splitJandaiaCatmatBlocks;
     deps.splitCeuAzulBlocks = splitCeuAzulBlocks;
+    deps.splitPiraquaraBlocks = splitPiraquaraBlocks;
+    deps.splitSarandiEletricosBlocks = splitSarandiEletricosBlocks;
+    deps.splitTomazinaNatalBlocks = splitTomazinaNatalBlocks;
 
     if (typeof bag.registerModelos === "function") {
       bag.registerModelos([
@@ -1219,6 +1745,54 @@
                   /,\d{4}\s+\d{1,3}(?:\.\d{3})*,\d{4}/.test(String(raw || "")))) ||
               (f.indexOf("lotes exclusivos me epp") >= 0 &&
                 f.indexOf("descricao do produto") >= 0)
+            );
+          }
+        },
+        {
+          id: "piraquara-tr",
+          label: "Piraquara — TR Grupo/Item QTD R$ R$",
+          family: "municipais",
+          split: "splitPiraquaraBlocks",
+          minItems: 12,
+          priority: 33,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            var f = foldCeu(raw);
+            return (
+              f.indexOf("piraquara") >= 0 &&
+              (f.indexOf("valor unit") >= 0 || f.indexOf("descricao dos itens") >= 0)
+            );
+          }
+        },
+        {
+          id: "sarandi-eletricos",
+          label: "Sarandi — Item/COD/UNID/R$ (materiais elétricos)",
+          family: "municipais",
+          split: "splitSarandiEletricosBlocks",
+          minItems: 12,
+          priority: 34,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            var f = foldCeu(raw);
+            return (
+              (f.indexOf("sarandi") >= 0 || f.indexOf("929307") >= 0) &&
+              (f.indexOf("item") >= 0 && f.indexOf("cod") >= 0 && /R\$/.test(String(raw || "")))
+            );
+          }
+        },
+        {
+          id: "tomazina-natal",
+          label: "Tomazina — LOTE/ITEM/UND/QTD/R$ (decoração natalina)",
+          family: "municipais",
+          split: "splitTomazinaNatalBlocks",
+          minItems: 6,
+          priority: 35,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            var f = foldCeu(raw);
+            return (
+              f.indexOf("tomazina") >= 0 &&
+              (f.indexOf("preco unt") >= 0 || f.indexOf("item und qtd") >= 0 || f.indexOf("total dos lotes") >= 0)
             );
           }
         },
