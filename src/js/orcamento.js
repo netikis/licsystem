@@ -504,7 +504,9 @@
         }
 
         var rawCheck = itCap.line || itCap.produto || "";
-        if(!rawCheck || !utils.sanitizar(rawCheck)) return;
+        var priced = Number(itCap.editalVunit) > 0 || Number(itCap.editalTotal) > 0;
+        if(!rawCheck) return;
+        if(!priced && !utils.sanitizar(rawCheck)) return;
 
         var item = LICSYSTEM.orcamento.emptyItem();
         item.lote = itCap.lote != null && String(itCap.lote).trim() !== "" ? String(itCap.lote) : "";

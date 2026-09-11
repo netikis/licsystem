@@ -838,120 +838,117 @@
       return out;
     }
 
+    function foldCeu(s) {
+      return utils.fold(String(s || "")).toLowerCase();
+    }
+
+    function looksLikeCeuAzul(raw) {
+      var f = foldCeu(raw);
+      return (
+        f.indexOf("ceu azul") >= 0 ||
+        (f.indexOf("lotes exclusivos me epp") >= 0 &&
+          f.indexOf("descricao do produto") >= 0)
+      );
+    }
+
     /**
      * Céu Azul / BLL — Anexo 01 Termo de Referência:
      * ITEM | QTD | UN | DESCRIÇÃO | UNITÁRIO (3–4 casas) | TOTAL (3–4 casas)
      * Ex.: 1 68 UN ABRAÇADEIRA UNIVERSAL PARA … 27,9200 1.898,5600
-     * A descrição quebra de linha e o THEO pega "N UN" virando lote lixo.
+     * Sem classe unicode no regex: o build ofusca e o THEO voltava a ganhar.
      */
     function splitCeuAzulBlocks(full) {
       var t = limparPagina(full).replace(/\r\n?/g, "\n");
-      if (
-        !/C[eé]u\s+Azul/i.test(t) &&
-        !(/Lotes exclusivos ME EPP/i.test(t) &&
-          /Uni\.\s*Descri[cç][aã]o do produto/i.test(t))
-      ) {
-        return [];
-      }
-      var start = t.search(/Lotes exclusivos ME EPP/i);
-      if (start < 0) start = t.search(/N[ºo°]\s*Item[\s\S]{0,120}?Qtde\.?\s*Estima/i);
+      if (!looksLikeCeuAzul(t)) return [];
+      var start = t.indexOf("Lotes exclusivos ME EPP");
+      if (start < 0) start = t.indexOf("Lotes exclusivos ME EPP".toLowerCase());
       if (start < 0) {
-        start = t.search(
-          /(?:^|\n)\s*1\s+\d{1,5}\s+(?:UN|UNI|P[CÇ]|KG|MT|CX|BR)\s+\S/i
-        );
+        var fAll = foldCeu(t);
+        var at = fAll.indexOf("lotes exclusivos me epp");
+        if (at < 0) at = fAll.indexOf("qtde. estima");
+        if (at < 0) at = fAll.indexOf("1 68 un ");
+        if (at >= 0) {
+          var iOrig = 0;
+          var iFold = 0;
+          while (iOrig < t.length && iFold < at) {
+            var one = utils.fold(t.charAt(iOrig));
+            iOrig++;
+            if (one) iFold += one.length;
+          }
+          start = iOrig;
+        }
       }
       if (start < 0) return [];
       var region = t.slice(start);
-      var end = region.search(
-        /Valor m[aá]ximo estimado do processo|1\.2\s*CRIT[EÉ]RIO DE JULGAMENTO/i
-      );
-      if (end > 80) region = region.slice(0, end);
+      var fReg = foldCeu(region);
+      var endFold = fReg.indexOf("valor maximo estimado do processo");
+      if (endFold < 0) endFold = fReg.indexOf("1.2 criterio de julgamento");
+      if (endFold > 80) {
+        var eOrig = 0;
+        var eFold = 0;
+        while (eOrig < region.length && eFold < endFold) {
+          var oneE = utils.fold(region.charAt(eOrig));
+          eOrig++;
+          if (oneE) eFold += oneE.length;
+        }
+        region = region.slice(0, eOrig);
+      }
       region = region
-        .replace(
-          /MUNIC[IÍ]PIO DE C[EÉ]U AZUL[\s\S]{0,260}?P[aá]gina\s+\d+\s*\/\s*\d+/gi,
-          "\n"
-        )
-        .replace(
-          /Edital Preg[aã]o Eletr[oô]nico N[ºo°]?\s*[\d./]+[^\n]{0,100}/gi,
-          "\n"
-        )
-        .replace(
-          /PREG[AÃ]O ELETR[OÔ]NICO N[ºo°]?\s*[\d./]+[^\n]{0,120}/gi,
-          "\n"
-        )
-        .replace(/Forma Eletr[oô]nica\.?/gi, "\n")
+        .replace(/MUNIC.PIO DE C.U AZUL[\s\S]{0,260}?P.gina\s+\d+\s*\/\s*\d+/gi, "\n")
+        .replace(/Edital Preg.o Eletr.nico N.?\s*[\d./]+[^\n]{0,100}/gi, "\n")
+        .replace(/PREG.O ELETR.NICO N.?\s*[\d./]+[^\n]{0,120}/gi, "\n")
+        .replace(/Forma Eletr.nica\.?/gi, "\n")
         .replace(/ANEXO\s*0?1[^\n]{0,80}/gi, "\n")
-        .replace(/TERMO DE REFER[EÊ]NCIA[^\n]{0,90}/gi, "\n")
-        .replace(/Aten[cç][aã]o:\s*Lotes exclusivos ME EPP/gi, "\n")
-        .replace(
-          /N[ºo°]\s*Item\s+Qtde\.?\s*Estima[^\n]{0,40}Uni\.\s*Descri[cç][aã]o[^\n]{0,80}Valor Total/gi,
-          "\n"
-        );
+        .replace(/TERMO DE REFER.NCIA[^\n]{0,90}/gi, "\n")
+        .replace(/Aten.{0,3}o:\s*Lotes exclusivos ME EPP/gi, "\n");
       var flat = region.replace(/\s+/g, " ").trim();
-      var undAlt =
-        "UNI|UNID\\.?|UND\\.?|UN|P[CÇ]|PE[CÇ]AS?|PCS|KG|MT|METROS?|CX|CAIXA|BR|BARRA";
-      var re = new RegExp(
-        "(?:^|\\s)(\\d{1,3})\\s+(\\d{1,5})\\s+(" + undAlt + ")(?=\\s)",
-        "gi"
-      );
+      var reUnd =
+        "(?:^|\\s)(\\d{1,3})\\s+(\\d{1,5})\\s+(UNI|UNID\\.?|UND\\.?|UN|PCS|PC|P\\u00C7|KG|MT|METROS?|CX|CAIXA|BR|BARRA)(?=\\s)";
       var anchors = [];
-      var m;
-      while ((m = re.exec(flat)) !== null) {
-        var itemNo = parseInt(m[1], 10);
-        var qtd = utils.parseBrNum(m[2]);
-        if (!(itemNo >= 1 && itemNo <= 400) || !(qtd > 0)) continue;
-        var pos = m.index;
-        if (m[0].charAt(0) === " " || m[0].charAt(0) === "\t") pos = m.index + 1;
+      String(flat).replace(new RegExp(reUnd, "gi"), function (whole, itemRaw, qtdRaw, undRaw, idx) {
+        var itemNo = parseInt(itemRaw, 10);
+        var qtd = utils.parseBrNum(qtdRaw);
+        if (!(itemNo >= 1 && itemNo <= 400) || !(qtd > 0)) return whole;
+        var pos = idx;
+        if (whole.charAt(0) === " " || whole.charAt(0) === "\t") pos = idx + 1;
         anchors.push({
           itemNo: itemNo,
           qtd: qtd,
-          und: m[3],
+          und: undRaw,
           index: pos,
-          headEnd: m.index + m[0].length
+          headEnd: idx + whole.length
         });
-      }
+        return whole;
+      });
       if (anchors.length < 8) return [];
 
       function firstPricePairCeu(str, qtdHint) {
         var all = [];
-        var reP =
-          /(\d{1,3}(?:\.\d{3})*,\d{3,4}|\d+,\d{3,4})\s+(\d{1,3}(?:\.\d{3})*,\d{3,4}|\d+,\d{3,4})(?=\s|$)/g;
-        var pm;
         var qtdN = Number(qtdHint) || 0;
-        while ((pm = reP.exec(str)) !== null) {
-          var u = utils.parseBrNum(pm[1]);
-          var tot = utils.parseBrNum(pm[2]);
-          if (!(u > 0) || !(tot > 0)) continue;
+        function pushPair(uRaw, tRaw, index, len) {
+          var u = utils.parseBrNum(uRaw);
+          var tot = utils.parseBrNum(tRaw);
+          if (!(u > 0) || !(tot > 0)) return;
           var rel =
             qtdN > 0
               ? Math.abs(qtdN * u - tot) / Math.max(Math.abs(tot), Math.abs(qtdN * u), 1)
               : 1;
-          all.push({
-            unit: u,
-            total: tot,
-            index: pm.index,
-            len: pm[0].length,
-            rel: rel
-          });
+          all.push({ unit: u, total: tot, index: index, len: len, rel: rel });
         }
-        var glued = /(\d{1,3}(?:\.\d{3})*,\d{3})(\d{1,3}(?:\.\d{3})*,\d{3,4})/g;
-        var gm;
-        while ((gm = glued.exec(str)) !== null) {
-          var ug = utils.parseBrNum(gm[1]);
-          var tg = utils.parseBrNum(gm[2]);
-          if (!(ug > 0) || !(tg > 0)) continue;
-          var relg =
-            qtdN > 0
-              ? Math.abs(qtdN * ug - tg) / Math.max(Math.abs(tg), Math.abs(qtdN * ug), 1)
-              : 1;
-          all.push({
-            unit: ug,
-            total: tg,
-            index: gm.index,
-            len: gm[0].length,
-            rel: relg
-          });
-        }
+        String(str).replace(
+          /(\d{1,3}(?:\.\d{3})*,\d{3,4}|\d+,\d{3,4})\s+(\d{1,3}(?:\.\d{3})*,\d{3,4}|\d+,\d{3,4})(?=\s|$)/g,
+          function (whole, uRaw, tRaw, idx) {
+            pushPair(uRaw, tRaw, idx, whole.length);
+            return whole;
+          }
+        );
+        String(str).replace(
+          /(\d{1,3}(?:\.\d{3})*,\d{3})(\d{1,3}(?:\.\d{3})*,\d{3,4})/g,
+          function (whole, uRaw, tRaw, idx) {
+            pushPair(uRaw, tRaw, idx, whole.length);
+            return whole;
+          }
+        );
         var exact = null;
         for (var p = 0; p < all.length; p++) {
           if (all[p].rel <= 0.02) {
@@ -978,7 +975,7 @@
         desc = String(desc || "").replace(/\s+/g, " ").trim();
         after = String(after || "")
           .replace(
-            /\b(?:MUNIC[IÍ]PIO DE C[EÉ]U AZUL|P[aá]gina\s+\d+|Forma Eletr[oô]nica|ANEXO\s*0?1|TERMO DE REFER[EÊ]NCIA)\b[\s\S]{0,80}/gi,
+            /\b(?:MUNIC.PIO DE C.U AZUL|P.gina\s+\d+|Forma Eletr.nica|ANEXO\s*0?1|TERMO DE REFER.NCIA)\b[\s\S]{0,80}/gi,
             " "
           )
           .replace(/\s+/g, " ")
@@ -1214,13 +1211,14 @@
           priority: 36,
           tryWithoutHint: true,
           hint: function (raw) {
+            var f = foldCeu(raw);
             return (
-              (/C[eé]u\s+Azul/i.test(raw) &&
-                (/\bValor\s+Unit[aá]rio\b/i.test(raw) ||
-                  /Lotes exclusivos ME EPP/i.test(raw) ||
-                  /\d{1,3}(?:\.\d{3})*,\d{4}\s+\d{1,3}(?:\.\d{3})*,\d{4}/.test(raw))) ||
-              (/Lotes exclusivos ME EPP/i.test(raw) &&
-                /Uni\.\s*Descri[cç][aã]o do produto/i.test(raw))
+              (f.indexOf("ceu azul") >= 0 &&
+                (f.indexOf("valor unitario") >= 0 ||
+                  f.indexOf("lotes exclusivos me epp") >= 0 ||
+                  /,\d{4}\s+\d{1,3}(?:\.\d{3})*,\d{4}/.test(String(raw || "")))) ||
+              (f.indexOf("lotes exclusivos me epp") >= 0 &&
+                f.indexOf("descricao do produto") >= 0)
             );
           }
         },

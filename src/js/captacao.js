@@ -346,6 +346,96 @@ BLACKLIST: BLACKLIST,
       });
     },
 
+    /** Lê o PDF com pdf.js e devolve os itens do splitEdital (mesmo fluxo da Importar). */
+    itensDoPdf: function (f) {
+      if (!f) return Promise.reject(new Error("Selecione um arquivo PDF primeiro."));
+      return utils.ensurePdfJs().then(function () {
+        return new Promise(function (resolve, reject) {
+          var reader = new FileReader();
+          reader.onerror = function () {
+            reject(new Error("Falha ao ler o arquivo"));
+          };
+          reader.onload = function () {
+            var data = new Uint8Array(reader.result);
+            window.pdfjsLib
+              .getDocument({ data: data })
+              .promise.then(function (pdf) {
+                var pages = [];
+                var geomPages = [];
+                var chain = Promise.resolve();
+                var p;
+                for (p = 1; p <= pdf.numPages; p++) {
+                  (function (pg) {
+                    chain = chain.then(function () {
+                      return pdf.getPage(pg).then(function (page) {
+                        return page.getTextContent().then(function (tc) {
+                          var clustered = null;
+                          try {
+                            var bag = LICSYSTEM.captacaoParsers;
+                            if (bag && typeof bag.clusterPdfTextItems === "function") {
+                              clustered = bag.clusterPdfTextItems(tc.items || []);
+                            }
+                          } catch (eCl) {}
+                          if (clustered && clustered.rows) {
+                            geomPages.push({ rows: clustered.rows });
+                            pages.push(clustered.text || "");
+                            return;
+                          }
+                          var items = (tc.items || []).slice();
+                          items.sort(function (a, b) {
+                            var ya = a.transform ? a.transform[5] : 0;
+                            var yb = b.transform ? b.transform[5] : 0;
+                            if (Math.abs(ya - yb) > 3) return yb - ya;
+                            var xa = a.transform ? a.transform[4] : 0;
+                            var xb = b.transform ? b.transform[4] : 0;
+                            return xa - xb;
+                          });
+                          var pageLines = [];
+                          var buf = [];
+                          var lastY = null;
+                          for (var ii = 0; ii < items.length; ii++) {
+                            var it = items[ii];
+                            var str = it.str || "";
+                            if (!str.trim()) continue;
+                            var y = it.transform ? it.transform[5] : 0;
+                            if (lastY !== null && Math.abs(y - lastY) > 3) {
+                              if (buf.length)
+                                pageLines.push(buf.join(" ").replace(/\s+/g, " ").trim());
+                              buf = [];
+                            }
+                            buf.push(str);
+                            lastY = y;
+                          }
+                          if (buf.length)
+                            pageLines.push(buf.join(" ").replace(/\s+/g, " ").trim());
+                          pages.push(pageLines.join("\n"));
+                        });
+                      });
+                    });
+                  })(p);
+                }
+                chain
+                  .then(function () {
+                    var full = pages.join("\n");
+                    var geom = { pages: geomPages };
+                    var items = LICSYSTEM.captacao.splitEdital(full, geom);
+                    resolve({
+                      items: items || [],
+                      full: full,
+                      geom: geom,
+                      pdf: pdf,
+                      pages: pages
+                    });
+                  })
+                  .catch(reject);
+              })
+              .catch(reject);
+          };
+          reader.readAsArrayBuffer(f);
+        });
+      });
+    },
+
     extrairArquivo:function(f){
       if(!f){ showAlert("pdfStatus","warn","Selecione um arquivo PDF primeiro."); return; }
       showAlert("pdfStatus","info",'<span class="spinner"></span> Carregando biblioteca e extraindo texto…');

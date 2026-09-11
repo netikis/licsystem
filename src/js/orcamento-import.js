@@ -12,10 +12,24 @@
     if (typeof fn !== "function") throw new Error("wireOrcFileInput ainda não disponível");
     return fn.apply(this, arguments);
   }
+  function showAlertOrc(msg, type){
+    var d = el("orcDrop");
+    if(!d) return;
+    d.innerHTML = '<span class="big">📊</span>' + msg;
+    setTimeout(function(){ LICSYSTEM.orcamento._restoreDrop(); }, type === "info" ? 60000 : 4000);
+  }
 
   LICSYSTEM.orcamento = Object.assign(LICSYSTEM.orcamento || {}, {
     handleFile:function(file){
       if(!file) return;
+      var nome = String(file.name || "").toLowerCase();
+      var pdf =
+        file.type === "application/pdf" ||
+        nome.slice(-4) === ".pdf";
+      if(pdf){
+        LICSYSTEM.orcamento.handlePdf(file);
+        return;
+      }
       showAlertOrc('<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Lendo planilha do edital…',"info");
       utils.ensureXlsx().then(function(){
         var reader = new FileReader();
@@ -29,13 +43,39 @@
         };
         reader.readAsArrayBuffer(file);
       }).catch(function(err){ showAlertOrc("Falha ao carregar SheetJS: "+utils.escapeHtml(err.message),"error"); });
-      function showAlertOrc(msg,type){
-        var d=el("orcDrop"); d.innerHTML='<span class="big">📊</span>'+msg;
-        setTimeout(function(){ LICSYSTEM.orcamento._restoreDrop(); }, type==="info"?60000:4000);
+    },
+    handlePdf:function(file){
+      if(!file || !LICSYSTEM.captacao || typeof LICSYSTEM.captacao.itensDoPdf !== "function"){
+        showAlertOrc("Leitura de PDF indisponível. Use Importar Edital.","error");
+        return;
       }
+      showAlertOrc('<span class="spinner" style="border-color:#ccc;border-top-color:#152642"></span> Lendo PDF do edital…',"info");
+      if(typeof LICSYSTEM.captacao.guardarPdfDoEdital === "function"){
+        try{ LICSYSTEM.captacao.guardarPdfDoEdital(file); }catch(eG){}
+      }
+      LICSYSTEM.captacao.itensDoPdf(file).then(function(res){
+        var items = (res && res.items) || [];
+        if(!items.length){
+          showAlertOrc("Não achei itens com quantidade e valor neste PDF.","error");
+          return;
+        }
+        LICSYSTEM.state.orcItems = [];
+        LICSYSTEM.state.orcPage = 1;
+        LICSYSTEM.orcamento.addFromLines(items);
+        if(LICSYSTEM.captacao.finishExtrair){
+          try{ LICSYSTEM.captacao.finishExtrair(items); }catch(eF){}
+        }
+        var comPreco = 0;
+        for(var i=0;i<items.length;i++){
+          if(Number(items[i].editalVunit)>0 || Number(items[i].editalTotal)>0) comPreco++;
+        }
+        showAlertOrc(items.length+" itens · "+comPreco+" com valor do edital","ok");
+      }).catch(function(err){
+        showAlertOrc("Erro ao ler PDF: "+utils.escapeHtml(err && err.message ? err.message : err),"error");
+      });
     },
     _restoreDrop:function(){
-      el("orcDrop").innerHTML='<span class="big">📊</span><b>Arraste Excel/CSV do edital aqui</b> ou clique para selecionar<br/><span class="small muted">Mapeia Lote/Item, Quantidade, Descrição, Valor Unitário e Valor Final (também Valor Máximo)</span><input type="file" id="orcFile" accept=".xlsx,.xls,.csv" style="display:none" />';
+      el("orcDrop").innerHTML='<span class="big">📊</span><b>Arraste o PDF, Excel ou CSV do edital aqui</b> ou clique para selecionar<br/><span class="small muted">Lê lote, quantidade, descrição, valor unitário e valor final</span><input type="file" id="orcFile" accept=".pdf,.xlsx,.xls,.csv,application/pdf" style="display:none" />';
       wireOrcFileInput();
     },
     _mapRows:function(rows){
