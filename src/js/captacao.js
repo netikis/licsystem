@@ -156,6 +156,136 @@ BLACKLIST: BLACKLIST,
       return false;
     },
 
+    pareceItensNoPncp: function (full) {
+      var t = String(full || "");
+      if (!t) return false;
+      var hint = LICSYSTEM.captacao.extractPncpHint(t);
+      if (!hint.cnpj || !(hint.numero || hint.processo)) return false;
+      var f = utils.fold(t).toLowerCase();
+      if (f.indexOf("anexo do termo de refer") >= 0) return true;
+      if (f.indexOf("especificacoes e valores disponiveis no anexo") >= 0) return true;
+      if (
+        f.indexOf("valor total estimado") >= 0 &&
+        f.indexOf("tabela constante do termo de refer") >= 0 &&
+        (t.match(/R\$\s*\d/g) || []).length < 8
+      ) {
+        return true;
+      }
+      return false;
+    },
+
+    extractPncpHint: function (full) {
+      var t = String(full || "");
+      var out = { cnpj: "", numero: "", ano: "", processo: "", uf: "", dataInicial: "", dataFinal: "" };
+      var cnpjM = t.match(/CNPJ\s*N?[º°o]?\s*(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})/i);
+      if (!cnpjM) cnpjM = t.match(/\b(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\b/);
+      if (cnpjM) out.cnpj = String(cnpjM[1]).replace(/\D/g, "");
+      var pregaoM =
+        t.match(/N[º°o.]?\s*PREG[AÃ]O\s+(\d{1,4})\s*\/\s*(\d{4})/i) ||
+        t.match(
+          /PREG[AÃ]O(?:\s+ELETR[OÔ]NICO)?(?:\s+SRP)?\s*N[º°o.]?\s*(\d{1,4})\s*\/\s*(\d{4})/i
+        );
+      var fold = utils.fold(t).toLowerCase();
+      if (!pregaoM) {
+        pregaoM = fold.match(/pregao.{0,24}(\d{1,4})\s*\/\s*(\d{4})/);
+      }
+      if (pregaoM) {
+        out.numero = String(Number(pregaoM[1]) || "");
+        out.ano = pregaoM[2];
+      }
+      var procM = t.match(/N[º°o]?\s*PROCESSO\s+(\d{1,4})\s*\/\s*(\d{4})/i);
+      if (procM) out.processo = String(Number(procM[1]) || "") + "/" + procM[2];
+      if (fold.indexOf("parana") >= 0) out.uf = "PR";
+      else if (fold.indexOf("sao paulo") >= 0) out.uf = "SP";
+      else if (fold.indexOf("santa catarina") >= 0) out.uf = "SC";
+      else if (fold.indexOf("rio grande do sul") >= 0) out.uf = "RS";
+      else if (fold.indexOf("minas gerais") >= 0) out.uf = "MG";
+      var meses = {
+        janeiro: "01",
+        fevereiro: "02",
+        marco: "03",
+        abril: "04",
+        maio: "05",
+        junho: "06",
+        julho: "07",
+        agosto: "08",
+        setembro: "09",
+        outubro: "10",
+        novembro: "11",
+        dezembro: "12"
+      };
+      var dates = [];
+      String(fold).replace(
+        /(\d{1,2})\s+de\s+(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+de\s+(\d{4})/g,
+        function (_, d, mes, ano) {
+          var mm = meses[mes];
+          if (mm) dates.push(ano + mm + ("0" + d).slice(-2));
+          return _;
+        }
+      );
+      if (dates.length) {
+        dates.sort();
+        var first = dates[0];
+        var last = dates[dates.length - 1];
+        function shift(ymd, days) {
+          var y = Number(ymd.slice(0, 4));
+          var m = Number(ymd.slice(4, 6)) - 1;
+          var d = Number(ymd.slice(6, 8));
+          var dt = new Date(y, m, d + days);
+          return (
+            dt.getFullYear() +
+            ("0" + (dt.getMonth() + 1)).slice(-2) +
+            ("0" + dt.getDate()).slice(-2)
+          );
+        }
+        out.dataInicial = shift(first, -20);
+        out.dataFinal = shift(last, 5);
+        if (!out.ano) out.ano = last.slice(0, 4);
+      } else if (out.ano) {
+        out.dataInicial = out.ano + "0101";
+        out.dataFinal = out.ano + "1231";
+      }
+      return out;
+    },
+
+    extractItensViaPncp: function (full) {
+      var hint = LICSYSTEM.captacao.extractPncpHint(full);
+      if (!hint.cnpj || !hint.ano || !(hint.numero || hint.processo)) {
+        return Promise.resolve([]);
+      }
+      var qs =
+        "cnpj=" +
+        encodeURIComponent(hint.cnpj) +
+        "&ano=" +
+        encodeURIComponent(hint.ano);
+      if (hint.numero) qs += "&numero=" + encodeURIComponent(hint.numero);
+      if (hint.processo) qs += "&processo=" + encodeURIComponent(hint.processo);
+      if (hint.uf) qs += "&uf=" + encodeURIComponent(hint.uf);
+      if (hint.dataInicial) qs += "&dataInicial=" + encodeURIComponent(hint.dataInicial);
+      if (hint.dataFinal) qs += "&dataFinal=" + encodeURIComponent(hint.dataFinal);
+      showAlert(
+        "pdfStatus",
+        "info",
+        '<span class="spinner"></span> PDF sem planilha — buscando itens oficiais no PNCP…'
+      );
+      return fetch("/api/pncp-itens?" + qs, { headers: { Accept: "application/json" } }).then(
+        function (res) {
+          return res.text().then(function (raw) {
+            var body = null;
+            try {
+              body = raw ? JSON.parse(raw) : null;
+            } catch (e) {
+              throw new Error("Resposta inválida da API pncp-itens.");
+            }
+            if (!res.ok || !body || !body.ok) {
+              throw new Error((body && body.error) || "PNCP HTTP " + res.status);
+            }
+            return LICSYSTEM.captacao.packApiItens(body.itens || []);
+          });
+        }
+      );
+    },
+
     extractItensViaIa: function (images, textHint, filename) {
       return fetch("/api/analyze-pdf", {
         method: "POST",
@@ -510,6 +640,7 @@ BLACKLIST: BLACKLIST,
                 return null;
               }
 
+              function fallbackImagem() {
               var ocrPages = LICSYSTEM.captacao.pickOcrPages(pages);
               if (!ocrPages.length) {
                 for (var pi = 1; pi <= pages.length && ocrPages.length < 3; pi++) ocrPages.push(pi);
@@ -574,6 +705,33 @@ BLACKLIST: BLACKLIST,
                       });
                     });
                 });
+              }
+
+              if (LICSYSTEM.captacao.pareceItensNoPncp(full) && items.length < 8) {
+                return LICSYSTEM.captacao
+                  .extractItensViaPncp(full)
+                  .then(function (pncpItems) {
+                    if (pncpItems && pncpItems.length >= 2) {
+                      LICSYSTEM.captacao.lastModelo = {
+                        id: "pncp-itens",
+                        label: "Itens oficiais do PNCP (anexo fora do PDF)",
+                        family: "pncp",
+                        via: "pncp",
+                        at: new Date().toISOString()
+                      };
+                      LICSYSTEM.captacao.finishExtrair(
+                        pncpItems,
+                        "(itens oficiais do PNCP — a planilha não está neste PDF)"
+                      );
+                      return null;
+                    }
+                    return fallbackImagem();
+                  })
+                  .catch(function () {
+                    return fallbackImagem();
+                  });
+              }
+              return fallbackImagem();
             }).catch(function(err){
               showAlert("pdfStatus","error","Erro ao ler PDF: "+utils.escapeHtml(err && err.message ? err.message : err));
             });
