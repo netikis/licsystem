@@ -1064,6 +1064,186 @@
       return out;
     }
 
+    function piraquaraIsLead(s) {
+      var t = String(s || "").replace(/\s+/g, " ").trim();
+      if (!t) return true;
+      var f = foldCeu(t);
+      if (/^[a-záéíóúâêôãõç]/.test(t)) return true;
+      if (/^[(\[\/,.;:%]/.test(t)) return true;
+      if (/^\d/.test(t)) return true;
+      if (/^[^.:]{1,36}:/.test(t)) return true;
+      if (/^(O|A|Os|As)\s+(produto|modelo|item|itens)\b/i.test(t)) return true;
+      if (/^(Este|Esta|O mesmo|A mesma)\b/i.test(t)) return true;
+      var w0 = t.split(/\s+/)[0] || "";
+      var w0c = w0.replace(/[.,;:()]/g, "");
+      if (/^[A-Z]{2,8}\d?$/.test(w0c)) return true;
+      var i;
+      var heads = [
+        "grupo ",
+        "mat.",
+        "mat ",
+        "item ",
+        "descricao",
+        "valor unit",
+        "valor total",
+        "quant",
+        "unidade",
+        "eletrico",
+        "hidraulico",
+        "ferramenta",
+        "pintura",
+        "epis",
+        "eletronico",
+        "carrinho transporte",
+        "pagina ",
+        "camara municipal",
+        "pregao eletronic",
+        "uasg",
+        "descricao dos itens",
+        "termo de referencia"
+      ];
+      for (i = 0; i < heads.length; i++) {
+        if (f.indexOf(heads[i]) === 0) return true;
+      }
+      var specs = [
+        "cor:",
+        "cor ",
+        "tipo:",
+        "tipo ",
+        "material",
+        "tensao",
+        "potencia",
+        "dimensoes",
+        "padrao",
+        "aplicacao",
+        "normas",
+        "norma ",
+        "referencia",
+        "certificacao",
+        "acessorios",
+        "requisitos",
+        "caracteristicas",
+        "itens inclusos",
+        "especificacao",
+        "acompanha",
+        "acompanhamentos",
+        "acondicionamento",
+        "compatibilidade",
+        "configuracao",
+        "acabamento",
+        "apresentacao",
+        "categoria",
+        "comprimento",
+        "espessura",
+        "diametro",
+        "temperatura",
+        "isolacao",
+        "isolacao",
+        "condutor",
+        "composto",
+        "policloreto",
+        "cobertura",
+        "externa",
+        "propriedades",
+        "profundidade",
+        "sistema de",
+        "operacao",
+        "conformidade",
+        "maxima",
+        "corrente",
+        "conexao",
+        "design",
+        "medida ",
+        "equipado",
+        "destinado",
+        "indicad",
+        "fabricado",
+        "classe ",
+        "tempera",
+        "encordoamento",
+        "isolamento",
+        "embalagem",
+        "completo:",
+        "completa:",
+        "inmetro",
+        "abnt",
+        "pvc ",
+        "uv,",
+        "uv ",
+        "kgf",
+        "minima ",
+        "minimo ",
+        "entre ",
+        "ate ",
+        "metal ",
+        "vinila",
+        "cobre ",
+        "preta",
+        "branco",
+        "branca",
+        "galao",
+        "uso ",
+        "validade",
+        "caixa com",
+        "compativel",
+        "termoplastico",
+        "dispersao",
+        "ventilacao",
+        "estrutura",
+        "gradil",
+        "alto brilho",
+        "tripla ",
+        "lisa",
+        "retardante",
+        "protecao de",
+        "cinza",
+        "plastico",
+        "indeterminada",
+        "t568",
+        "linha premium",
+        "linha branca",
+        "linha standard",
+        "sobrepor",
+        "deve ",
+        "premium",
+        "tela ",
+        "primeira linha"
+      ];
+      for (i = 0; i < specs.length; i++) {
+        if (f.indexOf(specs[i]) === 0) return true;
+      }
+      if (/^(mm|cm|m2|kg|w|v|a|db)\b/.test(f)) return true;
+      return false;
+    }
+
+    function takePiraquaraTitle(raw) {
+      var words = String(raw || "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .split(" ")
+        .filter(Boolean);
+      var i = 0;
+      while (i < words.length) {
+        var rest = words.slice(i).join(" ");
+        var w = (words[i] || "").replace(/[.,;:()"]/g, "");
+        var isProd =
+          w.length >= 3 &&
+          !piraquaraIsLead(rest) &&
+          /^[A-ZÁÉÍÓÚÂÊÔÃÕÇ]/.test(words[i]);
+        if (isProd) break;
+        i++;
+      }
+      var title = words.slice(i).join(" ");
+      if (!title) title = words.join(" ");
+      if (title.length > 220) {
+        var cut = title.slice(0, 220);
+        var sp = cut.lastIndexOf(". ");
+        if (sp > 50) title = title.slice(0, sp + 1);
+        else title = cut.replace(/\s+\S*$/, "");
+      }
+      return title.replace(/\s+/g, " ").trim();
+    }
+
     function cleanPiraquaraDesc(raw, itemNo) {
       var desc = String(raw || "")
         .replace(/R\$\s*\d{1,3}(?:\.\d{3})*,\d{2}/g, " ")
@@ -1072,27 +1252,31 @@
         .replace(/\bGrupo\s+\d+\b/gi, " ")
         .replace(/\bC.MARA MUNICIPAL DE PIRAQUARA\b/gi, " ")
         .replace(/\bPREG.O ELETR.NICO\b/gi, " ")
+        .replace(/\bP[aá]gina\s+\d+\s+de\s+\d+/gi, " ")
         .replace(/\bValor unit\.?\b/gi, " ")
         .replace(/\bValor total\b/gi, " ")
         .replace(/\bQuant\.?\b/gi, " ")
         .replace(/\bUnidade\b/gi, " ")
         .replace(/\bDescri[cç][aã]o\b/gi, " ")
         .replace(/\bMat\.\s*El[eé]trico\b/gi, " ")
-        .replace(/^[\s.\-–]*El[eé]trico\s+/i, " ")
+        .replace(/\bMat\.\s*Hidr[aá]ulico\b/gi, " ")
+        .replace(/^[\s.\-–]*(El[eé]trico|Hidr[aá]ulico|Ferramentas|Pintura|EPIs?|Eletr[oô]nicos)\s+/i, " ")
         .replace(/\s+/g, " ")
         .trim();
-      if (desc.length > 420) {
-        var cut = desc.search(/[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõçA-Z]{3,}[^]{0,80}$/);
-        if (cut > 40) desc = desc.slice(cut);
-        else desc = desc.slice(-360).replace(/^\S*\s/, "");
+      if (desc.length > 220) {
+        var cutP = desc.slice(0, 220);
+        var spP = cutP.lastIndexOf(". ");
+        if (spP > 50) desc = desc.slice(0, spP + 1);
+        else desc = cutP.replace(/\s+\S*$/, "");
       }
       if (!desc || desc.length < 3) desc = "Item " + itemNo;
       return desc;
     }
 
     /**
-     * Câmara de Piraquara — TR Grupo/Item:
-     * descrição quebra ANTES do nº; depois QTD + R$ unit + R$ total.
+     * Câmara de Piraquara — TR por GRUPO/tópico:
+     * cada item é uma célula alta (nome no topo, ficha no meio, nº/qtd/R$ numa linha).
+     * Não usar o final da célula nem o resto do tópico anterior.
      */
     function splitPiraquaraBlocks(full) {
       var t = limparPagina(full).replace(/\r\n?/g, "\n");
@@ -1140,12 +1324,11 @@
         if (foundIdx >= 0) {
           var before = chunk.slice(0, foundIdx).replace(/\s+/g, " ").trim();
           var after = chunk.slice(foundIdx + String(expected).length).replace(/\s+/g, " ").trim();
-          if (before.length > 200) {
-            var cap = before.search(/[A-ZÁÉÍÓÚÂÊÔÃÕÇ][^]{12,}$/);
-            if (cap < 0) cap = Math.max(0, before.length - 180);
-            before = before.slice(cap).replace(/^\S*[a-záéíóú]{2,}\s+/, "");
-          }
+          before = takePiraquaraTitle(before);
+          if (after.length > 140) after = after.slice(0, 140).replace(/\s+\S*$/, "");
           desc = (before + " " + after).trim();
+        } else {
+          desc = takePiraquaraTitle(chunk);
         }
         desc = cleanPiraquaraDesc(desc, itemNo);
         var packed = packMunicipioRow(
