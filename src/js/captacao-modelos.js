@@ -76,7 +76,7 @@
     return info;
   }
 
-  function tryModelo(modelo, text, P, via) {
+  function tryModelo(modelo, text, P, via, geom) {
     var dedupe = P.dedupeCaptacao;
     var min = Math.max(1, Number(modelo.minItems) || 1);
     var fn = P[modelo.split];
@@ -102,7 +102,7 @@
       return null;
     }
 
-    var raw = fn(text) || [];
+    var raw = fn(text, geom) || [];
     var out = dedupe(raw);
     if (out.length >= min) {
       setLastModelo(modelo, via || "hint");
@@ -163,7 +163,7 @@
       if (m.classic || m.always) continue;
       hinted[m.id] = !!(m.hint && m.hint(rawText));
       if (!hinted[m.id]) continue;
-      hit = tryModelo(m, text, P, "hint");
+      hit = tryModelo(m, text, P, "hint", geom);
       if (hit) return hit;
     }
 
@@ -173,7 +173,7 @@
     for (i = 0; i < list.length; i++) {
       m = list[i];
       if (!m.always) continue;
-      hit = tryModelo(m, text, P, "always");
+      hit = tryModelo(m, text, P, "always", geom);
       if (hit) return hit;
     }
 
@@ -181,14 +181,14 @@
       m = list[i];
       if (!m.tryWithoutHint || m.classic || m.always) continue;
       if (hinted[m.id]) continue;
-      hit = tryModelo(m, text, P, "fallback");
+      hit = tryModelo(m, text, P, "fallback", geom);
       if (hit) return hit;
     }
 
     for (i = 0; i < list.length; i++) {
       m = list[i];
       if (!m.classic) continue;
-      hit = tryModelo(m, text, P, "classico");
+      hit = tryModelo(m, text, P, "classico", geom);
       if (hit) return hit;
     }
 

@@ -1064,21 +1064,34 @@
       return out;
     }
 
+    function piraquaraStartsLower(t) {
+      var ch = String(t || "").charAt(0);
+      if (!ch) return false;
+      return ch !== ch.toUpperCase();
+    }
+
+    function piraquaraHasPrefix(f, list) {
+      var i;
+      for (i = 0; i < list.length; i++) {
+        if (f.indexOf(list[i]) === 0) return true;
+      }
+      return false;
+    }
+
     function piraquaraIsLead(s) {
       var t = String(s || "").replace(/\s+/g, " ").trim();
       if (!t) return true;
       var f = foldCeu(t);
-      if (/^[a-záéíóúâêôãõç]/.test(t)) return true;
-      if (/^[(\[\/,.;:%]/.test(t)) return true;
-      if (/^\d/.test(t)) return true;
-      if (/^[^.:]{1,36}:/.test(t)) return true;
-      if (/^(O|A|Os|As)\s+(produto|modelo|item|itens)\b/i.test(t)) return true;
-      if (/^(Este|Esta|O mesmo|A mesma)\b/i.test(t)) return true;
-      var w0 = t.split(/\s+/)[0] || "";
+      var ch = t.charAt(0);
+      if (piraquaraStartsLower(t)) return true;
+      if ("([/.,;:%".indexOf(ch) >= 0) return true;
+      if (ch >= "0" && ch <= "9") return true;
+      var w0 = t.split(" ")[0] || "";
       var w0c = w0.replace(/[.,;:()]/g, "");
-      if (/^[A-Z]{2,8}\d?$/.test(w0c)) return true;
-      var i;
-      var heads = [
+      if (w0c.length >= 2 && w0c.length <= 8 && w0c === w0c.toUpperCase() && w0c !== w0c.toLowerCase()) {
+        return true;
+      }
+      return piraquaraHasPrefix(f, [
         "grupo ",
         "mat.",
         "mat ",
@@ -1100,12 +1113,9 @@
         "pregao eletronic",
         "uasg",
         "descricao dos itens",
-        "termo de referencia"
-      ];
-      for (i = 0; i < heads.length; i++) {
-        if (f.indexOf(heads[i]) === 0) return true;
-      }
-      var specs = [
+        "termo de referencia",
+        "o produto",
+        "o modelo",
         "cor:",
         "cor ",
         "tipo:",
@@ -1126,7 +1136,6 @@
         "itens inclusos",
         "especificacao",
         "acompanha",
-        "acompanhamentos",
         "acondicionamento",
         "compatibilidade",
         "configuracao",
@@ -1137,7 +1146,6 @@
         "espessura",
         "diametro",
         "temperatura",
-        "isolacao",
         "isolacao",
         "condutor",
         "composto",
@@ -1163,8 +1171,6 @@
         "encordoamento",
         "isolamento",
         "embalagem",
-        "completo:",
-        "completa:",
         "inmetro",
         "abnt",
         "pvc ",
@@ -1187,173 +1193,170 @@
         "caixa com",
         "compativel",
         "termoplastico",
-        "dispersao",
-        "ventilacao",
-        "estrutura",
-        "gradil",
-        "alto brilho",
-        "tripla ",
-        "lisa",
-        "retardante",
-        "protecao de",
-        "cinza",
-        "plastico",
-        "indeterminada",
-        "t568",
-        "linha premium",
-        "linha branca",
-        "linha standard",
-        "sobrepor",
         "deve ",
+        "sobrepor",
         "premium",
         "tela ",
-        "primeira linha"
-      ];
-      for (i = 0; i < specs.length; i++) {
-        if (f.indexOf(specs[i]) === 0) return true;
+        "lisa",
+        "cinza",
+        "plastico",
+        "mhz",
+        "obrigator",
+        "construtivo",
+        "nominal ",
+        "wetzel",
+        "tramontina"
+      ]);
+    }
+
+    function piraquaraCellText(cells, x0, x1) {
+      var parts = [];
+      var i;
+      for (i = 0; i < (cells || []).length; i++) {
+        var c = cells[i];
+        var x = Number(c.x) || 0;
+        if (x >= x0 && x < x1) parts.push(String(c.text || "").trim());
       }
-      if (/^(mm|cm|m2|kg|w|v|a|db)\b/.test(f)) return true;
+      return parts.join(" ").replace(/\s+/g, " ").trim();
+    }
+
+    function piraquaraRowText(row) {
+      return piraquaraCellText((row && row.cells) || [], -10, 9000);
+    }
+
+    function piraquaraSkipHeader(t) {
+      var f = foldCeu(t);
+      if (!f) return true;
+      if (piraquaraHasPrefix(f, ["grupo ", "pagina ", "camara municipal", "uasg", "pregao eletronic"])) {
+        return true;
+      }
+      if (f === "quant" || f === "quant." || f === "unidade" || f === "mat." || f === "eletrico") {
+        return true;
+      }
+      if (f.indexOf("valor unit") >= 0 && f.indexOf("item") >= 0) return true;
       return false;
     }
 
-    function takePiraquaraTitle(raw) {
-      var words = String(raw || "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .split(" ")
-        .filter(Boolean);
+    function piraquaraTitleFromLines(lines) {
       var i = 0;
-      while (i < words.length) {
-        var rest = words.slice(i).join(" ");
-        var w = (words[i] || "").replace(/[.,;:()"]/g, "");
-        var isProd =
-          w.length >= 3 &&
-          !piraquaraIsLead(rest) &&
-          /^[A-ZÁÉÍÓÚÂÊÔÃÕÇ]/.test(words[i]);
-        if (isProd) break;
-        i++;
-      }
-      var title = words.slice(i).join(" ");
-      if (!title) title = words.join(" ");
-      if (title.length > 220) {
-        var cut = title.slice(0, 220);
+      while (i < lines.length && piraquaraIsLead(lines[i])) i++;
+      var t = lines.slice(i).join(" ").replace(/\s+/g, " ").trim();
+      if (t.length > 180) {
+        var cut = t.slice(0, 180);
         var sp = cut.lastIndexOf(". ");
-        if (sp > 50) title = title.slice(0, sp + 1);
-        else title = cut.replace(/\s+\S*$/, "");
+        if (sp > 40) t = t.slice(0, sp + 1);
+        else t = cut.replace(/\s+\S*$/, "");
       }
-      return title.replace(/\s+/g, " ").trim();
+      return t;
     }
 
-    function cleanPiraquaraDesc(raw, itemNo) {
-      var desc = String(raw || "")
-        .replace(/R\$\s*\d{1,3}(?:\.\d{3})*,\d{2}/g, " ")
-        .replace(/\bMat\.?\s*Item\b/gi, " ")
-        .replace(/\bItem\s*Descri[cç][aã]o\b/gi, " ")
-        .replace(/\bGrupo\s+\d+\b/gi, " ")
-        .replace(/\bC.MARA MUNICIPAL DE PIRAQUARA\b/gi, " ")
-        .replace(/\bPREG.O ELETR.NICO\b/gi, " ")
-        .replace(/\bP[aá]gina\s+\d+\s+de\s+\d+/gi, " ")
-        .replace(/\bValor unit\.?\b/gi, " ")
-        .replace(/\bValor total\b/gi, " ")
-        .replace(/\bQuant\.?\b/gi, " ")
-        .replace(/\bUnidade\b/gi, " ")
-        .replace(/\bDescri[cç][aã]o\b/gi, " ")
-        .replace(/\bMat\.\s*El[eé]trico\b/gi, " ")
-        .replace(/\bMat\.\s*Hidr[aá]ulico\b/gi, " ")
-        .replace(/^[\s.\-–]*(El[eé]trico|Hidr[aá]ulico|Ferramentas|Pintura|EPIs?|Eletr[oô]nicos)\s+/i, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-      if (desc.length > 220) {
-        var cutP = desc.slice(0, 220);
-        var spP = cutP.lastIndexOf(". ");
-        if (spP > 50) desc = desc.slice(0, spP + 1);
-        else desc = cutP.replace(/\s+\S*$/, "");
+    function splitPiraquaraGeom(geom) {
+      if (!geom || !geom.pages || !geom.pages.length) return [];
+      var rows = [];
+      var p;
+      var r;
+      for (p = 0; p < geom.pages.length; p++) {
+        var list = (geom.pages[p] && geom.pages[p].rows) || [];
+        for (r = 0; r < list.length; r++) rows.push(list[r]);
       }
-      if (!desc || desc.length < 3) desc = "Item " + itemNo;
-      return desc;
-    }
-
-    /**
-     * Câmara de Piraquara — TR por GRUPO/tópico:
-     * cada item é uma célula alta (nome no topo, ficha no meio, nº/qtd/R$ numa linha).
-     * Não usar o final da célula nem o resto do tópico anterior.
-     */
-    function splitPiraquaraBlocks(full) {
-      var t = limparPagina(full).replace(/\r\n?/g, "\n");
-      var f = foldCeu(t);
-      if (f.indexOf("piraquara") < 0) return [];
-      if (f.indexOf("valor unit") < 0 && f.indexOf("descricao dos itens") < 0) return [];
-      var start = t.search(/DESCRI.AO DOS ITENS, QUANTIDADES E VALORES/i);
-      if (start < 0) start = t.search(/Grupo\s*1\b/i);
-      if (start < 0) return [];
-      var region = t.slice(start);
-      var end = region.search(/VALOR TOTAL M.XIMO ESTIMADO/i);
-      if (end > 200) region = region.slice(0, end);
-      var flat = repairSplitRs(region);
-      var pairs = [];
-      String(flat).replace(
-        new RegExp(
-          "(\\d{1,5})\\s+R\\$\\s*" + moneyBrRe() + "\\s+R\\$\\s*" + moneyBrRe(),
-          "g"
-        ),
-        function (whole, qtdRaw, uRaw, tRaw, idx) {
-          var qtd = utils.parseBrNum(qtdRaw);
-          var vu = utils.parseBrNum(uRaw);
-          var vt = utils.parseBrNum(tRaw);
-          if (!(qtd > 0) || !(vu > 0) || !(vt > 0)) return whole;
-          var rel = Math.abs(qtd * vu - vt) / Math.max(vt, qtd * vu, 1);
-          if (rel > 0.08) return whole;
-          pairs.push({ qtd: qtd, vu: vu, vt: vt, index: idx, len: whole.length });
-          return whole;
+      var start = 0;
+      var stop = rows.length;
+      for (r = 0; r < rows.length; r++) {
+        var fr = foldCeu(piraquaraRowText(rows[r]));
+        if (start === 0 && fr.indexOf("descricao dos itens") >= 0) start = r;
+        if (fr.indexOf("valor total maximo estimado") >= 0) {
+          stop = r;
+          break;
         }
-      );
-      if (pairs.length < 8) return [];
+      }
+      if (start < 0) start = 0;
+      var anchors = [];
+      for (r = start; r < stop; r++) {
+        var cells = (rows[r] && rows[r].cells) || [];
+        var itemTxt = piraquaraCellText(cells, 118, 152);
+        var itemNo = parseInt(itemTxt, 10);
+        if (!(itemNo >= 1 && itemNo <= 250) || String(itemNo) !== String(itemTxt).replace(/\D/g, "")) {
+          continue;
+        }
+        var qtyTxt = piraquaraCellText(cells, 300, 370);
+        var right = repairSplitRs(piraquaraCellText(cells, 300, 600));
+        var ms = collectBrMoney(right, true);
+        if (ms.length < 2) ms = collectBrMoney(repairSplitRs(piraquaraRowText(rows[r])), true);
+        if (ms.length < 2) continue;
+        var qtd = utils.parseBrNum(qtyTxt);
+        if (!(qtd > 0)) continue;
+        var vu = ms[0].n;
+        var vt = ms[ms.length - 1].n;
+        if (!(vu > 0) || !(vt > 0)) continue;
+        var rel = Math.abs(qtd * vu - vt) / Math.max(vt, qtd * vu, 1);
+        if (rel > 0.12) continue;
+        anchors.push({ row: r, itemNo: itemNo, qtd: qtd, vu: vu, vt: vt });
+      }
+      if (anchors.length < 8) return [];
       var byItem = {};
-      var expected = 1;
-      var i;
-      for (i = 0; i < pairs.length; i++) {
-        var prevEnd = i ? pairs[i - 1].index + pairs[i - 1].len : 0;
-        var chunk = flat.slice(prevEnd, pairs[i].index);
-        var itemNo = expected;
-        var foundIdx = -1;
-        String(chunk).replace(/\b(\d{1,3})\b/g, function (w, n, idx) {
-          if (parseInt(n, 10) === expected) foundIdx = idx;
-          return w;
-        });
-        var desc = chunk;
-        if (foundIdx >= 0) {
-          var before = chunk.slice(0, foundIdx).replace(/\s+/g, " ").trim();
-          var after = chunk.slice(foundIdx + String(expected).length).replace(/\s+/g, " ").trim();
-          before = takePiraquaraTitle(before);
-          if (after.length > 140) after = after.slice(0, 140).replace(/\s+\S*$/, "");
-          desc = (before + " " + after).trim();
-        } else {
-          desc = takePiraquaraTitle(chunk);
+      var a;
+      for (a = 0; a < anchors.length; a++) {
+        var prevRow;
+        if (a) prevRow = anchors[a - 1].row;
+        else {
+          prevRow = anchors[a].row - 18;
+          if (prevRow < start) prevRow = start;
         }
-        desc = cleanPiraquaraDesc(desc, itemNo);
+        var lines = [];
+        var rr;
+        for (rr = prevRow + 1; rr < anchors[a].row; rr++) {
+          var d = piraquaraCellText((rows[rr] && rows[rr].cells) || [], 155, 312);
+          if (!d || piraquaraSkipHeader(d)) continue;
+          var fd = foldCeu(d);
+          if (fd.indexOf("fonte descricao") >= 0) continue;
+          if (fd.indexOf("material de consumo") >= 0) continue;
+          if (fd.indexOf("01 001") >= 0) continue;
+          lines.push(d);
+        }
+        var desc = piraquaraTitleFromLines(lines);
+        var onRow = piraquaraCellText((rows[anchors[a].row] && rows[anchors[a].row].cells) || [], 155, 312);
+        if (onRow && desc && !piraquaraIsLead(onRow)) desc = (desc + " " + onRow).replace(/\s+/g, " ").trim();
+        if (!desc || desc.length < 3) desc = "Item " + anchors[a].itemNo;
+        if (desc.length > 180) {
+          var cutG = desc.slice(0, 180);
+          var spG = cutG.lastIndexOf(". ");
+          desc = spG > 40 ? desc.slice(0, spG + 1) : cutG.replace(/\s+\S*$/, "");
+        }
         var packed = packMunicipioRow(
-          itemNo,
-          pairs[i].qtd,
+          anchors[a].itemNo,
+          anchors[a].qtd,
           "UN",
           desc,
-          pairs[i].vu,
-          pairs[i].vt
+          anchors[a].vu,
+          anchors[a].vt
         );
-        if (utils.isLinhaProdutoEdital(packed)) {
-          byItem[itemNo] = packed;
-          expected++;
+        if (utils.isLinhaProdutoEdital(packed) && !byItem[anchors[a].itemNo]) {
+          byItem[anchors[a].itemNo] = packed;
         }
       }
-      var keysP = Object.keys(byItem)
+      var keys = Object.keys(byItem)
         .map(function (k) {
           return parseInt(k, 10);
         })
         .sort(function (a, b) {
           return a - b;
         });
-      var outP = [];
-      for (i = 0; i < keysP.length; i++) outP.push(byItem[keysP[i]]);
-      return outP.length >= 8 ? outP : [];
+      var out = [];
+      for (a = 0; a < keys.length; a++) out.push(byItem[keys[a]]);
+      return out.length >= 8 ? out : [];
+    }
+
+    /**
+     * Camara de Piraquara — TR por grupo/topico (celula alta: nome no topo).
+     */
+    function splitPiraquaraBlocks(full, geom) {
+      var t = limparPagina(full).replace(/\r\n?/g, "\n");
+      var f = foldCeu(t);
+      if (f.indexOf("piraquara") < 0) return [];
+      if (f.indexOf("valor unit") < 0 && f.indexOf("descricao dos itens") < 0) return [];
+      var geo = splitPiraquaraGeom(geom);
+      if (geo.length >= 8) return geo;
+      return [];
     }
 
     /**
