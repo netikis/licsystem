@@ -106,6 +106,7 @@
         hora: "",
         nome: "",
         municipio: "",
+        plataforma: "",
         valor: 0,
         orcada: "",
         cadastrada: "",
@@ -121,6 +122,7 @@
         hora: normHora(it.hora),
         nome: String(it.nome || it.licitacao || "").slice(0, 220),
         municipio: String(it.municipio || "").slice(0, 120),
+        plataforma: String(it.plataforma || it.portal || "").slice(0, 80),
         valor: parseMoney(it.valor),
         orcada: normFlag(it.orcada),
         cadastrada: normFlag(it.cadastrada),
@@ -203,6 +205,9 @@
         } else if(key === "municipio"){
           va = fold(a.municipio).toLowerCase();
           vb = fold(b.municipio).toLowerCase();
+        } else if(key === "plataforma"){
+          va = fold(a.plataforma).toLowerCase();
+          vb = fold(b.plataforma).toLowerCase();
         } else if(key === "hora"){
           va = String(a.hora || "");
           vb = String(b.hora || "");
@@ -229,7 +234,7 @@
         LICSYSTEM.statusLicitacoes.sortDir = LICSYSTEM.statusLicitacoes.sortDir === 1 ? -1 : 1;
       } else {
         LICSYSTEM.statusLicitacoes.sortKey = key;
-        LICSYSTEM.statusLicitacoes.sortDir = (key === "nome" || key === "municipio" || key === "hora") ? 1 : -1;
+        LICSYSTEM.statusLicitacoes.sortDir = (key === "nome" || key === "municipio" || key === "hora" || key === "plataforma") ? 1 : -1;
       }
       LICSYSTEM.statusLicitacoes.renderTabela();
     },
@@ -241,6 +246,7 @@
       else if(field === "hora") item.hora = normHora(value);
       else if(field === "nome") item.nome = String(value || "").slice(0, 220);
       else if(field === "municipio") item.municipio = String(value || "").slice(0, 120);
+      else if(field === "plataforma") item.plataforma = String(value || "").slice(0, 80);
       else if(field === "valor") item.valor = parseMoney(value);
       else if(field === "status") item.status = normStatus(value);
       LICSYSTEM.statusLicitacoes.saveLocal();
@@ -309,7 +315,7 @@
       if(btnData) btnData.classList.toggle("btn-gold", LICSYSTEM.statusLicitacoes.sortKey === "data");
 
       if(!list.length){
-        body.innerHTML = '<tr><td colspan="9" class="sl-empty">Nenhuma licitação nesta lista. Clique em + Nova linha para começar.</td></tr>';
+        body.innerHTML = '<tr><td colspan="10" class="sl-empty">Nenhuma licitação nesta lista. Clique em + Nova linha para começar.</td></tr>';
         return;
       }
 
@@ -330,6 +336,7 @@
             "<td><input type=\"time\" class=\"sl-in sl-in-hora\" data-sl-id=\""+sid+"\" data-sl-f=\"hora\" value=\""+esc(it.hora)+"\"></td>"+
             "<td><input type=\"text\" class=\"sl-in\" data-sl-id=\""+sid+"\" data-sl-f=\"nome\" value=\""+esc(it.nome)+"\" placeholder=\"Nome da licitação\"></td>"+
             "<td><input type=\"text\" class=\"sl-in\" data-sl-id=\""+sid+"\" data-sl-f=\"municipio\" value=\""+esc(it.municipio)+"\" placeholder=\"Município\"></td>"+
+            "<td><input type=\"text\" class=\"sl-in sl-in-plataforma\" data-sl-id=\""+sid+"\" data-sl-f=\"plataforma\" value=\""+esc(it.plataforma)+"\" list=\"slPlataformas\" placeholder=\"Plataforma\" autocomplete=\"off\"></td>"+
             "<td class=\"sl-td-right\"><div class=\"sl-valor\"><span class=\"sl-valor-prefix\">R$</span>"+
               "<input type=\"text\" class=\"sl-in sl-in-valor\" data-sl-id=\""+sid+"\" data-sl-f=\"valor\" value=\""+esc(formatMoneyInput(it.valor))+"\" inputmode=\"decimal\" placeholder=\"0,00\">"+
             "</div></td>"+
