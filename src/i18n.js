@@ -445,6 +445,7 @@
       captacao: t("view.pesquisas"),
       analiseIa: t("view.analiseIa"),
       leiloesParticipo: t("view.leiloesParticipo"),
+      statusLicitacoes: t("view.statusLicitacoes"),
       leilaoWorkspace: t("view.leilaoWorkspace"),
       importarEdital: t("view.importarEdital"),
       orcamento: t("view.orcamento"),

@@ -263,6 +263,48 @@
     on("histStatus","change", function(){ LICSYSTEM.histEntregas.aplicarFiltros(); });
     on("btnHistAdd","click", function(){ LICSYSTEM.histEntregas.adicionarItem(); });
     on("btnHistSeed","click", function(){ LICSYSTEM.histEntregas.carregarExemplos(true); });
+
+    on("btnSlAdd","click", function(){ LICSYSTEM.statusLicitacoes.adicionarVazio(); });
+    on("btnSlAddConfirm","click", function(){ LICSYSTEM.statusLicitacoes.adicionar(); });
+    on("btnSlSortNome","click", function(){ LICSYSTEM.statusLicitacoes.setSort("nome"); });
+    on("btnSlSortData","click", function(){ LICSYSTEM.statusLicitacoes.setSort("data"); });
+    on("slNewNome","keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); LICSYSTEM.statusLicitacoes.adicionar(); } });
+    on("slNewMunicipio","keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); LICSYSTEM.statusLicitacoes.adicionar(); } });
+    on("slBody","input", function(e){
+      var inp = e.target.closest("input[data-sl-id]");
+      if(!inp) return;
+      LICSYSTEM.statusLicitacoes.onEdit(inp.getAttribute("data-sl-id"), inp.getAttribute("data-sl-f"), inp.value);
+    });
+    on("slBody","change", function(e){
+      var sel = e.target.closest("select[data-sl-f=status]");
+      if(sel){
+        LICSYSTEM.statusLicitacoes.onEdit(sel.getAttribute("data-sl-id"), "status", sel.value);
+        return;
+      }
+      var inp = e.target.closest("input[data-sl-id]");
+      if(inp){
+        LICSYSTEM.statusLicitacoes.onEdit(inp.getAttribute("data-sl-id"), inp.getAttribute("data-sl-f"), inp.value);
+      }
+    });
+    on("slBody","click", function(e){
+      var flag = e.target.closest("[data-sl-flag]");
+      if(flag){
+        LICSYSTEM.statusLicitacoes.setFlag(
+          flag.getAttribute("data-sl-id"),
+          flag.getAttribute("data-sl-flag"),
+          flag.getAttribute("data-sl-val")
+        );
+        return;
+      }
+      var del = e.target.closest("[data-sl-del]");
+      if(del) LICSYSTEM.statusLicitacoes.remover(del.getAttribute("data-sl-del"));
+    });
+    on("slTable","click", function(e){
+      var th = e.target.closest("th.sl-th-sort");
+      if(!th) return;
+      var key = th.getAttribute("data-sl-sort");
+      if(key) LICSYSTEM.statusLicitacoes.setSort(key);
+    });
     on("histEntregasBody","input", function(e){
       var inp = e.target.closest("input[data-hist-id]");
       if(!inp) return;
@@ -365,6 +407,7 @@
     captacao:'Pesquisas de Editais',
     analiseIa:'Análise Inteligente de Editais',
     leiloesParticipo:'Licitações que Participo',
+    statusLicitacoes:'Status Licitações',
     leilaoWorkspace:'Painel do Edital',
     importarEdital:'Importar Edital (PDF)',
     orcamento:'Orçamento',
@@ -509,6 +552,9 @@
     if(view==="ferramentas") LICSYSTEM.ferramentas.carregarView();
     if(view==="entregas") LICSYSTEM.entregas.renderLista();
     if(view==="histEntregas") LICSYSTEM.histEntregas.render();
+    if(view==="statusLicitacoes"){
+      try{ LICSYSTEM.statusLicitacoes.render(); }catch(e){}
+    }
     if(view==="catalogo") listarProdutos();
     if(view==="arp") LICSYSTEM.arp.renderAll();
     if(view==="disputa") LICSYSTEM.disputa.atualizarResultados();

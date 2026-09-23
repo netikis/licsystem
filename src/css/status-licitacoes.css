@@ -1,0 +1,64 @@
+/* LICSYSTEM — Status Licitações */
+.sl-add{margin:0 0 16px}
+.sl-add-grid{
+  display:grid;
+  grid-template-columns:140px minmax(180px,1.6fr) minmax(140px,1fr) auto;
+  gap:10px;
+  align-items:end;
+}
+.sl-add-actions{display:flex;align-items:end;padding-bottom:2px}
+.sl-wrap{border-color:#e6d48a}
+.sl-table{min-width:860px}
+.sl-table thead th{
+  background:linear-gradient(180deg,#f3d15a,var(--ls-gold));
+  color:var(--ls-navy);
+  font-weight:800;
+  font-size:12px;
+  letter-spacing:.6px;
+  text-transform:uppercase;
+  border-bottom:1px solid #d4b43a;
+}
+.sl-table thead th.sl-th-sort{cursor:pointer;user-select:none}
+.sl-table thead th.sl-th-sort:hover{filter:brightness(1.05)}
+.sl-table thead th.is-sort::after{content:" v";font-size:10px}
+.sl-table thead th.is-sort-asc::after{content:" ^"}
+.sl-th-center,.sl-td-center{text-align:center}
+.sl-table tbody td{padding:8px 10px;background:#fff}
+.sl-table tbody tr:nth-child(even) td{background:#fffbeb}
+.sl-table input.sl-in{
+  width:100%;border:1px solid var(--ls-line);background:#fff;
+  font-weight:600;color:var(--ls-navy);
+}
+.sl-table input.sl-in-date{min-width:132px;max-width:150px}
+.sl-marks{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+}
+.sl-mark{
+  width:34px;height:34px;border-radius:8px;border:2px solid var(--ls-line);
+  background:#fff;font-size:20px;font-weight:900;line-height:1;
+  cursor:pointer;color:#c5cad3;
+}
+.sl-mark.is-ok{
+  color:#15803d;background:#dcfce7;border-color:#15803d;
+  box-shadow:0 0 0 3px rgba(21,128,61,.18);
+}
+.sl-mark.is-no{
+  color:#dc2626;background:#fee2e2;border-color:#dc2626;
+  box-shadow:0 0 0 3px rgba(220,38,38,.16);
+}
+.sl-mark:hover{filter:brightness(1.04)}
+.sl-status{
+  min-width:160px;font-weight:800;text-transform:uppercase;
+  letter-spacing:.3px;font-size:12px;
+}
+.sl-status.is-habilitado{color:#1a4fa0;background:#e8f0fe;border-color:#c5d8fb}
+.sl-status.is-adjudicacao{color:#8a6410;background:var(--ls-yellow-bg);border-color:#f0dca0}
+.sl-status.is-homologado{color:#136c3d;background:var(--ls-green-bg);border-color:#b6e3ca}
+.sl-status.is-julgamento{color:#6b3fa0;background:#f3e8ff;border-color:#e0c6f5}
+.sl-empty{
+  text-align:center;padding:28px 16px;color:var(--ls-muted);font-weight:600;
+}
+@media (max-width: 900px){
+  .sl-add-grid{grid-template-columns:1fr 1fr}
+  .sl-add-actions{grid-column:1 / -1}
+}

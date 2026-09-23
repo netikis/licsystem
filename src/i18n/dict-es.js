@@ -22,6 +22,7 @@
       "nav.bllEditais": "Edictos BLL",
       "nav.analiseIa": "Análisis IA",
       "nav.leiloesParticipo": "Licitaciones en las que participo",
+      "nav.statusLicitacoes": "Estado de licitaciones",
       "nav.docsChecklist": "Docs del Edicto",
       "nav.importarEdital": "Importar Edicto (PDF)",
       "nav.orcamento": "Presupuesto",
@@ -45,6 +46,7 @@
       "view.bllEditais": "Edictos BLL",
       "view.analiseIa": "Análisis Inteligente de Edictos",
       "view.leiloesParticipo": "Licitaciones en las que participo",
+      "view.statusLicitacoes": "Estado de licitaciones",
       "view.leilaoWorkspace": "Panel del Edicto",
       "view.importarEdital": "Importar Edicto (PDF)",
       "view.orcamento": "Presupuesto",
@@ -99,6 +101,8 @@
       "disputa.off": "■ Detener",
       "disputa.cover": "⚡ Cubrir ahora",
       "disputa.clear": "Limpiar sesión",
+      "sl.title": "Estado de licitaciones",
+      "sl.desc": "Siga cada licitación: presupuestada, registrada y el estado del proceso. Pulse la V verde (ok) o la X roja. Elija el estado en la lista.",
       "side.foot": "LICSYSTEM © Sistema de Licitación"
   };
 })(window.LICSYSTEM || (window.LICSYSTEM = {}));

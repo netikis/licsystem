@@ -44,6 +44,7 @@ import "./js/catalogo.js";
 import "./js/arp.js";
 import "./js/disputa.js";
 import "./js/hist-entregas.js";
+import "./js/status-licitacoes.js";
 import "./js/analise-ia.js";
 import "./js/auth.js";
 import "./js/boot.js";

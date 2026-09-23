@@ -13,6 +13,7 @@
   var PNCP_ALERTS_KEY = ctx.PNCP_ALERTS_KEY;
   var CLOUD_META_KEY = ctx.CLOUD_META_KEY;
   var CLOUD_LAST_UID_KEY = ctx.CLOUD_LAST_UID_KEY;
+  var STATUS_LICITACOES_KEY = ctx.STATUS_LICITACOES_KEY;
   function listarProdutos(){
     var fn = ctx.listarProdutos || window.listarProdutos || LICSYSTEM.listarProdutos;
     if (typeof fn !== "function") throw new Error("listarProdutos ainda não disponível");
@@ -20,7 +21,7 @@
   }
 
   /* ============================ CLOUD SYNC (Firebase RTDB per uid) ============================
-   * Paths: users/{uid}/orcamento|catalogo|cofre|docsChecklist|leiloesParticipo|arp|entregas|histEntregas|pncpWatches|pncpAlerts
+   * Paths: users/{uid}/orcamento|catalogo|cofre|docsChecklist|leiloesParticipo|arp|entregas|histEntregas|statusLicitacoes|pncpWatches|pncpAlerts
    * Envelope: { updatedAt:ms, cleared?:bool, writeId?:string, data:... }
    * Merge: newest updatedAt wins; empty local never overwrites cloud unless Limpar (cleared).
    * Live: after login, onValue listeners apply newer remote envelopes without re-login.
@@ -35,7 +36,7 @@
   LICSYSTEM.cloudSync = {
     DEBOUNCE_MS: 900,
     REMOTE_DEFER_MS: 700,
-    KEYS: ["orcamento", "catalogo", "cofre", "docsChecklist", "leiloesParticipo", "arp", "entregas", "histEntregas", "pncpWatches", "pncpAlerts"],
+    KEYS: ["orcamento", "catalogo", "cofre", "docsChecklist", "leiloesParticipo", "arp", "entregas", "histEntregas", "statusLicitacoes", "pncpWatches", "pncpAlerts"],
     _uid: null,
     _onlineWired: false,
     _pulling: false,
@@ -246,6 +247,23 @@
             data: histData
           };
         }
+        if(key === "statusLicitacoes"){
+          var slRaw = JSON.parse(localStorage.getItem(STATUS_LICITACOES_KEY || "licsystem_status_licitacoes_v1") || "null");
+          if(slRaw == null) return null;
+          var slData = Array.isArray(slRaw)
+            ? slRaw
+            : (slRaw && Array.isArray(slRaw.items) ? slRaw.items : []);
+          var slTs = Number(
+            (slRaw && !Array.isArray(slRaw) && (slRaw.updatedAt || slRaw.savedAt)) ||
+            this.metaTs("statusLicitacoes") ||
+            0
+          );
+          return {
+            updatedAt: slTs,
+            cleared: !!(slRaw && !Array.isArray(slRaw) && slRaw.cleared) || (Array.isArray(slData) && !slData.length && slTs > 0),
+            data: slData
+          };
+        }
       }catch(e){}
       return null;
     },
@@ -385,6 +403,27 @@
         }catch(e){}
         this.touchMeta("histEntregas", ts);
         try{ if(LICSYSTEM.histEntregas.render) LICSYSTEM.histEntregas.render(); }catch(e){}
+        return;
+      }
+      if(key === "statusLicitacoes"){
+        if(LICSYSTEM.statusLicitacoes && LICSYSTEM.statusLicitacoes.applyData){
+          LICSYSTEM.statusLicitacoes.applyData(Array.isArray(data) ? data : []);
+        }
+        try{
+          localStorage.setItem(STATUS_LICITACOES_KEY || "licsystem_status_licitacoes_v1", JSON.stringify({
+            v: 1,
+            updatedAt: ts,
+            cleared: !!env.cleared || !(data && data.length),
+            items: Array.isArray(data) ? data : []
+          }));
+        }catch(e){}
+        this.touchMeta("statusLicitacoes", ts);
+        try{
+          if(LICSYSTEM.state.currentView === "statusLicitacoes" && LICSYSTEM.statusLicitacoes && LICSYSTEM.statusLicitacoes.render){
+            LICSYSTEM.statusLicitacoes.render();
+          }
+        }catch(e){}
+        return;
       }
     },
 

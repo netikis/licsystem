@@ -92,6 +92,7 @@ const shell = `<!DOCTYPE html>
       <!-- @include src/html/views/pesquisas.html -->
       <!-- @include src/html/views/analise-ia.html -->
       <!-- @include src/html/views/leiloes-participo.html -->
+      <!-- @include src/html/views/status-licitacoes.html -->
       <!-- @include src/html/views/leilao-workspace.html -->
       <!-- @include src/html/views/importar-edital.html -->
       <!-- @include src/html/views/orcamento.html -->

@@ -218,6 +218,7 @@
             captacao:"Pesquisas de Editais",
             analiseIa:"Análise Inteligente de Editais",
             leiloesParticipo:"Licitações que Participo",
+            statusLicitacoes:"Status Licitações",
             leilaoWorkspace:"Painel do Edital",
             importarEdital:"Importar Edital (PDF)",
             orcamento:"Orçamento",
