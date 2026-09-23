@@ -19,11 +19,17 @@
               <label class="fld" for="slNewData">Data
                 <input type="date" id="slNewData" />
               </label>
+              <label class="fld" for="slNewHora">Hora
+                <input type="time" id="slNewHora" />
+              </label>
               <label class="fld" for="slNewNome">Licitação
                 <input type="text" id="slNewNome" placeholder="ex.: Pref. Ibaiti — Materiais elétricos" autocomplete="off" />
               </label>
               <label class="fld" for="slNewMunicipio">Município
                 <input type="text" id="slNewMunicipio" placeholder="ex.: Ibaiti" autocomplete="off" />
+              </label>
+              <label class="fld" for="slNewValor">Valor
+                <input type="text" id="slNewValor" inputmode="decimal" placeholder="0,00" autocomplete="off" />
               </label>
               <div class="sl-add-actions">
                 <button type="button" class="btn btn-gold" id="btnSlAddConfirm">Adicionar</button>
@@ -36,8 +42,10 @@
               <thead>
                 <tr>
                   <th class="sl-th-sort" data-sl-sort="data">DATA</th>
+                  <th class="sl-th-sort" data-sl-sort="hora">HORA</th>
                   <th class="sl-th-sort" data-sl-sort="nome">LICITAÇÃO</th>
                   <th class="sl-th-sort" data-sl-sort="municipio">MUNICÍPIO</th>
+                  <th class="sl-th-sort sl-th-right" data-sl-sort="valor">VALOR</th>
                   <th class="sl-th-center">ORÇADA</th>
                   <th class="sl-th-center">CADASTRADA</th>
                   <th>STATUS</th>

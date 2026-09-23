@@ -270,6 +270,8 @@
     on("btnSlSortData","click", function(){ LICSYSTEM.statusLicitacoes.setSort("data"); });
     on("slNewNome","keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); LICSYSTEM.statusLicitacoes.adicionar(); } });
     on("slNewMunicipio","keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); LICSYSTEM.statusLicitacoes.adicionar(); } });
+    on("slNewHora","keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); LICSYSTEM.statusLicitacoes.adicionar(); } });
+    on("slNewValor","keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); LICSYSTEM.statusLicitacoes.adicionar(); } });
     on("slBody","input", function(e){
       var inp = e.target.closest("input[data-sl-id]");
       if(!inp) return;
@@ -284,6 +286,7 @@
       var inp = e.target.closest("input[data-sl-id]");
       if(inp){
         LICSYSTEM.statusLicitacoes.onEdit(inp.getAttribute("data-sl-id"), inp.getAttribute("data-sl-f"), inp.value);
+        if(inp.getAttribute("data-sl-f") === "valor") LICSYSTEM.statusLicitacoes.formatValorInput(inp);
       }
     });
     on("slBody","click", function(e){

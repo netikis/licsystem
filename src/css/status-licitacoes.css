@@ -2,13 +2,13 @@
 .sl-add{margin:0 0 16px}
 .sl-add-grid{
   display:grid;
-  grid-template-columns:140px minmax(180px,1.6fr) minmax(140px,1fr) auto;
+  grid-template-columns:140px 110px minmax(180px,1.5fr) minmax(120px,.9fr) 140px auto;
   gap:10px;
   align-items:end;
 }
 .sl-add-actions{display:flex;align-items:end;padding-bottom:2px}
 .sl-wrap{border-color:#e6d48a}
-.sl-table{min-width:860px}
+.sl-table{min-width:1080px}
 .sl-table thead th{
   background:linear-gradient(180deg,#f3d15a,var(--ls-gold));
   color:var(--ls-navy);
@@ -23,6 +23,7 @@
 .sl-table thead th.is-sort::after{content:" v";font-size:10px}
 .sl-table thead th.is-sort-asc::after{content:" ^"}
 .sl-th-center,.sl-td-center{text-align:center}
+.sl-th-right,.sl-td-right{text-align:right}
 .sl-table tbody td{padding:8px 10px;background:#fff}
 .sl-table tbody tr:nth-child(even) td{background:#fffbeb}
 .sl-table input.sl-in{
@@ -30,6 +31,14 @@
   font-weight:600;color:var(--ls-navy);
 }
 .sl-table input.sl-in-date{min-width:132px;max-width:150px}
+.sl-table input.sl-in-hora{min-width:92px;max-width:110px}
+.sl-valor{
+  display:flex;align-items:center;justify-content:flex-end;gap:6px;
+}
+.sl-valor-prefix{font-weight:800;color:var(--ls-navy);white-space:nowrap}
+.sl-table input.sl-in-valor{
+  min-width:110px;max-width:150px;text-align:right;
+}
 .sl-marks{
   display:inline-flex;align-items:center;justify-content:center;gap:8px;
 }
