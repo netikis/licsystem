@@ -1,12 +1,4 @@
 /* LICSYSTEM — Status Licitações */
-.sl-add{margin:0 0 16px}
-.sl-add-grid{
-  display:grid;
-  grid-template-columns:140px 110px minmax(180px,1.5fr) minmax(120px,.9fr) 140px auto;
-  gap:10px;
-  align-items:end;
-}
-.sl-add-actions{display:flex;align-items:end;padding-bottom:2px}
 .sl-wrap{border-color:#e6d48a}
 .sl-table{min-width:1080px}
 .sl-table thead th{
@@ -66,8 +58,4 @@
 .sl-status.is-julgamento{color:#6b3fa0;background:#f3e8ff;border-color:#e0c6f5}
 .sl-empty{
   text-align:center;padding:28px 16px;color:var(--ls-muted);font-weight:600;
-}
-@media (max-width: 900px){
-  .sl-add-grid{grid-template-columns:1fr 1fr}
-  .sl-add-actions{grid-column:1 / -1}
 }

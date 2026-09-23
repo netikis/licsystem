@@ -263,43 +263,14 @@
       LICSYSTEM.statusLicitacoes.renderTabela();
     },
 
-    adicionar: function(){
-      var dataEl = el("slNewData");
-      var horaEl = el("slNewHora");
-      var nomeEl = el("slNewNome");
-      var munEl = el("slNewMunicipio");
-      var valorEl = el("slNewValor");
-      var nome = nomeEl ? String(nomeEl.value || "").trim() : "";
-      var municipio = munEl ? String(munEl.value || "").trim() : "";
-      var data = dataEl && dataEl.value ? String(dataEl.value) : todayIso();
-      if(!nome){
-        showAlert("slAlert", "warn", "Informe o nome da licitação.");
-        if(nomeEl) nomeEl.focus();
-        return;
-      }
-      var row = LICSYSTEM.statusLicitacoes.emptyItem();
-      row.data = data;
-      row.hora = horaEl ? normHora(horaEl.value) : "";
-      row.nome = nome;
-      row.municipio = municipio;
-      row.valor = valorEl ? parseMoney(valorEl.value) : 0;
-      LICSYSTEM.statusLicitacoes.load();
-      LICSYSTEM.statusLicitacoes.items.unshift(row);
-      LICSYSTEM.statusLicitacoes.saveLocal({ immediate: true });
-      if(nomeEl) nomeEl.value = "";
-      if(munEl) munEl.value = "";
-      if(horaEl) horaEl.value = "";
-      if(valorEl) valorEl.value = "";
-      LICSYSTEM.statusLicitacoes.render();
-      showAlert("slAlert", "ok", "Licitação adicionada.");
-    },
-
     adicionarVazio: function(){
       LICSYSTEM.statusLicitacoes.load();
       LICSYSTEM.statusLicitacoes.items.unshift(LICSYSTEM.statusLicitacoes.emptyItem());
       LICSYSTEM.statusLicitacoes.saveLocal();
       LICSYSTEM.statusLicitacoes.render();
-      showAlert("slAlert", "ok", "Linha adicionada — preencha data, hora, licitação, município e valor.");
+      showAlert("slAlert", "ok", "Linha adicionada — preencha direto na tabela.");
+      var first = document.querySelector("#slBody input[data-sl-f=nome]");
+      if(first) first.focus();
     },
 
     remover: function(id){
@@ -318,8 +289,6 @@
     },
 
     render: function(){
-      var dataEl = el("slNewData");
-      if(dataEl && !dataEl.value) dataEl.value = todayIso();
       LICSYSTEM.statusLicitacoes.renderTabela();
     },
 
@@ -340,7 +309,7 @@
       if(btnData) btnData.classList.toggle("btn-gold", LICSYSTEM.statusLicitacoes.sortKey === "data");
 
       if(!list.length){
-        body.innerHTML = '<tr><td colspan="9" class="sl-empty">Nenhuma licitação nesta lista. Preencha acima e clique em Adicionar.</td></tr>';
+        body.innerHTML = '<tr><td colspan="9" class="sl-empty">Nenhuma licitação nesta lista. Clique em + Nova linha para começar.</td></tr>';
         return;
       }
 

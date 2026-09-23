@@ -265,13 +265,8 @@
     on("btnHistSeed","click", function(){ LICSYSTEM.histEntregas.carregarExemplos(true); });
 
     on("btnSlAdd","click", function(){ LICSYSTEM.statusLicitacoes.adicionarVazio(); });
-    on("btnSlAddConfirm","click", function(){ LICSYSTEM.statusLicitacoes.adicionar(); });
     on("btnSlSortNome","click", function(){ LICSYSTEM.statusLicitacoes.setSort("nome"); });
     on("btnSlSortData","click", function(){ LICSYSTEM.statusLicitacoes.setSort("data"); });
-    on("slNewNome","keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); LICSYSTEM.statusLicitacoes.adicionar(); } });
-    on("slNewMunicipio","keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); LICSYSTEM.statusLicitacoes.adicionar(); } });
-    on("slNewHora","keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); LICSYSTEM.statusLicitacoes.adicionar(); } });
-    on("slNewValor","keydown", function(e){ if(e.key==="Enter"){ e.preventDefault(); LICSYSTEM.statusLicitacoes.adicionar(); } });
     on("slBody","input", function(e){
       var inp = e.target.closest("input[data-sl-id]");
       if(!inp) return;
