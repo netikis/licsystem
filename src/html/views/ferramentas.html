@@ -17,10 +17,28 @@
                 <option value="en">English</option>
                 <option value="es">Español</option>
               </select>
+          </div>
+        </div>
+
+        <div class="entrega-subcard" id="pwaInstallCard">
+          <h3 class="cat-form-title" data-i18n="pwa.title">Instalar o aplicativo</h3>
+          <p class="small muted" style="margin:0 0 8px" data-i18n="pwa.desc">Instale o LICSYSTEM no Android, no iPhone ou no computador. O ícone LS fica na tela inicial e na área de trabalho.</p>
+          <div id="pwaInstalledNote" class="alert ok" hidden data-i18n="pwa.installed">O aplicativo já está instalado neste aparelho.</div>
+          <div class="pwa-install-grid" id="pwaInstallActions">
+            <button type="button" class="btn btn-gold" id="btnPwaAndroid" data-i18n="pwa.android">Instalar no Android</button>
+            <button type="button" class="btn btn-gold" id="btnPwaIphone" data-i18n="pwa.iphone">Instalar no iPhone</button>
+            <button type="button" class="btn btn-gold" id="btnPwaDesktop" data-i18n="pwa.desktop">Instalar no computador</button>
+          </div>
+          <div class="pwa-preview">
+            <img src="/icons/icon-192.png" width="56" height="56" alt="Ícone LICSYSTEM" />
+            <div>
+              <b>LICSYSTEM</b>
+              <span data-i18n="pwa.iconHint">Ícone do aplicativo</span>
             </div>
           </div>
+        </div>
 
-          <div class="cfg-form-grid">
+        <div class="cfg-form-grid">
             <div class="cfg-field cfg-field-nome">
               <label class="fld" for="empNome" data-i18n="cfg.name">Nome</label>
               <input type="text" id="empNome" placeholder="Razão social / nome fantasia" />

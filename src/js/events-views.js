@@ -387,6 +387,17 @@
       if(this.files && this.files[0]) LICSYSTEM.ferramentas.importarBackup(this.files[0]);
       this.value = "";
     });
+    on("btnPwaAndroid","click", function(){ LICSYSTEM.pwa.installAndroid(); });
+    on("btnPwaIphone","click", function(){ LICSYSTEM.pwa.installIphone(); });
+    on("btnPwaDesktop","click", function(){ LICSYSTEM.pwa.installDesktop(); });
+    on("btnPwaInstallTop","click", function(){ LICSYSTEM.pwa.installAuto(); });
+    on("btnPwaHelpClose","click", function(){ LICSYSTEM.pwa.closeHelp(); });
+    var pwaOv = el("pwaOverlay");
+    if(pwaOv){
+      pwaOv.addEventListener("click", function(e){
+        if(e.target === pwaOv) LICSYSTEM.pwa.closeHelp();
+      });
+    }
 
     // Bell
     on("bell","click", function(){
@@ -547,7 +558,10 @@
         }
       }catch(e){}
     }
-    if(view==="ferramentas") LICSYSTEM.ferramentas.carregarView();
+    if(view==="ferramentas"){
+      LICSYSTEM.ferramentas.carregarView();
+      try{ LICSYSTEM.pwa.updateUi(); }catch(e){}
+    }
     if(view==="entregas") LICSYSTEM.entregas.renderLista();
     if(view==="histEntregas") LICSYSTEM.histEntregas.render();
     if(view==="statusLicitacoes"){

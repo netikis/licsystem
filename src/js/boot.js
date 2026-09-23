@@ -117,6 +117,7 @@
   }
 
   function boot(){
+    try{ if(LICSYSTEM.pwa && LICSYSTEM.pwa.wire) LICSYSTEM.pwa.wire(); }catch(e){}
     LICSYSTEM.state.authUser = null;
     LICSYSTEM.auth.start(function(){
       bootApp();

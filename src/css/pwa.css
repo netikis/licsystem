@@ -1,0 +1,45 @@
+/* LICSYSTEM — instalação do aplicativo */
+.pwa-install-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+  margin:12px 0 16px;
+}
+.pwa-preview{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 12px;border:1px solid var(--ls-line);border-radius:12px;background:#fff;
+}
+.pwa-preview img{
+  width:56px;height:56px;border-radius:14px;flex-shrink:0;
+  box-shadow:0 4px 12px rgba(21,38,66,.16);
+}
+.pwa-preview b{display:block;font-size:14px;color:var(--ls-navy)}
+.pwa-preview span{display:block;font-size:12px;color:var(--ls-muted);font-weight:600}
+.pwa-auth-install{
+  display:flex;flex-wrap:wrap;gap:8px;justify-content:center;
+  margin:14px 0 0;padding-top:12px;border-top:1px solid var(--ls-line);
+}
+#pwaOverlay{
+  display:none;position:fixed;inset:0;z-index:10050;
+  background:rgba(15,26,46,.55);
+  align-items:center;justify-content:center;padding:16px;
+}
+#pwaOverlay.show{display:flex}
+.pwa-modal{
+  width:min(460px,100%);
+  background:#fff;border-radius:16px;padding:18px 18px 16px;
+  box-shadow:var(--shadow-lg);color:var(--ls-navy);
+}
+.pwa-modal h3{margin:0 0 8px;font-size:18px}
+.pwa-modal ol{margin:8px 0 0;padding-left:20px;font-weight:600;line-height:1.55}
+.pwa-modal li{margin:6px 0}
+.pwa-modal-head{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+}
+.pwa-modal-close{
+  border:0;background:#f4f6fa;width:36px;height:36px;border-radius:10px;
+  font-size:22px;cursor:pointer;color:var(--ls-navy);line-height:1;
+}
+@media (max-width: 700px){
+  .pwa-install-grid{grid-template-columns:1fr}
+}
