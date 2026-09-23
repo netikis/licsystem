@@ -106,6 +106,17 @@
       if(!it) return true;
       return !String(it.produto||"").trim() && !Number(it.vunit) && !Number(it.editalVunit) && !String(it.lote||"").trim();
     },
+    isPricedRow:function(it){
+      if(!it) return false;
+      return (Number(it.vunit) || 0) > 0 || (Number(it.vvenda) || 0) > 0;
+    },
+    countPricedItems:function(items){
+      var n = 0;
+      (Array.isArray(items) ? items : []).forEach(function(it){
+        if(LICSYSTEM.orcamento.isPricedRow(it)) n++;
+      });
+      return n;
+    },
     load:function(){
       try{
         var raw = JSON.parse(localStorage.getItem(ORC_KEY) || "null");

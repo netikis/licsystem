@@ -240,8 +240,50 @@
         catalogId: item.id
       };
       var leilao = LICSYSTEM.orcamento.findLeilaoForCatalog(item);
+      var catPriced = LICSYSTEM.orcamento.countPricedItems(itens);
+
+      function catalogWouldWipe(existingItems){
+        var have = LICSYSTEM.orcamento.countPricedItems(existingItems);
+        if(have <= catPriced) return false;
+        return !confirm(
+          "A planilha já tem "+have+" item(ns) com o seu preço.\n"+
+          "O catálogo tem só "+catPriced+".\n\n"+
+          "Abrir o catálogo agora apaga esses preços.\n\n"+
+          "OK = usar o catálogo (pode perder o orçamento).\n"+
+          "Cancelar = manter o que já está orçado."
+        );
+      }
+
       if(leilao && leilao.status !== "arquivado" && LICSYSTEM.leiloesParticipo.openWorkspace){
+        var sameOpen = String(LICSYSTEM.state.activeLeilaoId || "") === String(leilao.id) ||
+          String(LICSYSTEM.state.orcBoundLeilaoId || "") === String(leilao.id);
+        if(sameOpen){
+          try{ LICSYSTEM.orcamento.syncFromDom(); }catch(e){}
+          try{ LICSYSTEM.orcamento.flushSave({ immediate: true, bindActive: true }); }catch(e){}
+          try{ LICSYSTEM.leiloesParticipo.saveActiveWorkspace({ immediate: true, forceOrcamento: true }); }catch(e){}
+        }
         if(!leilao.workspace) leilao.workspace = LICSYSTEM.leiloesParticipo.emptyWorkspace();
+        var wsItems = ((leilao.workspace.orcamento || {}).items) || [];
+        var wsPriced = LICSYSTEM.orcamento.countPricedItems(wsItems);
+        if(wsPriced > catPriced){
+          if(!item.leilaoId){
+            item.leilaoId = String(leilao.id);
+            try{ LICSYSTEM.catalogo.saveLocal(); }catch(e){}
+          }
+          var keepMeta = (leilao.workspace.orcamento && leilao.workspace.orcamento.meta) || {};
+          keepMeta.catalogId = item.id;
+          leilao.workspace.orcamento.meta = keepMeta;
+          try{ LICSYSTEM.leiloesParticipo.persist({ immediate: true }); }catch(e){}
+          LICSYSTEM.leiloesParticipo.openWorkspace(leilao.id, "orcamento");
+          showAlert(
+            "orcAlert",
+            "ok",
+            "Mantive os <b>"+wsPriced+"</b> itens já orçados em <b>"+
+              utils.escapeHtml(leilao.titulo || item.nome || "")+
+              "</b>. O catálogo estava desatualizado e não substituiu a planilha."
+          );
+          return;
+        }
         leilao.workspace.orcamento = {
           v: 2,
           items: itens,
@@ -265,6 +307,13 @@
 
       if(LICSYSTEM.state.activeLeilaoId){
         try{ LICSYSTEM.leiloesParticipo.saveActiveWorkspace(); }catch(e){}
+      }
+      if(catalogWouldWipe(LICSYSTEM.state.orcItems)){
+        showAlert("catalogoAlert","info","Mantive a planilha que você já estava orçando.");
+        if(window.__lsActivateView) window.__lsActivateView("orcamento", { skipLeilaoGate: true, keepOrcamento: true });
+        return;
+      }
+      if(LICSYSTEM.state.activeLeilaoId){
         try{ LICSYSTEM.leiloesParticipo.setActiveId(null); }catch(e){}
       }
       LICSYSTEM.state.orcBoundLeilaoId = null;
