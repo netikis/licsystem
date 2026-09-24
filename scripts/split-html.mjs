@@ -66,7 +66,7 @@ const shell = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>LICSYSTEM — Sistema Licitação</title>
 <meta name="theme-color" content="#152642" />
 <meta name="mobile-web-app-capable" content="yes" />

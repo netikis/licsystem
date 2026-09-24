@@ -21,10 +21,38 @@
     /* Balões padrão (igual select "Todas") */
     --ls-radius-balloon:999px;
     --ls-radius-balloon-soft:20px;
+    --ls-gutter:clamp(10px, 2.6vw, 26px);
+    --ls-touch:44px;
+    --ls-safe-t:env(safe-area-inset-top, 0px);
+    --ls-safe-r:env(safe-area-inset-right, 0px);
+    --ls-safe-b:env(safe-area-inset-bottom, 0px);
+    --ls-safe-l:env(safe-area-inset-left, 0px);
+    /* Larguras CSS (px lógicos) — iPhone e Android */
+    --ls-w-se1:320px;
+    --ls-w-android:360px;
+    --ls-w-se:375px;
+    --ls-w-iphone12:390px;
+    --ls-w-iphone15:393px;
+    --ls-w-iphone16pro:402px;
+    --ls-w-pixel:412px;
+    --ls-w-plus:414px;
+    --ls-w-promax13:428px;
+    --ls-w-promax:430px;
+    --ls-w-promax16:440px;
+    --ls-w-phablet:480px;
   }
   *{box-sizing:border-box}
+  html{
+    -webkit-text-size-adjust:100%;
+    text-size-adjust:100%;
+  }
   /* overflow-x:hidden no body quebra position:sticky (some o topbar/botões ao rolar) */
   html,body{margin:0;padding:0;width:100%;max-width:100%;height:100%;overflow:hidden}
+  html,body,#app{
+    height:100%;
+    height:100dvh;
+    max-height:100dvh;
+  }
   body{
     font-family:'Montserrat',system-ui,Arial,sans-serif;
     background:var(--ls-bg);
@@ -32,10 +60,14 @@
     font-size:14px;
     -webkit-font-smoothing:antialiased;
   }
+  img,svg,video,canvas{max-width:100%}
+  button,a,.btn,.menu-toggle{touch-action:manipulation}
   /* ---------------- Layout ---------------- */
   #app{
-    display:flex;height:100vh;height:100dvh;width:100%;max-width:100%;
+    display:flex;width:100%;max-width:100%;
     overflow:hidden;
+    padding-left:var(--ls-safe-l);
+    padding-right:var(--ls-safe-r);
   }
   #sidebar{
     width:268px;max-width:100%;flex-shrink:0;
@@ -43,6 +75,8 @@
     color:#fff;display:flex;flex-direction:column;
     height:100%;z-index:40;
     transition:transform .28s ease;
+    padding-top:var(--ls-safe-t);
+    padding-bottom:var(--ls-safe-b);
   }
   .brand{padding:22px 22px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
   .brand .logo{

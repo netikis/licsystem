@@ -1,64 +1,146 @@
-/* LICSYSTEM — breakpoints 980 / 768 / 480 */
-  /* ---------------- Responsive ≤980px ---------------- */
-  @media (max-width:980px){
-    .grid.two{grid-template-columns:1fr}
-  }
+/* LICSYSTEM — celular Android e iPhone (todas as larguras CSS comuns)
+ *
+ * iPhone: 320 SE1 · 375 SE/8/X · 390 12/13/14 · 393 15 · 402 16 Pro
+ *         414 Plus/XR/11 · 428 13 Pro Max · 430 15 Pro Max · 440 16 Pro Max
+ * Android: 360 Galaxy · 384/411/412 Pixel · 424 · 480 phablet
+ */
+@media (max-width:980px){
+  .grid.two{grid-template-columns:1fr}
+  .lw-context-bar{flex-wrap:wrap}
+  .lw-context-tabs{width:100%}
+}
 
-  /* ---------------- Mobile ≤768px ---------------- */
-  @media (max-width:768px){
-    #app{flex-direction:column}
-    #sidebar{
-      position:fixed;left:0;top:0;bottom:0;
-      width:min(288px,86vw);max-width:86vw;
-      height:100dvh;height:100vh;
-      transform:translateX(-105%);
-      box-shadow:var(--shadow-lg);
-    }
-    body.sidebar-open #sidebar{transform:translateX(0)}
-    #main{width:100%;max-width:100%}
-    #sidebar-overlay{display:block}
-    .sidebar-close{display:flex}
-    .brand .logo{gap:10px}
-    .menu-toggle{display:inline-flex}
-    .topbar{padding:12px 14px}
-    .topbar h1{font-size:16px}
-    .topbar .sub{font-size:11px}
-    .top-user{display:none}
-    .top-actions{gap:10px}
-    .content{padding:14px;width:100%;max-width:100%}
-    .card{padding:14px;border-radius:14px;margin-bottom:14px}
-    .card h2{font-size:15px}
-    .grid{gap:12px}
-    .grid.kpi{grid-template-columns:1fr}
-    .kpi-card{padding:14px 16px}
-    .kpi-card .k-value{font-size:22px}
-    .form-row{flex-direction:column;gap:10px}
-    .form-row > div{flex:1 1 auto;width:100%;max-width:100%!important;min-width:0}
-    .btn-row .btn{flex:1 1 auto}
-    .btn{min-height:42px}
-    .tbl-wrap{margin:0 -2px;border-radius:10px}
-    .tbl-wrap table{min-width:560px;font-size:12px}
-    .chart-box{height:220px}
-    .checklist-item{flex-direction:column;align-items:stretch;gap:8px}
-    .checklist-item input[type=date]{max-width:100%}
-    .cofre-item{grid-template-columns:auto 1fr;gap:10px}
-    .cofre-item .ci-actions{grid-column:1 / -1;flex-direction:row;justify-content:flex-start;flex-wrap:wrap;min-width:0}
-    .cofre-item .ci-actions .btn{width:auto}
-    .cofre-view-head{flex-direction:column}
-    .cofre-view-scroll,.cofre-view-frame{height:min(70vh,640px)}
-    .pill-group{width:100%}
-    .pill-group label{flex:1 1 auto;text-align:center}
-    .dropzone{padding:18px 14px}
-    .result-item .ri-grid{grid-template-columns:1fr 1fr}
-    .side-foot{font-size:10px}
+@media (max-width:768px){
+  #app{flex-direction:column}
+  #sidebar{
+    position:fixed;left:0;top:0;bottom:0;
+    width:min(288px,86vw);max-width:86vw;
+    height:100dvh;height:100vh;
+    transform:translateX(-105%);
+    box-shadow:var(--shadow-lg);
+    padding-left:var(--ls-safe-l);
   }
+  body.sidebar-open #sidebar{transform:translateX(0)}
+  #main{width:100%;max-width:100%}
+  #sidebar-overlay{display:block}
+  .sidebar-close{display:flex;width:var(--ls-touch);height:var(--ls-touch)}
+  .brand .logo{gap:10px}
+  .menu-toggle{display:inline-flex;width:var(--ls-touch);height:var(--ls-touch)}
+  .topbar{
+    padding:10px 12px;
+    padding-top:max(10px, var(--ls-safe-t));
+    gap:8px;
+  }
+  .topbar h1{font-size:16px}
+  .topbar .sub{font-size:11px}
+  .top-user{display:none}
+  .top-actions{gap:8px;flex-wrap:wrap;justify-content:flex-end}
+  .top-user-row{gap:6px}
+  .content{padding:14px;padding-bottom:calc(14px + var(--ls-safe-b));width:100%;max-width:100%}
+  .card{padding:14px;border-radius:14px;margin-bottom:14px}
+  .card h2{font-size:15px}
+  .card-head{gap:8px}
+  .card-head .btn-row{width:100%}
+  .grid{gap:12px}
+  .grid.kpi{grid-template-columns:1fr}
+  .kpi-card{padding:14px 16px}
+  .kpi-card .k-value{font-size:22px}
+  .form-row{flex-direction:column;gap:10px}
+  .form-row > div{flex:1 1 auto;width:100%;max-width:100%!important;min-width:0}
+  .btn-row{flex-wrap:wrap}
+  .btn-row .btn{flex:1 1 auto}
+  .btn{min-height:var(--ls-touch)}
+  .btn-sm{min-height:40px}
+  input[type=text],input[type=number],input[type=date],input[type=time],
+  input[type=email],input[type=password],input[type=search],input[type=tel],
+  input[type=url],select,textarea{
+    font-size:16px;
+    min-height:var(--ls-touch);
+  }
+  .tbl-wrap{margin:0;border-radius:10px;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .tbl-wrap table{font-size:12px}
+  .sl-table{min-width:980px}
+  .sl-table thead th{font-size:11px;letter-spacing:.3px;padding:8px 6px}
+  .sl-table tbody td{padding:6px}
+  .sl-mark{width:32px;height:32px}
+  #histEntregasTable{min-width:820px}
+  .chart-box{height:220px}
+  .checklist-item{flex-direction:column;align-items:stretch;gap:8px}
+  .checklist-item input[type=date]{max-width:100%}
+  .cofre-item{grid-template-columns:auto 1fr;gap:10px}
+  .cofre-item .ci-actions{grid-column:1 / -1;flex-direction:row;justify-content:flex-start;flex-wrap:wrap;min-width:0}
+  .cofre-item .ci-actions .btn{width:auto}
+  .cofre-view-head{flex-direction:column}
+  .cofre-view-scroll,.cofre-view-frame{height:min(70vh,640px)}
+  .pill-group{width:100%}
+  .pill-group label{flex:1 1 auto;text-align:center;min-height:40px;display:inline-flex;align-items:center;justify-content:center}
+  .dropzone{padding:18px 14px}
+  .result-item .ri-grid{grid-template-columns:1fr 1fr}
+  .side-foot{font-size:10px}
+  .auth-card,.auth-checking-panel{padding:22px 18px 18px;max-width:100%}
+  .lang-switch{height:40px}
+  .cfg-form-grid{grid-template-columns:1fr}
+  .lw-context-bar{padding:10px 12px;gap:8px}
+  .lw-context-tabs .lw-tab{flex:1 1 auto;justify-content:center}
+  .pwa-install-grid{grid-template-columns:1fr}
+  #pwaOverlay{padding:max(12px, var(--ls-safe-t)) 12px max(12px, var(--ls-safe-b))}
+  .pwa-modal{max-height:min(86dvh, 640px);overflow:auto}
+}
 
-  /* ---------------- Small phones ≤480px ---------------- */
-  @media (max-width:480px){
-    .content{padding:10px}
-    .topbar{padding:10px 12px}
-    .kpi-card .k-value{font-size:20px}
-    .result-item .ri-grid{grid-template-columns:1fr}
-    .btn-row .btn{width:100%}
-    .tbl-wrap table{min-width:480px}
+@media (max-width:480px){
+  .content{padding:10px;padding-bottom:calc(10px + var(--ls-safe-b))}
+  .topbar{padding:8px 10px;padding-top:max(8px, var(--ls-safe-t))}
+  .topbar .sub{display:none}
+  .kpi-card .k-value{font-size:20px}
+  .result-item .ri-grid{grid-template-columns:1fr}
+  .btn-row .btn{width:100%}
+  .sl-table{min-width:920px}
+  .brand{padding:16px 14px 12px}
+  .card .desc{font-size:12px}
+  #btnPwaInstallTop{padding:7px 10px;font-size:11px}
+}
+
+@media (max-width:430px){
+  .top-actions .lang-switch span.lang-switch-ico{display:none}
+  .sync-status{display:none}
+  .sl-table input.sl-in-date{min-width:118px}
+  .sl-status{min-width:132px;font-size:11px}
+}
+
+@media (max-width:390px){
+  #btnPwaInstallTop{display:none!important}
+  .topbar h1{font-size:15px}
+  .card{padding:12px}
+  .sl-table{min-width:860px}
+  .pwa-auth-install .btn{flex:1 1 30%}
+}
+
+@media (max-width:360px){
+  .content{padding:8px;padding-bottom:calc(8px + var(--ls-safe-b))}
+  .menu-toggle{width:40px;height:40px}
+  .btn-logout{padding:6px 8px;font-size:11px}
+  .sl-table{min-width:800px}
+  .auth-brand b{font-size:16px}
+}
+
+@media (max-width:320px){
+  .lang-switch{padding-left:6px}
+  .topbar-titles{max-width:42vw}
+  .sl-table{min-width:760px}
+}
+
+@media (max-width:900px) and (orientation:landscape){
+  .topbar .sub{display:none}
+  .topbar{
+    padding-top:max(6px, var(--ls-safe-t));
+    padding-bottom:6px;
   }
+  .kpi-card .k-value{font-size:20px}
+  #sidebar{width:min(260px, 72vw)}
+}
+
+@media (display-mode: standalone){
+  .topbar{padding-top:max(12px, var(--ls-safe-t))}
+  #sidebar{padding-top:var(--ls-safe-t);padding-bottom:var(--ls-safe-b)}
+  .content{padding-bottom:calc(14px + var(--ls-safe-b))}
+}
