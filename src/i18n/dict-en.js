@@ -22,7 +22,7 @@
       "nav.bllEditais": "BLL notices",
       "nav.analiseIa": "AI Analysis",
       "nav.leiloesParticipo": "Bids I Join",
-      "nav.statusLicitacoes": "Bid Status",
+      "nav.statusLicitacoes": "Bid Schedule",
       "nav.docsChecklist": "Bid Documents",
       "nav.importarEdital": "Import Notice (PDF)",
       "nav.orcamento": "Budget",
@@ -46,7 +46,7 @@
       "view.bllEditais": "BLL notices",
       "view.analiseIa": "Smart Notice Analysis",
       "view.leiloesParticipo": "Bids I Join",
-      "view.statusLicitacoes": "Bid Status",
+      "view.statusLicitacoes": "Bid Schedule",
       "view.leilaoWorkspace": "Notice Panel",
       "view.importarEdital": "Import Notice (PDF)",
       "view.orcamento": "Budget",
@@ -109,7 +109,7 @@
       "disputa.off": "■ Stop",
       "disputa.cover": "⚡ Cover now",
       "disputa.clear": "Clear session",
-      "sl.title": "Bid Status",
+      "sl.title": "Bid Schedule",
       "sl.desc": "Track each bid: quoted, registered, and process status. Click the green V (ok) or the red X. Pick the status from the list.",
       "side.foot": "LICSYSTEM © Bidding System"
   };

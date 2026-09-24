@@ -61,7 +61,7 @@
     -webkit-font-smoothing:antialiased;
   }
   img,svg,video,canvas{max-width:100%}
-  button,a,.btn,.menu-toggle{touch-action:manipulation}
+  button,a,.btn,.menu-toggle,.nav-back{touch-action:manipulation}
   /* ---------------- Layout ---------------- */
   #app{
     display:flex;width:100%;max-width:100%;

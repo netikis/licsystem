@@ -22,7 +22,7 @@
       "nav.bllEditais": "Editais BLL",
       "nav.analiseIa": "Análise IA",
       "nav.leiloesParticipo": "Licitações que Participo",
-      "nav.statusLicitacoes": "Status Licitações",
+      "nav.statusLicitacoes": "Cronograma de Licitações",
       "nav.docsChecklist": "Docs do Edital",
       "nav.importarEdital": "Importar Edital (PDF)",
       "nav.orcamento": "Orçamento",
@@ -46,7 +46,7 @@
       "view.bllEditais": "Editais BLL",
       "view.analiseIa": "Análise Inteligente de Editais",
       "view.leiloesParticipo": "Licitações que Participo",
-      "view.statusLicitacoes": "Status Licitações",
+      "view.statusLicitacoes": "Cronograma de Licitações",
       "view.leilaoWorkspace": "Painel do Edital",
       "view.importarEdital": "Importar Edital (PDF)",
       "view.orcamento": "Orçamento",
@@ -109,7 +109,7 @@
       "disputa.off": "■ Parar",
       "disputa.cover": "⚡ Cobrir agora",
       "disputa.clear": "Limpar sessão",
-      "sl.title": "Status Licitações",
+      "sl.title": "Cronograma de Licitações",
       "sl.desc": "Acompanhe cada licitação: orçada, cadastrada e o status do processo. Clique no V verde (ok) ou no X vermelho. Escolha o status na lista.",
       "side.foot": "LICSYSTEM © Sistema Licitação"
   };

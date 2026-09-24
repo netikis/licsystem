@@ -3,6 +3,8 @@
     var NAV_OPEN_KEY = "licsystem_nav_open_v1";
     /** Última view gravada no history — evita push duplicado e guia replace vs push */
     var _histNavKey = null;
+    /** Posição no histórico interno do app (0 = primeira tela). Liga/desliga a setinha Voltar. */
+    var _histIndex = 0;
     var VIEW_RESOLVE = {
       captacao: { view: "pesquisas" },
       perguntarEditais: { view: "pesquisas", section: "cardChatEditais" },
@@ -127,46 +129,67 @@
       return h;
     }
 
-    function syncHistory(navKey, opts){
-      opts = opts || {};
-      navKey = navKey || "dashboard";
-      if(opts.fromPopstate || opts.skipHistory){
-        _histNavKey = navKey;
-        return;
-      }
-      var path = "#/" + navKey;
-      var state = {
+    function updateBackBtn(){
+      var btn = document.getElementById("btnNavBack");
+      if(!btn) return;
+      var can = _histIndex > 0;
+      btn.disabled = !can;
+      btn.setAttribute("aria-disabled", can ? "false" : "true");
+    }
+    function goBack(){
+      if(_histIndex <= 0) return;
+      try{ history.back(); }catch(e){}
+    }
+    function historyState(navKey, opts){
+      return {
         licsystem: 1,
         view: navKey,
+        histIndex: _histIndex,
         opts: {
           skipEnsureGroup: !!opts.skipEnsureGroup,
           fromWorkspace: !!opts.fromWorkspace,
           skipLeilaoGate: !!opts.skipLeilaoGate
         }
       };
+    }
+    function syncHistory(navKey, opts){
+      opts = opts || {};
+      navKey = navKey || "dashboard";
+      if(opts.fromPopstate || opts.skipHistory){
+        _histNavKey = navKey;
+        if(typeof opts.histIndex === "number") _histIndex = opts.histIndex;
+        updateBackBtn();
+        return;
+      }
+      var path = "#/" + navKey;
       try{
         if(opts.replaceHistory){
-          history.replaceState(state, "", path);
+          history.replaceState(historyState(navKey, opts), "", path);
         } else if(_histNavKey === null){
           // 1ª navegação interna: marca a entrada atual (ex. veio do Google) e
           // só dá push se for para outra tela — assim o Voltar fica no app.
           if(navKey === "dashboard"){
-            history.replaceState(state, "", path);
+            _histIndex = 0;
+            history.replaceState(historyState(navKey, opts), "", path);
           } else {
+            _histIndex = 0;
             history.replaceState(
-              { licsystem: 1, view: "dashboard", opts: {} },
+              { licsystem: 1, view: "dashboard", histIndex: 0, opts: {} },
               "",
               "#/dashboard"
             );
-            history.pushState(state, "", path);
+            _histIndex = 1;
+            history.pushState(historyState(navKey, opts), "", path);
           }
         } else if(_histNavKey === navKey){
-          history.replaceState(state, "", path);
+          history.replaceState(historyState(navKey, opts), "", path);
         } else {
-          history.pushState(state, "", path);
+          _histIndex++;
+          history.pushState(historyState(navKey, opts), "", path);
         }
       }catch(e){}
       _histNavKey = navKey;
+      updateBackBtn();
     }
 
     function activate(view, opts){
@@ -218,7 +241,7 @@
             captacao:"Pesquisas de Editais",
             analiseIa:"Análise Inteligente de Editais",
             leiloesParticipo:"Licitações que Participo",
-            statusLicitacoes:"Status Licitações",
+            statusLicitacoes:"Cronograma de Licitações",
             leilaoWorkspace:"Painel do Edital",
             importarEdital:"Importar Edital (PDF)",
             orcamento:"Orçamento",
@@ -308,6 +331,9 @@
       if(toggle) toggle.addEventListener("click", toggleSidebar);
       if(closeBtn) closeBtn.addEventListener("click", closeSidebar);
       if(overlay) overlay.addEventListener("click", closeSidebar);
+      var backBtn = document.getElementById("btnNavBack");
+      if(backBtn) backBtn.addEventListener("click", goBack);
+      updateBackBtn();
       document.addEventListener("keydown", function(e){
         if(e.key === "Escape") closeSidebar();
       });
@@ -326,6 +352,7 @@
       var popOpts = { fromPopstate: true, skipHistory: true };
       if(st && st.licsystem && st.view){
         view = st.view;
+        if(typeof st.histIndex === "number") popOpts.histIndex = st.histIndex;
         if(st.opts){
           if(st.opts.skipEnsureGroup) popOpts.skipEnsureGroup = true;
           if(st.opts.fromWorkspace) popOpts.fromWorkspace = true;
@@ -333,6 +360,7 @@
         }
       } else {
         view = viewFromHash();
+        if(_histIndex > 0) popOpts.histIndex = _histIndex - 1;
       }
       if(!view) view = "dashboard";
       activate(view, popOpts);

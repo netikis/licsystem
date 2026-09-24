@@ -1,4 +1,4 @@
-/* LICSYSTEM — STATUS LICITAÇÕES */
+/* LICSYSTEM — CRONOGRAMA DE LICITAÇÕES */
 (function (LICSYSTEM) {
   "use strict";
 

@@ -95,14 +95,18 @@
   .topbar-titles{min-width:0}
   .topbar h1{font-size:18px;margin:0;font-weight:700;color:var(--ls-navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .topbar .sub{font-size:12px;color:var(--ls-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .menu-toggle{
+  .nav-back,.menu-toggle{
     display:none;align-items:center;justify-content:center;
     width:42px;height:42px;flex-shrink:0;
     border:1px solid var(--ls-line);border-radius:12px;cursor:pointer;
     background:#fff;color:var(--ls-navy);padding:0;
     font-family:inherit;
   }
-  .menu-toggle:hover{border-color:var(--ls-gold);background:#fafbfd}
+  .nav-back svg{width:22px;height:22px;max-width:none;display:block}
+  .nav-back:hover,.menu-toggle:hover{border-color:var(--ls-gold);background:#fafbfd}
+  .nav-back:disabled{
+    opacity:.38;cursor:default;pointer-events:none;
+  }
   .menu-toggle .burger{
     display:flex;flex-direction:column;justify-content:center;gap:5px;width:18px;
   }

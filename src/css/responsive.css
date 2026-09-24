@@ -25,7 +25,8 @@
   #sidebar-overlay{display:block}
   .sidebar-close{display:flex;width:var(--ls-touch);height:var(--ls-touch)}
   .brand .logo{gap:10px}
-  .menu-toggle{display:inline-flex;width:var(--ls-touch);height:var(--ls-touch)}
+  .nav-back,.menu-toggle{display:inline-flex;width:var(--ls-touch);height:var(--ls-touch)}
+  .topbar-left{gap:8px}
   .topbar{
     padding:10px 12px;
     padding-top:max(10px, var(--ls-safe-t));
@@ -117,7 +118,7 @@
 
 @media (max-width:360px){
   .content{padding:8px;padding-bottom:calc(8px + var(--ls-safe-b))}
-  .menu-toggle{width:40px;height:40px}
+  .nav-back,.menu-toggle{width:40px;height:40px}
   .btn-logout{padding:6px 8px;font-size:11px}
   .sl-table{min-width:800px}
   .auth-brand b{font-size:16px}
@@ -143,4 +144,5 @@
   .topbar{padding-top:max(12px, var(--ls-safe-t))}
   #sidebar{padding-top:var(--ls-safe-t);padding-bottom:var(--ls-safe-b)}
   .content{padding-bottom:calc(14px + var(--ls-safe-b))}
+  .nav-back{display:inline-flex;width:var(--ls-touch);height:var(--ls-touch)}
 }
