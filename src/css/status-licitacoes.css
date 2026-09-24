@@ -1,6 +1,6 @@
 /* LICSYSTEM — Cronograma de Licitações */
 .sl-wrap{border-color:#e6d48a}
-.sl-table{min-width:1180px}
+.sl-table{min-width:1480px}
 .sl-table thead th{
   background:linear-gradient(180deg,#f3d15a,var(--ls-gold));
   color:var(--ls-navy);
@@ -24,6 +24,8 @@
 }
 .sl-table input.sl-in-date{min-width:132px;max-width:150px}
 .sl-table input.sl-in-hora{min-width:92px;max-width:110px}
+.sl-table th.sl-th-municipio,.sl-table td.sl-td-municipio{min-width:320px;width:24%}
+.sl-table input.sl-in-municipio{min-width:300px;max-width:none;width:100%}
 .sl-table input.sl-in-plataforma{min-width:120px;max-width:170px}
 .sl-valor{
   display:flex;align-items:center;justify-content:flex-end;gap:6px;

@@ -335,7 +335,7 @@
             "<td><input type=\"date\" class=\"sl-in sl-in-date\" data-sl-id=\""+sid+"\" data-sl-f=\"data\" value=\""+esc(it.data)+"\"></td>"+
             "<td><input type=\"time\" class=\"sl-in sl-in-hora\" data-sl-id=\""+sid+"\" data-sl-f=\"hora\" value=\""+esc(it.hora)+"\"></td>"+
             "<td><input type=\"text\" class=\"sl-in\" data-sl-id=\""+sid+"\" data-sl-f=\"nome\" value=\""+esc(it.nome)+"\" placeholder=\"Nome da licitação\"></td>"+
-            "<td><input type=\"text\" class=\"sl-in\" data-sl-id=\""+sid+"\" data-sl-f=\"municipio\" value=\""+esc(it.municipio)+"\" placeholder=\"Município\"></td>"+
+            "<td class=\"sl-td-municipio\"><input type=\"text\" class=\"sl-in sl-in-municipio\" data-sl-id=\""+sid+"\" data-sl-f=\"municipio\" value=\""+esc(it.municipio)+"\" placeholder=\"Município\"></td>"+
             "<td><input type=\"text\" class=\"sl-in sl-in-plataforma\" data-sl-id=\""+sid+"\" data-sl-f=\"plataforma\" value=\""+esc(it.plataforma)+"\" list=\"slPlataformas\" placeholder=\"Plataforma\" autocomplete=\"off\"></td>"+
             "<td class=\"sl-td-right\"><div class=\"sl-valor\"><span class=\"sl-valor-prefix\">R$</span>"+
               "<input type=\"text\" class=\"sl-in sl-in-valor\" data-sl-id=\""+sid+"\" data-sl-f=\"valor\" value=\""+esc(formatMoneyInput(it.valor))+"\" inputmode=\"decimal\" placeholder=\"0,00\">"+

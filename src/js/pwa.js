@@ -75,7 +75,9 @@
     updateUi: function(){
       var installed = isStandalone();
       var top = el("btnPwaInstallTop");
-      if(top) top.hidden = installed;
+      var mobile = false;
+      try{ mobile = window.matchMedia("(max-width: 768px)").matches; }catch(e){}
+      if(top) top.hidden = installed || mobile;
       var note = el("pwaInstalledNote");
       if(note) note.hidden = !installed;
       var actions = el("pwaInstallActions");
@@ -159,6 +161,12 @@
           if(e.target === pwaOv) LICSYSTEM.pwa.closeHelp();
         });
       }
+      try{
+        var mq = window.matchMedia("(max-width: 768px)");
+        function onMq(){ LICSYSTEM.pwa.updateUi(); }
+        if(mq.addEventListener) mq.addEventListener("change", onMq);
+        else if(mq.addListener) mq.addListener(onMq);
+      }catch(e){}
       LICSYSTEM.pwa.updateUi();
     }
   };
