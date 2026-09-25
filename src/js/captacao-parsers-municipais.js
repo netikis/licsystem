@@ -1,4 +1,4 @@
-/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID · Céu Azul · Piraquara · Sarandi · Tomazina) */
+/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID · Céu Azul · Piraquara · Sarandi · Tomazina · Marquinho · Terra Roxa) */
 (function (LICSYSTEM) {
   "use strict";
   var ctx = LICSYSTEM._ctx || (LICSYSTEM._ctx = {});
@@ -1743,6 +1743,284 @@
       return outT.length >= 4 ? outT : [];
     }
 
+    /**
+     * Marquinho/PR — Termo de Referência PNCP:
+     * ITEM | DESCRIÇÃO | UN | QTDE | VALOR UNITÁRIO | VALOR TOTAL
+     * Nº 001–015 cai no meio da descrição; 14 e 15 vão para a página seguinte.
+     * Sem classe unicode no regex (ofuscador).
+     */
+    function splitMarquinhoNatalBlocks(full) {
+      var t = limparPagina(full).replace(/\r\n?/g, "\n");
+      var f = foldCeu(t);
+      if (f.indexOf(" marquinho") < 0 && f.indexOf("marquinho/") < 0 && f.indexOf("descricao do item") < 0) {
+        return [];
+      }
+      var start = t.search(/ITEM\s+DESCRI[CÇ][AÃ]O DO ITEM/i);
+      if (start < 0) return [];
+      var region = t.slice(start);
+      var end = region.search(
+        /Os bens objeto desta contrata[cç][aã]o|1\.2\.\s*Os bens objeto|n[aã]o se enquadra como bem de luxo/i
+      );
+      if (end > 80) region = region.slice(0, end);
+      var flat = String(region || "")
+        .replace(/(\d+,\d{2})\s+(\d{1,3})\s+(\d{3}),(\d{2})/g, "$1 $2.$3,$4")
+        .replace(/\s+/g, " ")
+        .trim();
+      flat = flat
+        .replace(/UNIDADE\s+VALOR\s+VALOR/gi, " ")
+        .replace(/ITEM\s+DESCRI[CÇ][AÃ]O DO ITEM(?:\s+DE)?\s+QTDE\s+UNIT[AÁ]RIO\s+TOTAL/gi, " ")
+        .replace(/\bUNIDADE DE MEDIDA\b/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      var re = new RegExp("\\bUN\\b\\s+(\\d{1,4})\\s+" + moneyBrRe() + "\\s+" + moneyBrRe(), "gi");
+      var anchors = [];
+      var am;
+      while ((am = re.exec(flat)) !== null) {
+        var qtd = utils.parseBrNum(am[1]);
+        var vu = utils.parseBrNum(am[2]);
+        var vt = utils.parseBrNum(am[3]);
+        if (!(qtd > 0) || !(vu > 0) || !(vt > 0)) continue;
+        var rel = Math.abs(qtd * vu - vt) / Math.max(vt, qtd * vu, 1);
+        if (rel > 0.08) continue;
+        anchors.push({
+          qtd: qtd,
+          vu: vu,
+          vt: vt,
+          index: am.index,
+          end: am.index + am[0].length
+        });
+      }
+      if (anchors.length < 4) return [];
+
+      function lastItemAt(before, expected) {
+        var best = null;
+        var reN = new RegExp("\\b0*" + expected + "\\b", "g");
+        var sm;
+        while ((sm = reN.exec(before)) !== null) {
+          best = { n: expected, at: sm.index, len: sm[0].length };
+        }
+        if (best) return best;
+        var last = null;
+        String(before).replace(/\b(0[0-4]\d|[1-9]\d?)\b/g, function (w, raw, idx) {
+          var n = parseInt(raw, 10);
+          if (n >= 1 && n <= 40) last = { n: n, at: idx, len: w.length };
+          return w;
+        });
+        return last;
+      }
+
+      function takeTail(s) {
+        s = String(s || "").replace(/\s+/g, " ").trim();
+        if (!s) return { tail: "", rest: "" };
+        var m = s.match(/^(.{1,120}?\.)\s+([A-Z][\s\S]+)$/);
+        if (m && m[1].length <= 90) {
+          return { tail: m[1], rest: m[2] };
+        }
+        return { tail: s, rest: "" };
+      }
+
+      var byItem = {};
+      var expected = 1;
+      var prevTail = "";
+      var a;
+      for (a = 0; a < anchors.length; a++) {
+        var prevEnd = a ? anchors[a - 1].end : 0;
+        var before = flat.slice(prevEnd, anchors[a].index);
+        if (prevTail) {
+          var t0 = before.replace(/^\s+/, "");
+          if (t0.indexOf(prevTail) === 0) {
+            before = t0.slice(prevTail.length);
+          }
+        }
+        var hit = lastItemAt(before, expected);
+        if (!hit) continue;
+        var desc = before.slice(0, hit.at) + " " + before.slice(hit.at + hit.len);
+        var after =
+          a + 1 < anchors.length
+            ? flat.slice(anchors[a].end, anchors[a + 1].index)
+            : flat.slice(anchors[a].end);
+        var parts = takeTail(after);
+        prevTail = parts.tail || "";
+        desc = (desc + " " + parts.tail).replace(/\s+/g, " ").trim();
+        desc = desc
+          .replace(/^(?:UNIDADE|VALOR|ITEM|DESCRI[CÇ][AÃ]O|QTDE|UNIT[AÁ]RIO|TOTAL|MEDIDA)\s+/gi, "")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (desc.length < 3) desc = "Item " + hit.n;
+        if (desc.length > 280) desc = desc.slice(0, 280).replace(/\s+\S*$/, "");
+        var packed = packMunicipioRow(hit.n, anchors[a].qtd, "UN", desc, anchors[a].vu, anchors[a].vt);
+        if (utils.isLinhaProdutoEdital(packed)) {
+          byItem[hit.n] = packed;
+          expected = hit.n + 1;
+        }
+      }
+      var keys = Object.keys(byItem)
+        .map(function (k) {
+          return parseInt(k, 10);
+        })
+        .sort(function (a, b) {
+          return a - b;
+        });
+      var outM = [];
+      for (a = 0; a < keys.length; a++) outM.push(byItem[keys[a]]);
+      return outM.length >= 4 ? outM : [];
+    }
+
+    /**
+     * Terra Roxa / Comprasnet — CATMAT + Unidade/Metro + qtd + R$ unitário/total.
+     * Tabela do objeto (págs. 1–15); itens 42/45/46/54/58 vêm com centavos partidos (23.995,0).
+     * Sem classe unicode no regex.
+     */
+    function splitTerraRoxaNatalBlocks(full) {
+      var t = limparPagina(full).replace(/\r\n?/g, "\n");
+      var f = foldCeu(t);
+      if (f.indexOf("terra roxa") < 0 && f.indexOf("987921") < 0) return [];
+      var start = t.search(/ITEM\s+QUANT\.?\s+CATMAT/i);
+      if (start < 0) start = t.search(/CATMAT[\s\S]{0,80}DESCRI[CÇ][AÃ]O DO OBJETO/i);
+      if (start < 0) return [];
+      var region = t.slice(start);
+      var end = region.search(
+        /OBS:\s*Havendo qualquer discord[aâ]ncia|TOTAL\s+1\.084\.639,93|2\s+VALOR M[AÁ]XIMO DA LICITA/i
+      );
+      if (end > 200) region = region.slice(0, end);
+      var flat = String(region || "")
+        .replace(/Un\s+idade/gi, "Unidade")
+        .replace(/(\d{1,3})\.00(\s+R\$\s*R\$[\s\S]{0,160}?)\b0\s+(0,\d{2})/g, "$1.000$2$3")
+        .replace(/(\d{1,3}(?:\.\d{3})*),(\d)\s+(\d)(?=\s|$)/g, "$1,$2$3")
+        .replace(/(\d{1,3}(?:\.\d{3})+),(\d)(?!\d)/g, "$1,$20")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      function almost(a, b) {
+        return Math.abs(a - b) / Math.max(a, b, 1) <= 0.05;
+      }
+      var moneyRe = /\d{1,3}(?:\.\d{3})+,\d{2}|\d{1,6},\d{2}/g;
+      var nums = [];
+      var pm;
+      while ((pm = moneyRe.exec(flat)) !== null) {
+        var afterM = flat.slice(pm.index + pm[0].length, pm.index + pm[0].length + 10);
+        var n = utils.parseBrNum(pm[0]);
+        if (!(n > 0)) continue;
+        if (/^\s*(mm|cm|kg|w)\b/i.test(afterM)) continue;
+        if (/^\s*m\b/i.test(afterM) && !/^\s*metros?\b/i.test(afterM)) continue;
+        if (/^\s*metros?\b/i.test(afterM) && n < 80) continue;
+        if (/^\s*x\b/i.test(afterM) && n < 80) continue;
+        if (/^\s*\/\s*\d/.test(afterM)) continue;
+        if (/^\s*kV\b/i.test(afterM)) continue;
+        nums.push({ n: n, raw: pm[0], idx: pm.index, len: pm[0].length });
+      }
+      var used = {};
+      var pairs = [];
+      var i;
+      for (i = 0; i < nums.length - 1; i++) {
+        if (used[i]) continue;
+        var vuN = nums[i];
+        var vtN = nums[i + 1];
+        var gap = vtN.idx - (vuN.idx + vuN.len);
+        if (gap > 90) continue;
+        if (vtN.n + 0.02 < vuN.n) continue;
+        var qtd = Math.round(vtN.n / vuN.n);
+        if (!(almost(qtd * vuN.n, vtN.n) && qtd >= 1 && qtd <= 400000)) continue;
+        var before = flat.slice(Math.max(0, vuN.idx - 140), vuN.idx);
+        var hasUnd = /\b(Metros?|Unidade)\b/i.test(before);
+        var qtdTok = String(qtd);
+        var qtdBr = qtd.toLocaleString("pt-BR");
+        var qtdNear =
+          before.indexOf(qtdTok) >= 0 ||
+          before.indexOf(qtdBr) >= 0 ||
+          (qtd === 2000 && before.indexOf("2.000") >= 0) ||
+          (qtd === 1000 && before.indexOf("1.000") >= 0) ||
+          (qtd === 3000 && before.indexOf("3.000") >= 0) ||
+          (qtd === 7000 && before.indexOf("7.000") >= 0) ||
+          (qtd === 300000 && before.indexOf("300.000") >= 0) ||
+          (qtd === 100000 && before.indexOf("100.000") >= 0);
+        if (!qtdNear && !hasUnd) continue;
+        used[i] = 1;
+        used[i + 1] = 1;
+        pairs.push({ qtd: qtd, vu: vuN.n, vt: vtN.n, idx: vuN.idx, end: vtN.idx + vtN.len });
+      }
+      if (pairs.length < 20) return [];
+
+      function nearbyUnd(before) {
+        var last = "UN";
+        String(before || "").replace(/\b(Metros?|Unidade)\b/gi, function (w) {
+          last = /^metro/i.test(w) ? "METRO" : "UN";
+          return w;
+        });
+        return last;
+      }
+      function nearbyItem(before, expected) {
+        var win = String(before || "");
+        var reN = new RegExp("\\b" + expected + "\\b", "g");
+        if (reN.test(win)) return expected;
+        var mHead = win.match(/(\d{1,2})\s+(\d{4,6})\s+(Unidade|Metros?)\s*$/i);
+        if (mHead) {
+          var nHead = parseInt(mHead[1], 10);
+          if (nHead >= 1 && nHead <= 80) return nHead;
+        }
+        var last = 0;
+        win.replace(/\b(\d{1,2})\b/g, function (w, raw, idx) {
+          var n = parseInt(raw, 10);
+          if (!(n >= 1 && n <= 80)) return w;
+          var prefix = win.slice(Math.max(0, idx - 18), idx);
+          if (/\b(Unidade|Metros?)\s+$/i.test(prefix)) return w;
+          last = n;
+          return w;
+        });
+        return last || expected;
+      }
+      function titleOf(before) {
+        var d = String(before || "");
+        var namedRe =
+          /AQUISI[CÇ][AÃ]O|LOCA[CÇ][AÃ]O|Aquisi[cç][aã]o|Loca[cç][aã]o|Cabo el[eé]trico|Rel[eé] |Disjuntor |Quadro |Fita |Fonte |Abra[cç]adeira |Escada |Pisca |Mangueira |M[aá]quina |Bola |Tubo |Gorro |Fest[aã]o |Grama /gi;
+        var namedAt = -1;
+        var nm;
+        while ((nm = namedRe.exec(d)) !== null) namedAt = nm.index;
+        if (namedAt >= 0) d = d.slice(namedAt);
+        d = d
+          .replace(/AQUISI[CÇ][AÃ]ODE/gi, "AQUISIÇÃO DE")
+          .replace(/\bR\$/g, " ")
+          .replace(/\b(Metros?|Unidade|CATMAT|ITEM|QUANT\.?|MEDIDA|VALOR|TOTAL|UNIT[AÁ]RIO)\b/gi, " ")
+          .replace(/\b\d{5,6}\b/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        d = d.replace(/\s+\d{1,3}(?:\.\d{3})*\s*$/, "").trim();
+        var colon = d.search(/:\s/);
+        if (colon >= 12 && colon <= 160) d = d.slice(0, colon);
+        if (d.length > 220) d = d.slice(0, 220).replace(/\s+\S*$/, "");
+        return d;
+      }
+
+      var byItem = {};
+      var expected = 1;
+      for (i = 0; i < pairs.length; i++) {
+        var prevEnd = i ? pairs[i - 1].end : 0;
+        var chunk = flat.slice(prevEnd, pairs[i].idx);
+        var itemNo = nearbyItem(chunk.slice(-180), expected);
+        if (!(itemNo >= 1 && itemNo <= 80)) itemNo = expected;
+        if (itemNo < expected - 1 || itemNo > expected + 3) itemNo = expected;
+        var und = nearbyUnd(chunk.slice(-180));
+        var desc = titleOf(chunk);
+        if (!desc || desc.length < 4) desc = "Item " + itemNo;
+        var packed = packMunicipioRow(itemNo, pairs[i].qtd, und, desc, pairs[i].vu, pairs[i].vt);
+        if (!utils.isLinhaProdutoEdital(packed)) continue;
+        if (!byItem[itemNo]) {
+          byItem[itemNo] = packed;
+          expected = itemNo + 1;
+        }
+      }
+      var keys = Object.keys(byItem)
+        .map(function (k) {
+          return parseInt(k, 10);
+        })
+        .sort(function (a, b) {
+          return a - b;
+        });
+      var outT = [];
+      for (i = 0; i < keys.length; i++) outT.push(byItem[keys[i]]);
+      return outT.length >= 20 ? outT : [];
+    }
+
     function splitSaoJosePinhaisBlocks(full) {
       var t = limparPagina(full).replace(/\r\n?/g, "\n");
       var start = t.search(/ANEXO\s+II\s+OR[CÇ]AMENTO DA ADMINISTRA[CÇ][AÃ]O/i);
@@ -1816,6 +2094,8 @@
     deps.splitPiraquaraBlocks = splitPiraquaraBlocks;
     deps.splitSarandiEletricosBlocks = splitSarandiEletricosBlocks;
     deps.splitTomazinaNatalBlocks = splitTomazinaNatalBlocks;
+    deps.splitMarquinhoNatalBlocks = splitMarquinhoNatalBlocks;
+    deps.splitTerraRoxaNatalBlocks = splitTerraRoxaNatalBlocks;
 
     if (typeof bag.registerModelos === "function") {
       bag.registerModelos([
@@ -1979,6 +2259,38 @@
             return (
               f.indexOf("tomazina") >= 0 &&
               (f.indexOf("preco unt") >= 0 || f.indexOf("item und qtd") >= 0 || f.indexOf("total dos lotes") >= 0)
+            );
+          }
+        },
+        {
+          id: "marquinho-natal",
+          label: "Marquinho — TR ITEM/UN/QTDE (enfeites natalinos)",
+          family: "municipais",
+          split: "splitMarquinhoNatalBlocks",
+          minItems: 8,
+          priority: 28,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            var f = foldCeu(raw);
+            return (
+              (f.indexOf("marquinho") >= 0 || f.indexOf("01612552") >= 0) &&
+              (f.indexOf("descricao do item") >= 0 || /ITEM\s+DESCRI[CÇ][AÃ]O DO ITEM/i.test(raw))
+            );
+          }
+        },
+        {
+          id: "terra-roxa-natal",
+          label: "Terra Roxa — CATMAT/Unidade (Natal Luz Comprasnet)",
+          family: "municipais",
+          split: "splitTerraRoxaNatalBlocks",
+          minItems: 20,
+          priority: 27,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            var f = foldCeu(raw);
+            return (
+              (f.indexOf("terra roxa") >= 0 || f.indexOf("987921") >= 0) &&
+              (f.indexOf("catmat") >= 0 || /DESCRI[CÇ][AÃ]O DO OBJETO/i.test(raw))
             );
           }
         },
