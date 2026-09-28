@@ -1,6 +1,6 @@
 /* LICSYSTEM — Cronograma de Licitações */
 .sl-wrap{border-color:#e6d48a}
-.tbl-wrap.sl-wrap table.sl-table,.sl-table{min-width:1760px}
+.tbl-wrap.sl-wrap table.sl-table,.sl-table{min-width:1580px}
 .sl-table thead th{
   background:linear-gradient(180deg,#f3d15a,var(--ls-gold));
   color:var(--ls-navy);
@@ -24,12 +24,12 @@
 }
 .sl-table input.sl-in-date{min-width:132px;max-width:150px}
 .sl-table input.sl-in-hora{min-width:92px;max-width:110px}
-.sl-table th.sl-th-licitacao,.sl-table td.sl-td-licitacao{min-width:280px;width:20%}
+.sl-table th.sl-th-licitacao,.sl-table td.sl-td-licitacao{min-width:118px;width:118px;max-width:128px}
 .sl-table input.sl-in-licitacao{
-  min-width:260px;max-width:none;width:100%;
-  min-height:42px;padding:8px 12px;font-size:14px;
+  min-width:104px;max-width:118px;width:118px;
+  padding:6px 8px;text-align:center;
 }
-.sl-table th.sl-th-municipio,.sl-table td.sl-td-municipio{min-width:320px;width:22%}
+.sl-table th.sl-th-municipio,.sl-table td.sl-td-municipio{min-width:320px;width:24%}
 .sl-table input.sl-in-municipio{min-width:300px;max-width:none;width:100%}
 .sl-td-edital{min-width:148px;width:148px;white-space:nowrap}
 .sl-edital{
