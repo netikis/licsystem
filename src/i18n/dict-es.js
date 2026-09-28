@@ -110,7 +110,7 @@
       "disputa.cover": "⚡ Cubrir ahora",
       "disputa.clear": "Limpiar sesión",
       "sl.title": "Cronograma de licitaciones",
-      "sl.desc": "Siga cada licitación: presupuestada, registrada y el estado del proceso. Pulse la V verde (ok) o la X roja. Elija el estado en la lista.",
+      "sl.desc": "Siga cada licitación: presupuestada, registrada y el estado del proceso. Pulse la V verde (ok) o la X roja. Adjunte el edital en PDF en la columna Edital.",
       "side.foot": "LICSYSTEM © Sistema de Licitación"
   };
 })(window.LICSYSTEM || (window.LICSYSTEM = {}));

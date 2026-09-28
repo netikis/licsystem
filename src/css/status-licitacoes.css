@@ -1,6 +1,6 @@
 /* LICSYSTEM — Cronograma de Licitações */
 .sl-wrap{border-color:#e6d48a}
-.sl-table{min-width:1480px}
+.tbl-wrap.sl-wrap table.sl-table,.sl-table{min-width:1760px}
 .sl-table thead th{
   background:linear-gradient(180deg,#f3d15a,var(--ls-gold));
   color:var(--ls-navy);
@@ -24,8 +24,29 @@
 }
 .sl-table input.sl-in-date{min-width:132px;max-width:150px}
 .sl-table input.sl-in-hora{min-width:92px;max-width:110px}
-.sl-table th.sl-th-municipio,.sl-table td.sl-td-municipio{min-width:320px;width:24%}
+.sl-table th.sl-th-licitacao,.sl-table td.sl-td-licitacao{min-width:280px;width:20%}
+.sl-table input.sl-in-licitacao{
+  min-width:260px;max-width:none;width:100%;
+  min-height:42px;padding:8px 12px;font-size:14px;
+}
+.sl-table th.sl-th-municipio,.sl-table td.sl-td-municipio{min-width:320px;width:22%}
 .sl-table input.sl-in-municipio{min-width:300px;max-width:none;width:100%}
+.sl-td-edital{min-width:148px;width:148px;white-space:nowrap}
+.sl-edital{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  min-width:132px;
+}
+.sl-edital-pick,.sl-edital-open,.sl-edital-clear{
+  border:1px solid var(--ls-line);background:#fff;color:var(--ls-navy);
+  font-weight:800;font-size:12px;line-height:1;cursor:pointer;
+  border-radius:8px;min-height:34px;
+}
+.sl-edital-pick,.sl-edital-open{padding:6px 10px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sl-edital-clear{width:34px;padding:0;color:#dc2626}
+.sl-edital.is-on .sl-edital-open{
+  background:#fffbeb;border-color:#d4b43a;color:var(--ls-navy);
+}
+.sl-edital-pick:hover,.sl-edital-open:hover,.sl-edital-clear:hover{filter:brightness(1.04)}
 .sl-table input.sl-in-plataforma{min-width:120px;max-width:170px}
 .sl-valor{
   display:flex;align-items:center;justify-content:flex-end;gap:6px;

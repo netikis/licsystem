@@ -10,9 +10,10 @@
             </div>
           </div>
           <div class="desc" data-i18n="sl.desc">
-            Acompanhe cada licitação: orçada, cadastrada e o status do processo. Clique no V verde (ok) ou no X vermelho. Escolha o status na lista.
+            Acompanhe cada licitação: orçada, cadastrada e o status do processo. Clique no V verde (ok) ou no X vermelho. Anexe o edital em PDF na coluna Edital.
           </div>
           <div id="slAlert" class="alert"></div>
+          <input type="file" id="slEditalFile" accept="application/pdf,.pdf" style="display:none" />
 
           <div class="tbl-wrap sl-wrap">
             <table id="slTable" class="sl-table">
@@ -20,7 +21,8 @@
                 <tr>
                   <th class="sl-th-sort" data-sl-sort="data">DATA</th>
                   <th class="sl-th-sort" data-sl-sort="hora">HORA</th>
-                  <th class="sl-th-sort" data-sl-sort="nome">LICITAÇÃO</th>
+                  <th class="sl-th-sort sl-th-licitacao" data-sl-sort="nome">LICITAÇÃO</th>
+                  <th class="sl-th-center">EDITAL</th>
                   <th class="sl-th-sort sl-th-municipio" data-sl-sort="municipio">MUNICÍPIO</th>
                   <th class="sl-th-sort" data-sl-sort="plataforma">PLATAFORMA</th>
                   <th class="sl-th-sort sl-th-right" data-sl-sort="valor">VALOR</th>

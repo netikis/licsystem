@@ -110,7 +110,7 @@
       "disputa.cover": "⚡ Cobrir agora",
       "disputa.clear": "Limpar sessão",
       "sl.title": "Cronograma de Licitações",
-      "sl.desc": "Acompanhe cada licitação: orçada, cadastrada e o status do processo. Clique no V verde (ok) ou no X vermelho. Escolha o status na lista.",
+      "sl.desc": "Acompanhe cada licitação: orçada, cadastrada e o status do processo. Clique no V verde (ok) ou no X vermelho. Anexe o edital em PDF na coluna Edital.",
       "side.foot": "LICSYSTEM © Sistema Licitação"
   };
 })(window.LICSYSTEM || (window.LICSYSTEM = {}));

@@ -93,6 +93,30 @@
     return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
+  function pdfKey(id){
+    return "cronograma:" + String(id || "");
+  }
+
+  function shortNome(nome){
+    var s = String(nome || "").trim();
+    if(!s) return "PDF";
+    if(s.length <= 22) return s;
+    return s.slice(0, 18) + "…";
+  }
+
+  function editalCell(it, sid){
+    var nome = String(it.editalNome || "").trim();
+    if(nome){
+      return '<div class="sl-edital is-on">'+
+        '<button type="button" class="sl-edital-open" data-sl-pdf-open="'+sid+'" title="Abrir '+esc(nome)+'">📎 '+esc(shortNome(nome))+"</button>"+
+        '<button type="button" class="sl-edital-clear" data-sl-pdf-clear="'+sid+'" title="Remover PDF">✕</button>'+
+      "</div>";
+    }
+    return '<div class="sl-edital">'+
+      '<button type="button" class="sl-edital-pick" data-sl-pdf-pick="'+sid+'" title="Anexar edital em PDF">📎 PDF</button>'+
+    "</div>";
+  }
+
   LICSYSTEM.statusLicitacoes = {
     items: [],
     _loaded: false,
@@ -110,7 +134,10 @@
         valor: 0,
         orcada: "",
         cadastrada: "",
-        status: ""
+        status: "",
+        editalNome: "",
+        editalSize: 0,
+        editalAt: 0
       };
     },
 
@@ -126,7 +153,10 @@
         valor: parseMoney(it.valor),
         orcada: normFlag(it.orcada),
         cadastrada: normFlag(it.cadastrada),
-        status: normStatus(it.status)
+        status: normStatus(it.status),
+        editalNome: String(it.editalNome || "").slice(0, 220),
+        editalSize: Number(it.editalSize) > 0 ? Number(it.editalSize) : 0,
+        editalAt: Number(it.editalAt) || 0
       };
     },
 
@@ -253,9 +283,88 @@
       if(field === "status") LICSYSTEM.statusLicitacoes.renderTabela();
     },
 
+    pickEdital: function(id){
+      var item = LICSYSTEM.statusLicitacoes.find(id);
+      if(!item) return;
+      LICSYSTEM.statusLicitacoes._pdfTargetId = id;
+      var inp = el("slEditalFile");
+      if(!inp) return;
+      inp.value = "";
+      inp.click();
+    },
+
+    onEditalFile: function(file){
+      var id = LICSYSTEM.statusLicitacoes._pdfTargetId;
+      LICSYSTEM.statusLicitacoes._pdfTargetId = "";
+      if(!id || !file) return;
+      var nome = String(file.name || "").toLowerCase();
+      if(file.type && file.type !== "application/pdf" && nome.slice(-4) !== ".pdf"){
+        showAlert("slAlert", "warn", "Anexe um arquivo PDF do edital.");
+        return;
+      }
+      var item = LICSYSTEM.statusLicitacoes.find(id);
+      if(!item) return;
+      var go = function(rec){
+        item.editalNome = String((rec && rec.name) || file.name || "edital.pdf").slice(0, 220);
+        item.editalSize = Number((rec && rec.size) || file.size || 0);
+        item.editalAt = Date.now();
+        LICSYSTEM.statusLicitacoes.saveLocal();
+        LICSYSTEM.statusLicitacoes.renderTabela();
+        showAlert("slAlert", "ok", "Edital anexado: " + item.editalNome);
+      };
+      if(LICSYSTEM.editalPdf && typeof LICSYSTEM.editalPdf.save === "function"){
+        LICSYSTEM.editalPdf.save(pdfKey(id), file).then(go).catch(function(){ go(null); });
+        return;
+      }
+      go(null);
+    },
+
     formatValorInput: function(inp){
       if(!inp) return;
       inp.value = formatMoneyInput(parseMoney(inp.value));
+    },
+
+    openEdital: function(id){
+      var item = LICSYSTEM.statusLicitacoes.find(id);
+      if(!item || !item.editalNome){
+        showAlert("slAlert", "warn", "Nenhum PDF anexado nesta linha.");
+        return;
+      }
+      if(!LICSYSTEM.editalPdf || typeof LICSYSTEM.editalPdf.getFile !== "function"){
+        showAlert("slAlert", "warn", "Não foi possível abrir o PDF.");
+        return;
+      }
+      LICSYSTEM.editalPdf.getFile(pdfKey(id)).then(function(f){
+        if(!f){
+          showAlert("slAlert", "warn", "PDF não encontrado neste aparelho. Anexe o edital de novo.");
+          return;
+        }
+        var url = URL.createObjectURL(f);
+        var w = window.open(url, "_blank");
+        if(!w){
+          var a = document.createElement("a");
+          a.href = url;
+          a.download = item.editalNome || "edital.pdf";
+          a.click();
+        }
+      }).catch(function(){
+        showAlert("slAlert", "warn", "Não foi possível abrir o PDF.");
+      });
+    },
+
+    clearEdital: function(id){
+      var item = LICSYSTEM.statusLicitacoes.find(id);
+      if(!item || !item.editalNome) return;
+      if(!confirm("Remover o PDF anexado desta licitação?")) return;
+      item.editalNome = "";
+      item.editalSize = 0;
+      item.editalAt = 0;
+      if(LICSYSTEM.editalPdf && typeof LICSYSTEM.editalPdf.remove === "function"){
+        try{ LICSYSTEM.editalPdf.remove(pdfKey(id)); }catch(e){}
+      }
+      LICSYSTEM.statusLicitacoes.saveLocal();
+      LICSYSTEM.statusLicitacoes.renderTabela();
+      showAlert("slAlert", "ok", "PDF removido.");
     },
 
     setFlag: function(id, field, value){
@@ -287,6 +396,9 @@
       var items = LICSYSTEM.statusLicitacoes.items;
       for(var i=0;i<items.length;i++){
         if(items[i].id !== id) keep.push(items[i]);
+        else if(LICSYSTEM.editalPdf && typeof LICSYSTEM.editalPdf.remove === "function"){
+          try{ LICSYSTEM.editalPdf.remove(pdfKey(id)); }catch(e){}
+        }
       }
       LICSYSTEM.statusLicitacoes.items = keep;
       LICSYSTEM.statusLicitacoes.saveLocal({ immediate: true });
@@ -315,7 +427,7 @@
       if(btnData) btnData.classList.toggle("btn-gold", LICSYSTEM.statusLicitacoes.sortKey === "data");
 
       if(!list.length){
-        body.innerHTML = '<tr><td colspan="10" class="sl-empty">Nenhuma licitação nesta lista. Clique em + Nova linha para começar.</td></tr>';
+        body.innerHTML = '<tr><td colspan="11" class="sl-empty">Nenhuma licitação nesta lista. Clique em + Nova linha para começar.</td></tr>';
         return;
       }
 
@@ -334,7 +446,8 @@
           "<tr data-sl-row=\""+sid+"\">"+
             "<td><input type=\"date\" class=\"sl-in sl-in-date\" data-sl-id=\""+sid+"\" data-sl-f=\"data\" value=\""+esc(it.data)+"\"></td>"+
             "<td><input type=\"time\" class=\"sl-in sl-in-hora\" data-sl-id=\""+sid+"\" data-sl-f=\"hora\" value=\""+esc(it.hora)+"\"></td>"+
-            "<td><input type=\"text\" class=\"sl-in\" data-sl-id=\""+sid+"\" data-sl-f=\"nome\" value=\""+esc(it.nome)+"\" placeholder=\"Nome da licitação\"></td>"+
+            "<td class=\"sl-td-licitacao\"><input type=\"text\" class=\"sl-in sl-in-licitacao\" data-sl-id=\""+sid+"\" data-sl-f=\"nome\" value=\""+esc(it.nome)+"\" placeholder=\"Nome da licitação\"></td>"+
+            "<td class=\"sl-td-edital\">"+editalCell(it, sid)+"</td>"+
             "<td class=\"sl-td-municipio\"><input type=\"text\" class=\"sl-in sl-in-municipio\" data-sl-id=\""+sid+"\" data-sl-f=\"municipio\" value=\""+esc(it.municipio)+"\" placeholder=\"Município\"></td>"+
             "<td><input type=\"text\" class=\"sl-in sl-in-plataforma\" data-sl-id=\""+sid+"\" data-sl-f=\"plataforma\" value=\""+esc(it.plataforma)+"\" list=\"slPlataformas\" placeholder=\"Plataforma\" autocomplete=\"off\"></td>"+
             "<td class=\"sl-td-right\"><div class=\"sl-valor\"><span class=\"sl-valor-prefix\">R$</span>"+

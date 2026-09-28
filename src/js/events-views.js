@@ -295,7 +295,28 @@
         return;
       }
       var del = e.target.closest("[data-sl-del]");
-      if(del) LICSYSTEM.statusLicitacoes.remover(del.getAttribute("data-sl-del"));
+      if(del){
+        LICSYSTEM.statusLicitacoes.remover(del.getAttribute("data-sl-del"));
+        return;
+      }
+      var pick = e.target.closest("[data-sl-pdf-pick]");
+      if(pick){
+        LICSYSTEM.statusLicitacoes.pickEdital(pick.getAttribute("data-sl-pdf-pick"));
+        return;
+      }
+      var openPdf = e.target.closest("[data-sl-pdf-open]");
+      if(openPdf){
+        LICSYSTEM.statusLicitacoes.openEdital(openPdf.getAttribute("data-sl-pdf-open"));
+        return;
+      }
+      var clearPdf = e.target.closest("[data-sl-pdf-clear]");
+      if(clearPdf) LICSYSTEM.statusLicitacoes.clearEdital(clearPdf.getAttribute("data-sl-pdf-clear"));
+    });
+    on("slEditalFile","change", function(){
+      var inp = el("slEditalFile");
+      var file = inp && inp.files && inp.files[0];
+      if(file) LICSYSTEM.statusLicitacoes.onEditalFile(file);
+      if(inp) inp.value = "";
     });
     on("slTable","click", function(e){
       var th = e.target.closest("th.sl-th-sort");

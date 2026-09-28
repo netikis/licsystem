@@ -110,7 +110,7 @@
       "disputa.cover": "⚡ Cover now",
       "disputa.clear": "Clear session",
       "sl.title": "Bid Schedule",
-      "sl.desc": "Track each bid: quoted, registered, and process status. Click the green V (ok) or the red X. Pick the status from the list.",
+      "sl.desc": "Track each bid: quoted, registered, and process status. Click the green V (ok) or the red X. Attach the notice PDF in the Edital column.",
       "side.foot": "LICSYSTEM © Bidding System"
   };
 })(window.LICSYSTEM || (window.LICSYSTEM = {}));
