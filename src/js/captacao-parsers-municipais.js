@@ -1,4 +1,4 @@
-/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID · Céu Azul · Piraquara · Sarandi · Tomazina · Marquinho · Terra Roxa) */
+/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID · Céu Azul · Piraquara · Sarandi · Tomazina · Marquinho · Terra Roxa · Ibaiti) */
 (function (LICSYSTEM) {
   "use strict";
   var ctx = LICSYSTEM._ctx || (LICSYSTEM._ctx = {});
@@ -25,7 +25,7 @@
       if (und === "METROS" || und === "MT" || und === "MTS") und = "METRO";
       if (und === "DIA" || und === "DIAS") und = "DIA";
       if (/^PE[CÇ]AS?$/i.test(und)) und = "PEÇA";
-      if (und === "PCS" || und === "PC" || und === "PÇ") und = "PEÇA";
+      if (und === "PCS" || und === "PC" || und === "PÇ" || und === "P€" || und === "PECA") und = "PEÇA";
       produto = String(produto || "").replace(/\s+/g, " ").trim();
       qtd = Number(qtd) || 0;
       vu = Number(vu) || 0;
@@ -2082,6 +2082,143 @@
       return out;
     }
 
+    /**
+     * Ibaiti / BLL — Termo de Referência por lote (Lote: N - Lote 00N).
+     * Cada lote reinicia o item em 1; a captura junta na sequência 1, 2, 3…
+     * Sem classe unicode no regex.
+     */
+    function splitIbaitiLoteBlocks(full) {
+      var t = limparPagina(full).replace(/\r\n?/g, "\n");
+      var f = foldCeu(t);
+      if (f.indexOf("ibaiti") < 0 && f.indexOf("77008068") < 0) return [];
+      var start = t.search(/Lote:\s*1\s*-\s*Lote\s*001/i);
+      if (start < 0) return [];
+      var region = t.slice(start);
+      var end = region.search(
+        /3\.2\s*-\s*O objeto desta contrata|n[aã]o se enquadra como sendo de bem de luxo/i
+      );
+      if (end > 80) region = region.slice(0, end);
+
+      function limparCabecalhoIbaiti(s) {
+        return String(s || "")
+          .replace(/Pra[cç]a dos Tr[eê]s Poderes[\s\S]{0,180}?ibaiti\.pr\.gov\.br/gi, " ")
+          .replace(/SECRETARIA MUNICIPAL DE ADMINISTRA[CÇ][AÃ]O(?:\s*[–-]\s*SEMAD)?/gi, " ")
+          .replace(/Departamento de Licita[cç][aã]o e Contratos/gi, " ")
+          .replace(/\bIbaiti\s*[–-]\s*Paran[aá]/gi, " ")
+          .replace(/\s*-\s*\d{1,3}\s*-\s*/g, " ");
+      }
+
+      var stripped = limparCabecalhoIbaiti(region)
+        .replace(
+          /Item\s+C[oó]digo do Nome do produto\s+Quant\.\s+Unid\.\s+Pre[cç]o\s+Pre[cç]o m[aá]ximo/gi,
+          " "
+        )
+        .replace(/\bproduto\s+m[aá]ximo\s+total\b/gi, " ")
+        .replace(/\bTOTAL\s+\d{1,3}(?:\.\d{3})*,\d{2}/gi, " ")
+        .replace(/\bP[^\w\s]\s+(?=\d{1,3}(?:\.\d{3})*,\d{2})/g, "PECA ");
+
+      var flat = stripped.replace(/\s+/g, " ").trim();
+      if (!flat) return [];
+
+      var lotes = [];
+      var lm;
+      var reLote = /Lote:\s*(\d+)\s*-\s*Lote\s*\d+/gi;
+      while ((lm = reLote.exec(flat)) !== null) {
+        lotes.push({ n: parseInt(lm[1], 10), idx: lm.index });
+      }
+      if (!lotes.length) return [];
+
+      function loteAt(idx) {
+        var best = lotes[0].n;
+        var i;
+        for (i = 0; i < lotes.length; i++) {
+          if (lotes[i].idx <= idx) best = lotes[i].n;
+        }
+        return best;
+      }
+
+      var money = moneyBrRe();
+      var undAlt = "UNID|UND|UNI|UN|MTS|KIT|PECA|PC|P[CÇ]";
+      var reRow = new RegExp(
+        "\\b(\\d{1,2})\\s+(\\d{3,6})\\s+(.+?)\\s+" +
+          money +
+          "\\s+(" +
+          undAlt +
+          ")\\s+" +
+          money +
+          "\\s+" +
+          money,
+        "gi"
+      );
+      var hits = [];
+      var am;
+      while ((am = reRow.exec(flat)) !== null) {
+        var itemNo = parseInt(am[1], 10);
+        var title = String(am[3] || "").replace(/\s+/g, " ").trim();
+        var qtd = utils.parseBrNum(am[4]);
+        var und = String(am[5] || "UN");
+        var vu = utils.parseBrNum(am[6]);
+        var vt = utils.parseBrNum(am[7]);
+        if (!(itemNo >= 1 && itemNo <= 40)) continue;
+        if (!(qtd > 0) || !(vu > 0) || !(vt > 0)) continue;
+        if (/Lote:/i.test(title) || /C[oó]digo do Nome/i.test(title)) continue;
+        if (title.length < 3) continue;
+        var rel = Math.abs(qtd * vu - vt) / Math.max(vt, qtd * vu, 1);
+        if (rel > 0.08) continue;
+        hits.push({
+          itemNo: itemNo,
+          title: title,
+          qtd: qtd,
+          und: und,
+          vu: vu,
+          vt: vt,
+          index: am.index,
+          end: am.index + am[0].length
+        });
+      }
+      if (hits.length < 6) return [];
+
+      var seen = {};
+      var seq = 0;
+      var out = [];
+      var h;
+      for (h = 0; h < hits.length; h++) {
+        var loteN = loteAt(hits[h].index);
+        var key = loteN + ":" + hits[h].itemNo;
+        if (seen[key]) continue;
+        seen[key] = 1;
+        seq += 1;
+        var after = flat.slice(
+          hits[h].end,
+          h + 1 < hits.length ? hits[h + 1].index : hits[h].end + 240
+        );
+        after = limparCabecalhoIbaiti(after)
+          .replace(/Lote:\s*\d+\s*-\s*Lote[\s\S]*$/i, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        var spec = after.replace(/\b\d{1,2}\s+\d{3,6}\b[\s\S]*$/, "").replace(/\s+/g, " ").trim();
+        if (spec.length > 220) spec = spec.slice(0, 220);
+        var desc = hits[h].title;
+        var df = foldCeu(desc);
+        var sf = foldCeu(spec);
+        if (spec.length > 3 && df.indexOf(sf) < 0) {
+          desc = (desc + " " + spec).replace(/\s+/g, " ").trim();
+        }
+        desc = "Lote " + loteN + ": " + cleanMunicipalDescription(desc, 420);
+        var packed = packMunicipioRow(
+          seq,
+          hits[h].qtd,
+          hits[h].und,
+          desc,
+          hits[h].vu,
+          hits[h].vt
+        );
+        if (utils.isLinhaProdutoEdital(packed)) out.push(packed);
+      }
+      if (out.length < 6) return [];
+      return out;
+    }
+
     deps.packMunicipioRow = packMunicipioRow;
     deps.splitGodoyMoreiraBlocks = splitGodoyMoreiraBlocks;
     deps.splitSaoJoaoIvaiBlocks = splitSaoJoaoIvaiBlocks;
@@ -2096,6 +2233,7 @@
     deps.splitTomazinaNatalBlocks = splitTomazinaNatalBlocks;
     deps.splitMarquinhoNatalBlocks = splitMarquinhoNatalBlocks;
     deps.splitTerraRoxaNatalBlocks = splitTerraRoxaNatalBlocks;
+    deps.splitIbaitiLoteBlocks = splitIbaitiLoteBlocks;
 
     if (typeof bag.registerModelos === "function") {
       bag.registerModelos([
@@ -2291,6 +2429,23 @@
             return (
               (f.indexOf("terra roxa") >= 0 || f.indexOf("987921") >= 0) &&
               (f.indexOf("catmat") >= 0 || /DESCRI[CÇ][AÃ]O DO OBJETO/i.test(raw))
+            );
+          }
+        },
+        {
+          id: "ibaiti-lotes",
+          label: "Ibaiti — BLL Termo de Referência por lote",
+          family: "municipais",
+          split: "splitIbaitiLoteBlocks",
+          minItems: 8,
+          priority: 18,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            var f = foldCeu(raw);
+            return (
+              (f.indexOf("ibaiti") >= 0 || f.indexOf("77008068") >= 0) &&
+              /Lote:\s*\d+\s*-\s*Lote\s*\d+/i.test(raw) &&
+              /Item\s+C[oó]digo do Nome do produto/i.test(raw)
             );
           }
         },
