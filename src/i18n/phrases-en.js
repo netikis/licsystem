@@ -385,6 +385,7 @@
       "MUNICÍPIO": "CITY",
       "PLATAFORMA": "PLATFORM",
       "VALOR": "VALUE",
+      "TOTAL": "TOTAL",
       "ORÇADA": "QUOTED",
       "CADASTRADA": "REGISTERED",
       "STATUS": "STATUS",

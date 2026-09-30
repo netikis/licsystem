@@ -83,3 +83,36 @@
 .sl-empty{
   text-align:center;padding:28px 16px;color:var(--ls-muted);font-weight:600;
 }
+.sl-table tfoot td{
+  padding:12px 14px;
+  background:linear-gradient(180deg,#fff6d4,#f3e19a);
+  border-top:2px solid #d4b43a;
+  color:var(--ls-navy);
+  font-weight:800;
+  vertical-align:middle;
+}
+.sl-foot-bar{
+  display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;
+}
+.sl-foot-label{
+  letter-spacing:.5px;text-transform:uppercase;font-size:13px;
+}
+.sl-foot-n{
+  font-size:12px;font-weight:700;letter-spacing:0;
+  text-transform:none;color:#5c4a12;opacity:.85;
+}
+.sl-foot-valor{
+  font-variant-numeric:tabular-nums;white-space:nowrap;font-size:15px;margin-left:auto;
+}
+.sl-foot-chip{
+  display:inline-flex;align-items:center;gap:8px;
+  font-size:11px;letter-spacing:.4px;
+}
+.sl-foot-frac{
+  display:inline-block;min-width:48px;padding:4px 10px;border-radius:8px;
+  background:#fff;border:1px solid #d4b43a;font-variant-numeric:tabular-nums;
+  font-size:14px;letter-spacing:.2px;text-align:center;
+}
+.sl-foot-frac.is-ok{
+  color:#15803d;background:#dcfce7;border-color:#15803d;
+}

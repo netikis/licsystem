@@ -93,6 +93,16 @@
     return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
+  function formatMoneyTotal(n){
+    n = Number(n) || 0;
+    return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function fracHtml(ok, total, title){
+    var cls = ok > 0 ? " is-ok" : "";
+    return '<span class="sl-foot-frac'+cls+'" title="'+esc(title)+'">'+ok+"/"+total+"</span>";
+  }
+
   function pdfKey(id){
     return "cronograma:" + String(id || "");
   }
@@ -281,6 +291,7 @@
       else if(field === "status") item.status = normStatus(value);
       LICSYSTEM.statusLicitacoes.saveLocal();
       if(field === "status") LICSYSTEM.statusLicitacoes.renderTabela();
+      else if(field === "valor") LICSYSTEM.statusLicitacoes.renderTotais();
     },
 
     pickEdital: function(id){
@@ -410,6 +421,43 @@
       LICSYSTEM.statusLicitacoes.renderTabela();
     },
 
+    renderTotais: function(){
+      var foot = el("slFoot");
+      if(!foot) return;
+      LICSYSTEM.statusLicitacoes.load();
+      var items = LICSYSTEM.statusLicitacoes.items || [];
+      var n = items.length;
+      if(!n){
+        foot.innerHTML = "";
+        return;
+      }
+      var total = 0;
+      var orcadaOk = 0;
+      var cadOk = 0;
+      var statusOk = 0;
+      var i;
+      for(i=0;i<n;i++){
+        var it = items[i];
+        total += Number(it.valor) || 0;
+        if(it.orcada === "ok") orcadaOk++;
+        if(it.cadastrada === "ok") cadOk++;
+        if(it.status) statusOk++;
+      }
+      foot.innerHTML =
+        "<tr>"+
+          "<td colspan=\"11\">"+
+            "<div class=\"sl-foot-bar\">"+
+              "<span class=\"sl-foot-label\">TOTAL</span>"+
+              "<span class=\"sl-foot-n\">"+n+(n===1?" licitação":" licitações")+"</span>"+
+              "<span class=\"sl-foot-valor\">R$ "+formatMoneyTotal(total)+"</span>"+
+              "<span class=\"sl-foot-chip\">ORÇADA "+fracHtml(orcadaOk, n, orcadaOk+" orçadas (V verde) de "+n)+"</span>"+
+              "<span class=\"sl-foot-chip\">CADASTRADA "+fracHtml(cadOk, n, cadOk+" cadastradas (V verde) de "+n)+"</span>"+
+              "<span class=\"sl-foot-chip\">STATUS "+fracHtml(statusOk, n, statusOk+" com status preenchido de "+n)+"</span>"+
+            "</div>"+
+          "</td>"+
+        "</tr>";
+    },
+
     renderTabela: function(){
       var body = el("slBody");
       if(!body) return;
@@ -428,6 +476,7 @@
 
       if(!list.length){
         body.innerHTML = '<tr><td colspan="11" class="sl-empty">Nenhuma licitação nesta lista. Clique em + Nova linha para começar.</td></tr>';
+        LICSYSTEM.statusLicitacoes.renderTotais();
         return;
       }
 
@@ -467,6 +516,7 @@
         );
       }
       body.innerHTML = html.join("");
+      LICSYSTEM.statusLicitacoes.renderTotais();
     }
   };
 

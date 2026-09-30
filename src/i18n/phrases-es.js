@@ -385,6 +385,7 @@
       "MUNICÍPIO": "MUNICIPIO",
       "PLATAFORMA": "PLATAFORMA",
       "VALOR": "VALOR",
+      "TOTAL": "TOTAL",
       "ORÇADA": "PRESUPUESTADA",
       "CADASTRADA": "REGISTRADA",
       "STATUS": "ESTADO",
