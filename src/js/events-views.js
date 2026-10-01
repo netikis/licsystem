@@ -265,6 +265,7 @@
     on("btnHistSeed","click", function(){ LICSYSTEM.histEntregas.carregarExemplos(true); });
 
     on("btnSlAdd","click", function(){ LICSYSTEM.statusLicitacoes.adicionarVazio(); });
+    try{ if(LICSYSTEM.cronogramaEdital) LICSYSTEM.cronogramaEdital.wire(); }catch(e){}
     on("btnSlSortNome","click", function(){ LICSYSTEM.statusLicitacoes.setSort("nome"); });
     on("btnSlSortData","click", function(){ LICSYSTEM.statusLicitacoes.setSort("data"); });
     on("slBody","input", function(e){
@@ -587,6 +588,7 @@
     if(view==="histEntregas") LICSYSTEM.histEntregas.render();
     if(view==="statusLicitacoes"){
       try{ LICSYSTEM.statusLicitacoes.render(); }catch(e){}
+      try{ if(LICSYSTEM.cronogramaEdital) LICSYSTEM.cronogramaEdital.wire(); }catch(e){}
     }
     if(view==="catalogo") listarProdutos();
     if(view==="arp") LICSYSTEM.arp.renderAll();

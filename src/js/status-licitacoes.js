@@ -399,6 +399,34 @@
       if(first) first.focus();
     },
 
+    /** Nova linha vinda do PDF do edital (Nova licitação pelo edital). */
+    adicionarDoEdital: function(d, file){
+      d = d || {};
+      LICSYSTEM.statusLicitacoes.load();
+      var item = LICSYSTEM.statusLicitacoes.emptyItem();
+      item.nome = String(d.numero || "").slice(0, 220);
+      item.municipio = String(d.municipio || "").slice(0, 120);
+      item.plataforma = String(d.plataforma || "").slice(0, 80);
+      if(/^\d{4}-\d{2}-\d{2}$/.test(String(d.data || ""))) item.data = d.data;
+      item.hora = normHora(d.hora);
+      item.valor = parseMoney(d.valor);
+      LICSYSTEM.statusLicitacoes.items.unshift(item);
+      var done = function(rec){
+        if(file){
+          item.editalNome = String((rec && rec.name) || file.name || "edital.pdf").slice(0, 220);
+          item.editalSize = Number((rec && rec.size) || file.size || 0);
+          item.editalAt = Date.now();
+        }
+        LICSYSTEM.statusLicitacoes.saveLocal({ immediate: true });
+        LICSYSTEM.statusLicitacoes.render();
+        return item;
+      };
+      if(file && LICSYSTEM.editalPdf && typeof LICSYSTEM.editalPdf.save === "function"){
+        return LICSYSTEM.editalPdf.save(pdfKey(item.id), file).then(done).catch(function(){ return done(null); });
+      }
+      return Promise.resolve(done(null));
+    },
+
     remover: function(id){
       if(!id) return;
       if(!confirm("Remover esta licitação da lista de status?")) return;

@@ -1,5 +1,21 @@
       <!-- ===================== CRONOGRAMA DE LICITAÇÕES ===================== -->
       <section id="view-statusLicitacoes" class="view">
+        <div class="card sl-novo-card">
+          <div class="card-head">
+            <h2 data-i18n="sl.novo.title">📥 Nova licitação pelo edital</h2>
+          </div>
+          <div class="desc" data-i18n="sl.novo.desc">
+            Jogue o PDF do edital: o sistema puxa número, município, plataforma, data da sessão e valor, mostra o que precisa fazer e lança no cronograma com o PDF anexado.
+          </div>
+          <div id="slNovoAlert" class="alert"></div>
+          <div class="dropzone sl-novo-drop" id="slNovoDrop" role="button" tabindex="0">
+            <span class="big">📥</span><b>Arraste o PDF do edital aqui</b> ou clique para selecionar<br/>
+            <span class="small muted">O sistema lê número, município, plataforma, data da sessão e valor e já monta o resumo</span>
+          </div>
+          <input type="file" id="slNovoFile" accept="application/pdf,.pdf" style="display:none" />
+          <div id="slNovoBox" class="sl-novo-box" hidden></div>
+        </div>
+
         <div class="card">
           <div class="card-head">
             <h2 data-i18n="sl.title">📋 Cronograma de Licitações</h2>

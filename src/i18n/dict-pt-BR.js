@@ -111,6 +111,8 @@
       "disputa.clear": "Limpar sessão",
       "sl.title": "Cronograma de Licitações",
       "sl.desc": "Acompanhe cada licitação: orçada, cadastrada e o status do processo. Clique no V verde (ok) ou no X vermelho. Anexe o edital em PDF na coluna Edital.",
+      "sl.novo.title": "📥 Nova licitação pelo edital",
+      "sl.novo.desc": "Jogue o PDF do edital: o sistema puxa número, município, plataforma, data da sessão e valor, mostra o que precisa fazer e lança no cronograma com o PDF anexado.",
       "side.foot": "LICSYSTEM © Sistema Licitação"
   };
 })(window.LICSYSTEM || (window.LICSYSTEM = {}));

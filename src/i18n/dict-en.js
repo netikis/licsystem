@@ -111,6 +111,8 @@
       "disputa.clear": "Clear session",
       "sl.title": "Bid Schedule",
       "sl.desc": "Track each bid: quoted, registered, and process status. Click the green V (ok) or the red X. Attach the notice PDF in the Edital column.",
+      "sl.novo.title": "📥 New bid from the notice",
+      "sl.novo.desc": "Drop the notice PDF: the system reads the number, city, platform, session date and value, shows what needs to be done and adds it to the schedule with the PDF attached.",
       "side.foot": "LICSYSTEM © Bidding System"
   };
 })(window.LICSYSTEM || (window.LICSYSTEM = {}));
