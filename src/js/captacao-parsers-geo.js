@@ -159,8 +159,30 @@
     var cur = null;
     var Y_TOL = 3.4;
 
+    /** Negrito "falso" (mesmo texto impresso 2–3x por cima) — descarta o token sobreposto contido no outro. */
+    function dropOverprint(tokens) {
+      var bySize = tokens.slice().sort(function (a, b) {
+        return b.w - a.w;
+      });
+      var kept = [];
+      for (var i = 0; i < bySize.length; i++) {
+        var tk = bySize[i];
+        var txt = String(tk.text || "").trim();
+        var dup = false;
+        for (var k = 0; k < kept.length && !dup; k++) {
+          var o = kept[k];
+          var ov = Math.min(tk.x + tk.w, o.x + o.w) - Math.max(tk.x, o.x);
+          if (!(tk.w > 0) || ov < tk.w * 0.7) continue;
+          if (String(o.text || "").indexOf(txt) >= 0) dup = true;
+        }
+        if (!dup) kept.push(tk);
+      }
+      return kept;
+    }
+
     function flush() {
       if (!cur) return;
+      cur.tokens = dropOverprint(cur.tokens);
       cur.tokens.sort(function (a, b) {
         return a.x - b.x;
       });
@@ -170,14 +192,16 @@
         var last = cells[cells.length - 1];
         var gap = last ? tk.x - (last.x + last.w) : 999;
         if (last && gap < 8.5) {
-          var space = gap > 1.6 ? " " : "";
-          last.text += space + tk.text;
+          var space = gap > 1.6 || last.endsSpace || /^\s/.test(tk.text) ? " " : "";
+          last.text = (last.text + space + tk.text).replace(/\s+/g, " ").trim();
           last.w = Math.max(last.w, tk.x + tk.w - last.x);
+          last.endsSpace = /\s$/.test(tk.text);
         } else {
           cells.push({
             x: tk.x,
             w: tk.w,
-            text: String(tk.text || "").replace(/\s+/g, " ").trim()
+            text: String(tk.text || "").replace(/\s+/g, " ").trim(),
+            endsSpace: /\s$/.test(tk.text)
           });
         }
       }

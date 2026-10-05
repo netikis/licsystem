@@ -1,4 +1,4 @@
-/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID · Céu Azul · Piraquara · Sarandi · Tomazina · Marquinho · Terra Roxa · Ibaiti · Cornélio) */
+/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID · Céu Azul · Piraquara · Sarandi · Tomazina · Marquinho · Terra Roxa · Ibaiti · Cornélio · Pato Branco) */
 (function (LICSYSTEM) {
   "use strict";
   var ctx = LICSYSTEM._ctx || (LICSYSTEM._ctx = {});
@@ -212,6 +212,8 @@
           .replace(noMeio, function (todo, palavra, acento, seguinte) {
             // "DE Á GUA": o acento abre a próxima palavra, não fecha a anterior.
             if (CURTAS.test(palavra) && seguinte.length > 2) return todo;
+            // "Craspedia é um": verbo, não pedaço de palavra.
+            if (acento === "é" && palavra.length >= 3) return todo;
             return palavra + acento + seguinte;
           })
           .replace(noInicio, "$1$2");
@@ -2291,6 +2293,173 @@
       return out;
     }
 
+    /**
+     * Pato Branco — TR "Item Qtde Und Descrição Valor Valor Total":
+     *   1 1,00 Sv. 29.378,0000 29.378,00
+     * Descrição centralizada em volta da linha numérica, sem separador entre itens:
+     * cada intervalo entre duas linhas numéricas é cortado de preferência após "." + maiúscula,
+     * escolhendo o conjunto de cortes que deixa cada linha numérica mais centralizada.
+     */
+    function splitPatoBrancoTrBlocks(full) {
+      var t = limparPagina(full).replace(/\r\n?/g, "\n");
+      if (foldCeu(t).indexOf("pato branco") < 0) return [];
+      var start = t.search(/Item\s+Qtde\s+Und\s+Descri/i);
+      if (start < 0) return [];
+      var region = t.slice(start);
+      var end = region.search(/\n\s*Valor\s+Total\s+R\$/i);
+      if (end > 80) region = region.slice(0, end);
+
+      var money = moneyBrRe();
+      var reRow = new RegExp(
+        "^(\\d{1,4})\\s+(\\d{1,6}(?:\\.\\d{3})*,\\d{2})\\s+(Un\\.?|Und\\.?|Rol|Rolo|Sv\\.?|M\\.?|M2|Kg|Cx|Pc|Pct|Par|Kit|Jg|Cj)\\s+(?:(.*?)\\s+)?(\\d{1,3}(?:\\.\\d{3})*,\\d{2,4})\\s+" +
+          money +
+          "\\s*$",
+        "i"
+      );
+      var reJunk = /^(?:=====\s*PAGE|Item\s+Qtde\s+Und|Rua\s+Caramuru|Assinado\s+por|\(46\)|Fone|P[aá]gina\s+\d+|www\.)/i;
+
+      var lines = region.split("\n");
+      var rows = [];
+      var rowPage = [];
+      var gaps = [[]];
+      var page = 0;
+      var inJunk = false;
+      for (var i = 1; i < lines.length; i++) {
+        var ln = String(lines[i] || "").replace(/\s+/g, " ").trim();
+        if (!ln) continue;
+        if (reJunk.test(ln)) {
+          if (!inJunk) page++;
+          inJunk = true;
+          continue;
+        }
+        inJunk = false;
+        var m = reRow.exec(ln);
+        if (m) {
+          rows.push(m);
+          rowPage.push(page);
+          gaps.push([]);
+        } else {
+          gaps[gaps.length - 1].push({ t: ln, p: page });
+        }
+      }
+      if (rows.length < 10) return [];
+
+      function startsUpper(s) {
+        var c0 = String(s || "").charAt(0);
+        return c0 !== c0.toLowerCase();
+      }
+      function txt(arr) {
+        return arr.map(function (x) {
+          return x.t;
+        });
+      }
+      function countOnPage(arr, from, to, pg) {
+        var n = 0;
+        for (var a = from; a < to; a++) if (arr[a].p === pg) n++;
+        return n;
+      }
+      /**
+       * Cortes possíveis no intervalo k (entre as linhas numéricas k-1 e k), com penalidade:
+       * após "." seguido de maiúscula = 0; só maiúscula = 2; qualquer = 6.
+       */
+      function candidates(k) {
+        var g = gaps[k];
+        var prevInline = rows[k - 1][4] || "";
+        var nextInline = rows[k][4] || "";
+        var out = [];
+        for (var b = 0; b <= g.length; b++) {
+          var before = b === 0 ? prevInline : g[b - 1].t;
+          var at = b === g.length ? nextInline : g[b].t;
+          var pen = 6;
+          if (before && at && startsUpper(at)) {
+            if (/\.\s*$/.test(before)) pen = 0;
+            else if (!/,\s*$/.test(before)) pen = 2;
+          }
+          if (pen < 6 || (b > 0 && b < g.length)) out.push({ s: b, pen: pen });
+        }
+        if (!out.length) out.push({ s: Math.ceil(g.length / 2), pen: 6 });
+        return out;
+      }
+
+      /* A linha numérica fica centralizada na própria célula (contando só a mesma página):
+         escolhe os cortes que minimizam a soma |acima − abaixo| de todos os itens. */
+      var nGaps = rows.length;
+      var cands = [null];
+      for (var k = 1; k < nGaps; k++) cands.push(candidates(k));
+      function itemCost(r, sPre, sPost) {
+        var gp = gaps[r];
+        var gn = gaps[r + 1];
+        var above = countOnPage(gp, r === 0 ? 0 : sPre, gp.length, rowPage[r]);
+        var below = countOnPage(gn, 0, r === rows.length - 1 ? gn.length : sPost, rowPage[r]);
+        return Math.abs(above - below);
+      }
+      var best = [];
+      var back = [];
+      for (var g1 = 1; g1 < nGaps; g1++) {
+        best.push([]);
+        back.push([]);
+        var cs = cands[g1];
+        for (var c = 0; c < cs.length; c++) {
+          var bestV = Infinity;
+          var bestP = -1;
+          if (g1 === 1) {
+            bestV = itemCost(0, 0, cs[c].s);
+          } else {
+            var ps = cands[g1 - 1];
+            for (var q = 0; q < ps.length; q++) {
+              var v = best[g1 - 2][q] + itemCost(g1 - 1, ps[q].s, cs[c].s);
+              if (v < bestV) {
+                bestV = v;
+                bestP = q;
+              }
+            }
+          }
+          best[g1 - 1].push(bestV + cs[c].pen);
+          back[g1 - 1].push(bestP);
+        }
+      }
+      var splits = [];
+      var lastG = nGaps - 1;
+      var lastCs = cands[lastG];
+      var pick = -1;
+      var pickV = Infinity;
+      for (var z = 0; z < lastCs.length; z++) {
+        var tot = best[lastG - 1][z] + itemCost(rows.length - 1, lastCs[z].s, 0);
+        if (tot < pickV) {
+          pickV = tot;
+          pick = z;
+        }
+      }
+      for (var gb = lastG; gb >= 1; gb--) {
+        splits[gb] = cands[gb][pick].s;
+        pick = back[gb - 1][pick];
+      }
+
+      var pre = [txt(gaps[0])];
+      var post = [];
+      for (var kk = 1; kk < nGaps; kk++) {
+        post.push(txt(gaps[kk].slice(0, splits[kk])));
+        pre.push(txt(gaps[kk].slice(splits[kk])));
+      }
+      post.push(txt(gaps[nGaps]));
+
+      var out = [];
+      for (var r = 0; r < rows.length; r++) {
+        var row = rows[r];
+        var qtd = utils.parseBrNum(row[2]);
+        var vu = utils.parseBrNum(row[5]);
+        var vt = utils.parseBrNum(row[6]);
+        if (!(qtd > 0) || !(vt > 0)) continue;
+        var u = String(row[3] || "").toUpperCase().replace(/\.$/, "");
+        var und = u === "SV" ? "SERVIÇO" : u === "ROL" ? "ROLO" : u === "UND" ? "UN" : u;
+        var parts = (pre[r] || []).concat(row[4] ? [row[4]] : [], post[r] || []);
+        var desc = cleanMunicipalDescription(parts.join(" "), 1400);
+        var packed = packMunicipioRow(parseInt(row[1], 10), qtd, und, desc, vu, vt);
+        if (utils.isLinhaProdutoEdital(packed)) out.push(packed);
+      }
+      return out;
+    }
+
     deps.packMunicipioRow = packMunicipioRow;
     deps.splitGodoyMoreiraBlocks = splitGodoyMoreiraBlocks;
     deps.splitSaoJoaoIvaiBlocks = splitSaoJoaoIvaiBlocks;
@@ -2307,6 +2476,7 @@
     deps.splitTerraRoxaNatalBlocks = splitTerraRoxaNatalBlocks;
     deps.splitIbaitiLoteBlocks = splitIbaitiLoteBlocks;
     deps.splitCornelioLoteBlocks = splitCornelioLoteBlocks;
+    deps.splitPatoBrancoTrBlocks = splitPatoBrancoTrBlocks;
 
     if (typeof bag.registerModelos === "function") {
       bag.registerModelos([
@@ -2536,6 +2706,18 @@
               f.indexOf("cornelio procopio") >= 0 &&
               /Lote\s+Item\s+Qt\.?\s+Un\s+DESCRI/i.test(raw)
             );
+          }
+        },
+        {
+          id: "pato-branco-tr",
+          label: "Pato Branco — TR Item/Qtde/Und (descrição centralizada)",
+          family: "municipais",
+          split: "splitPatoBrancoTrBlocks",
+          minItems: 10,
+          priority: 20,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return foldCeu(raw).indexOf("pato branco") >= 0 && /Item\s+Qtde\s+Und\s+Descri/i.test(raw);
           }
         },
         {
