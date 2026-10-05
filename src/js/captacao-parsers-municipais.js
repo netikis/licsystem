@@ -1,4 +1,4 @@
-/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID · Céu Azul · Piraquara · Sarandi · Tomazina · Marquinho · Terra Roxa · Ibaiti) */
+/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID · Céu Azul · Piraquara · Sarandi · Tomazina · Marquinho · Terra Roxa · Ibaiti · Cornélio) */
 (function (LICSYSTEM) {
   "use strict";
   var ctx = LICSYSTEM._ctx || (LICSYSTEM._ctx = {});
@@ -2219,6 +2219,78 @@
       return out;
     }
 
+    /**
+     * Cornélio Procópio — TR "Lote Item Qt. Un DESCRIÇÃO DOS SERVIÇOS UNIT. TOTAL":
+     *   01 01 9 UN conexão direta… 25.480,00 229.320,00
+     * A descrição fica acima e abaixo da linha numérica, até "TOTAL DO LOTE N" / "Lote 0N".
+     * Sem classe unicode no regex (só escapes \u).
+     */
+    function splitCornelioLoteBlocks(full) {
+      var t = limparPagina(full).replace(/\r\n?/g, "\n");
+      var f = foldCeu(t);
+      if (f.indexOf("cornelio procopio") < 0) return [];
+      var start = t.search(/Lote\s+Item\s+Qt\.?\s+Un\s+DESCRI/i);
+      if (start < 0) return [];
+      var region = t.slice(start);
+      var end = region.search(/\n\s*3\.3\.?\s*O valor total estimado|\n\s*4\.\s*Entrega/i);
+      if (end > 80) region = region.slice(0, end);
+
+      var lines = region.split("\n");
+      var money = moneyBrRe();
+      var reRow = new RegExp(
+        "^\\s*(\\d{1,3})\\s+(\\d{1,3})\\s+(\\d{1,5})\\s+(UN|UND|UNID|SERV\\.?|SERVICO|KIT|CJ|PC|PAR|M|M2|MT)\\s*(.*?)\\s*" +
+          money +
+          "\\s+" +
+          money +
+          "\\s*$",
+        "i"
+      );
+      var reStop = /^\s*(?:TOTAL\s+DO\s+LOTE\s+\d+|Lote\s+0*\d+)\s+\d{1,3}(?:\.\d{3})*,\d{2}\s*$/i;
+      var reJunk = /^\s*(?:=====\s*PAGE|P[aá]gina\s+\d+\s+de\s+\d+|Rua\s+Rio\s+de\s+Janeiro|Fone:|\/?\s*\S+@\S+\s*$|UNIT\.\s*TOTAL|R\$\s+R\$|Lote\s+Item\s+Qt)/i;
+
+      var blocks = [];
+      var cur = { pre: [], row: null, post: [] };
+      for (var i = 0; i < lines.length; i++) {
+        var ln = String(lines[i] || "").replace(/[\uF000-\uF8FF]/g, " ").replace(/\s+/g, " ").trim();
+        if (!ln || reJunk.test(ln)) continue;
+        if (reStop.test(ln)) {
+          if (cur.row) blocks.push(cur);
+          cur = { pre: [], row: null, post: [] };
+          continue;
+        }
+        var m = reRow.exec(ln);
+        if (m && !cur.row) {
+          cur.row = m;
+          continue;
+        }
+        if (m && cur.row) {
+          blocks.push(cur);
+          cur = { pre: [], row: m, post: [] };
+          continue;
+        }
+        (cur.row ? cur.post : cur.pre).push(ln);
+      }
+      if (cur.row) blocks.push(cur);
+      if (blocks.length < 2) return [];
+
+      var out = [];
+      for (var b = 0; b < blocks.length; b++) {
+        var r = blocks[b].row;
+        var qtd = parseInt(r[3], 10);
+        var vu = utils.parseBrNum(r[6]);
+        var vt = utils.parseBrNum(r[7]);
+        if (!(qtd > 0) || !(vu > 0) || !(vt > 0)) continue;
+        if (Math.abs(qtd * vu - vt) / Math.max(vt, 1) > 0.02) continue;
+        var und = String(r[4] || "UN").toUpperCase().replace(/\.$/, "");
+        if (und === "SERV" || und === "SERVICO") und = "SERVIÇO";
+        var parts = blocks[b].pre.concat(r[5] ? [r[5]] : [], blocks[b].post);
+        var desc = cleanMunicipalDescription(parts.join(" ").replace(/\s+,/g, ","), 1400);
+        var packed = packMunicipioRow(parseInt(r[2], 10), qtd, und, desc, vu, vt);
+        if (utils.isLinhaProdutoEdital(packed)) out.push(packed);
+      }
+      return out;
+    }
+
     deps.packMunicipioRow = packMunicipioRow;
     deps.splitGodoyMoreiraBlocks = splitGodoyMoreiraBlocks;
     deps.splitSaoJoaoIvaiBlocks = splitSaoJoaoIvaiBlocks;
@@ -2234,6 +2306,7 @@
     deps.splitMarquinhoNatalBlocks = splitMarquinhoNatalBlocks;
     deps.splitTerraRoxaNatalBlocks = splitTerraRoxaNatalBlocks;
     deps.splitIbaitiLoteBlocks = splitIbaitiLoteBlocks;
+    deps.splitCornelioLoteBlocks = splitCornelioLoteBlocks;
 
     if (typeof bag.registerModelos === "function") {
       bag.registerModelos([
@@ -2446,6 +2519,22 @@
               (f.indexOf("ibaiti") >= 0 || f.indexOf("77008068") >= 0) &&
               /Lote:\s*\d+\s*-\s*Lote\s*\d+/i.test(raw) &&
               /Item\s+C[oó]digo do Nome do produto/i.test(raw)
+            );
+          }
+        },
+        {
+          id: "cornelio-lotes",
+          label: "Cornélio Procópio — TR Lote/Item/Qt./Un (descrição em volta)",
+          family: "municipais",
+          split: "splitCornelioLoteBlocks",
+          minItems: 2,
+          priority: 19,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            var f = foldCeu(raw);
+            return (
+              f.indexOf("cornelio procopio") >= 0 &&
+              /Lote\s+Item\s+Qt\.?\s+Un\s+DESCRI/i.test(raw)
             );
           }
         },
