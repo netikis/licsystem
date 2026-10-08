@@ -1,4 +1,4 @@
-/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID · Céu Azul · Piraquara · Sarandi · Tomazina · Marquinho · Terra Roxa · Ibaiti · Cornélio · Pato Branco) */
+/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID · Céu Azul · Piraquara · Sarandi · Tomazina · Marquinho · Terra Roxa · Ibaiti · Cornélio · Pato Branco · Clevelândia) */
 (function (LICSYSTEM) {
   "use strict";
   var ctx = LICSYSTEM._ctx || (LICSYSTEM._ctx = {});
@@ -2460,6 +2460,108 @@
       return out;
     }
 
+    /**
+     * Clevelândia — "ITEM DESCRIÇÃO QTDE UND VALOR UNITÁRIO TOTAL":
+     *   ...40cm comprimento, 5m + 1 metro de cabo de 30 UN 288,96 8.668,80
+     *   2
+     * A linha "QTDE UND VU VT" fica no meio da descrição; o nº do item vem no início
+     * dessa linha ou na linha seguinte. Cada item novo começa na última linha com
+     * maiúscula antes da próxima linha de preço.
+     */
+    function splitClevelandiaBlocks(full) {
+      var t = limparPagina(full).replace(/\r\n?/g, "\n");
+      if (foldCeu(t).indexOf("clevelandia") < 0) return [];
+      var start = t.search(/ITEM\s+DESCRI\S*\s+QTDE\s+UND\s+VALOR/i);
+      if (start < 0) return [];
+      var region = t.slice(start);
+      var end = region.search(/\n\s*2\.2\s/);
+      if (end > 80) region = region.slice(0, end);
+
+      var money = moneyBrRe();
+      var reRow = new RegExp(
+        "^(.*?)\\s*(\\d{1,6}(?:\\.\\d{3})*)\\s+(UN|UND|ROL|ROLO|PC|PCT|CX|KIT|M|MT|JG|PAR|CJ)\\s+(" +
+          money +
+          ")\\s+(" +
+          money +
+          ")\\s*$",
+        "i"
+      );
+      var reJunk = /^(?:=====\s*PAGE|Red\.|UNIT[AÁ]RIO\s+TOTAL|ITEM\s+DESCRI)/i;
+
+      var rows = [];
+      var gaps = [[]];
+      var lines = region.split("\n");
+      for (var i = 0; i < lines.length; i++) {
+        var ln = String(lines[i] || "").replace(/\s+/g, " ").trim();
+        if (!ln || reJunk.test(ln)) continue;
+        var m = reRow.exec(ln);
+        if (m) {
+          var vals = /(\S+)\s+(\S+)\s*$/.exec(ln);
+          rows.push({ inline: m[1], qtd: m[2], und: m[3], vu: vals[1], vt: vals[2] });
+          gaps.push([]);
+        } else {
+          gaps[gaps.length - 1].push(ln);
+        }
+      }
+      if (rows.length < 5) return [];
+
+      function tirarNumero(s, n) {
+        var re = new RegExp("^0*" + n + "(?:\\s+|$)");
+        return re.test(s) ? s.replace(re, "") : null;
+      }
+      for (var r = 0; r < rows.length; r++) {
+        var n = r + 1;
+        var semNum = tirarNumero(rows[r].inline, n);
+        if (semNum !== null) {
+          rows[r].inline = semNum;
+        } else if (gaps[r + 1].length) {
+          var prox = tirarNumero(gaps[r + 1][0], n);
+          if (prox !== null) {
+            if (prox) gaps[r + 1][0] = prox;
+            else gaps[r + 1].shift();
+          }
+        }
+      }
+
+      function startsUpper(s) {
+        var c0 = String(s || "").charAt(0);
+        return c0 !== c0.toLowerCase();
+      }
+      var pre = [gaps[0]];
+      var post = [];
+      for (var k = 1; k < rows.length; k++) {
+        var g = gaps[k];
+        var s = -1;
+        for (var b = g.length - 1; b >= 0; b--) {
+          var antes = b === 0 ? rows[k - 1].inline : g[b - 1];
+          if (startsUpper(g[b]) && !/,\s*$/.test(antes || "")) {
+            s = b;
+            break;
+          }
+        }
+        if (s < 0) s = Math.ceil(g.length / 2);
+        post.push(g.slice(0, s));
+        pre.push(g.slice(s));
+      }
+      post.push(gaps[rows.length]);
+
+      var out = [];
+      for (var q = 0; q < rows.length; q++) {
+        var row = rows[q];
+        var qtd = utils.parseBrNum(row.qtd);
+        var vu = utils.parseBrNum(row.vu);
+        var vt = utils.parseBrNum(row.vt);
+        if (!(qtd > 0) || !(vt > 0)) continue;
+        var u = String(row.und).toUpperCase();
+        var und = u === "ROL" ? "ROLO" : u === "UND" ? "UN" : u;
+        var parts = (pre[q] || []).concat(row.inline ? [row.inline] : [], post[q] || []);
+        var desc = cleanMunicipalDescription(parts.join(" "), 1400);
+        var packed = packMunicipioRow(q + 1, qtd, und, desc, vu, vt);
+        if (utils.isLinhaProdutoEdital(packed)) out.push(packed);
+      }
+      return out;
+    }
+
     deps.packMunicipioRow = packMunicipioRow;
     deps.splitGodoyMoreiraBlocks = splitGodoyMoreiraBlocks;
     deps.splitSaoJoaoIvaiBlocks = splitSaoJoaoIvaiBlocks;
@@ -2477,6 +2579,7 @@
     deps.splitIbaitiLoteBlocks = splitIbaitiLoteBlocks;
     deps.splitCornelioLoteBlocks = splitCornelioLoteBlocks;
     deps.splitPatoBrancoTrBlocks = splitPatoBrancoTrBlocks;
+    deps.splitClevelandiaBlocks = splitClevelandiaBlocks;
 
     if (typeof bag.registerModelos === "function") {
       bag.registerModelos([
@@ -2718,6 +2821,18 @@
           tryWithoutHint: true,
           hint: function (raw) {
             return foldCeu(raw).indexOf("pato branco") >= 0 && /Item\s+Qtde\s+Und\s+Descri/i.test(raw);
+          }
+        },
+        {
+          id: "clevelandia-itens",
+          label: "Clevelândia — ITEM/DESCRIÇÃO/QTDE/UND/VALOR (preço no meio da descrição)",
+          family: "municipais",
+          split: "splitClevelandiaBlocks",
+          minItems: 5,
+          priority: 21,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return foldCeu(raw).indexOf("clevelandia") >= 0 && /ITEM\s+DESCRI\S*\s+QTDE\s+UND\s+VALOR/i.test(raw);
           }
         },
         {
