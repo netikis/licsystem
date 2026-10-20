@@ -1,4 +1,4 @@
-/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID · Céu Azul · Piraquara · Sarandi · Tomazina · Marquinho · Terra Roxa · Ibaiti · Cornélio · Pato Branco · Clevelândia) */
+/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID · Céu Azul · Piraquara · Sarandi · Tomazina · Marquinho · Terra Roxa · Ibaiti · Cornélio · Pato Branco · Clevelândia · Conselheiro Mairinck) */
 (function (LICSYSTEM) {
   "use strict";
   var ctx = LICSYSTEM._ctx || (LICSYSTEM._ctx = {});
@@ -2562,6 +2562,78 @@
       return out;
     }
 
+    /**
+     * Conselheiro Mairinck — TR por lote:
+     *   Lote: 1 - Lote 001
+     *   Item Especificações Quant. Unid. Preço unit. máximo / Preço máximo total
+     *   1 Avental Branco 70x120CM ... 40 UNID 14,61 584,40
+     *   (descrição continua) ... TOTAL 584,40
+     * Descrição vai da linha do item até o próximo item / "TOTAL"; o nº vira o do lote
+     * quando o lote tem um item só.
+     */
+    function splitConselheiroMairinckBlocks(full) {
+      var t = limparPagina(full).replace(/\r\n?/g, "\n");
+      if (foldCeu(t).indexOf("conselheiro mairinck") < 0) return [];
+      var start = t.search(/Lote:\s*\d+\s*-\s*Lote\s*\d+/i);
+      if (start < 0) return [];
+      var region = t.slice(start);
+      var end = region.search(/\n\s*VALOR\s+TOTAL\s+R\$/i);
+      if (end > 80) region = region.slice(0, end);
+
+      var reLote = /^Lote:\s*(\d+)\s*-\s*Lote\s*\d+/i;
+      var reRow = /^(\d{1,3})\s+(.*?)\s+(\d{1,6}(?:\.\d{3})*(?:,\d{1,3})?)\s+([A-Za-z]{2,6}\.?)\s+(\d{1,3}(?:\.\d{3})*,\d{2,4})\s+(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/;
+      var reTotal = /^TOTAL\s+\d{1,3}(?:\.\d{3})*,\d{2}\s*$/i;
+      var reJunk = /^(?:=====\s*PAGE|M U N I C|CONSELHEIRO\s+MAIRINCK\s*$|ESTADO\s+DO\s+PARAN|PA\S+O\s+MUNICIPAL|Pra\S+a\s+Ot|CNPJ:|Site:|Pre\S+o\s+unit|Item\s+Especifica|m\S+ximo\s+total)/i;
+
+      var blocos = [];
+      var lote = null;
+      var cur = null;
+      var lines = region.split("\n");
+      for (var i = 0; i < lines.length; i++) {
+        var ln = String(lines[i] || "").replace(/\s+/g, " ").trim();
+        if (!ln || reJunk.test(ln)) continue;
+        var ml = reLote.exec(ln);
+        if (ml) {
+          if (cur) blocos.push(cur);
+          cur = null;
+          lote = { n: parseInt(ml[1], 10), itens: 0 };
+          continue;
+        }
+        if (reTotal.test(ln)) {
+          if (cur) blocos.push(cur);
+          cur = null;
+          continue;
+        }
+        var m = lote ? reRow.exec(ln) : null;
+        if (m) {
+          if (cur) blocos.push(cur);
+          lote.itens++;
+          cur = { lote: lote, item: parseInt(m[1], 10), row: m, desc: [m[2]] };
+          continue;
+        }
+        if (cur) cur.desc.push(ln);
+      }
+      if (cur) blocos.push(cur);
+      if (blocos.length < 5) return [];
+
+      var out = [];
+      for (var b = 0; b < blocos.length; b++) {
+        var bl = blocos[b];
+        var r = bl.row;
+        var qtd = utils.parseBrNum(r[3]);
+        var vu = utils.parseBrNum(r[5]);
+        var vt = utils.parseBrNum(r[6]);
+        if (!(qtd > 0) || !(vt > 0)) continue;
+        var u = String(r[4]).toUpperCase().replace(/\.$/, "");
+        var und = u === "UNID" || u === "UND" ? "UN" : u;
+        var desc = cleanMunicipalDescription(bl.desc.join(" "), 4000);
+        if (bl.lote.itens > 1) desc = "Lote " + bl.lote.n + " item " + bl.item + ": " + desc;
+        var packed = packMunicipioRow(bl.lote.itens > 1 ? b + 1 : bl.lote.n, qtd, und, desc, vu, vt);
+        if (utils.isLinhaProdutoEdital(packed)) out.push(packed);
+      }
+      return out;
+    }
+
     deps.packMunicipioRow = packMunicipioRow;
     deps.splitGodoyMoreiraBlocks = splitGodoyMoreiraBlocks;
     deps.splitSaoJoaoIvaiBlocks = splitSaoJoaoIvaiBlocks;
@@ -2580,6 +2652,7 @@
     deps.splitCornelioLoteBlocks = splitCornelioLoteBlocks;
     deps.splitPatoBrancoTrBlocks = splitPatoBrancoTrBlocks;
     deps.splitClevelandiaBlocks = splitClevelandiaBlocks;
+    deps.splitConselheiroMairinckBlocks = splitConselheiroMairinckBlocks;
 
     if (typeof bag.registerModelos === "function") {
       bag.registerModelos([
@@ -2833,6 +2906,22 @@
           tryWithoutHint: true,
           hint: function (raw) {
             return foldCeu(raw).indexOf("clevelandia") >= 0 && /ITEM\s+DESCRI\S*\s+QTDE\s+UND\s+VALOR/i.test(raw);
+          }
+        },
+        {
+          id: "conselheiro-mairinck-lotes",
+          label: "Conselheiro Mairinck — TR por lote (Item/Especificações/Quant./Unid.)",
+          family: "municipais",
+          split: "splitConselheiroMairinckBlocks",
+          minItems: 5,
+          priority: 22,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return (
+              foldCeu(raw).indexOf("conselheiro mairinck") >= 0 &&
+              /Lote:\s*\d+\s*-\s*Lote\s*\d+/i.test(raw) &&
+              /Item\s+Especifica\S*\s+Quant\.?\s+Unid/i.test(raw)
+            );
           }
         },
         {
