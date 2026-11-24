@@ -221,14 +221,16 @@ function isOverloadedPayload(upstreamJson, status) {
   );
 }
 
-function sleep(ms) {
-  return new Promise(function (resolve) {
-    setTimeout(resolve, ms);
-  });
-}
+/** maxDuration da função = 300 s (vercel.json): tempo total para todas as tentativas. */
+var TOTAL_BUDGET_MS = 270000;
+/** Teto por chamada — um modelo travado não pode consumir o tempo dos reservas. */
+var CALL_TIMEOUT_MS = 110000;
+/** Não inicia nova chamada com menos que isso sobrando. */
+var MIN_CALL_MS = 20000;
 
-/** Função da Vercel tem 60 s: só tenta de novo se ainda sobrar tempo. */
-var RETRY_BUDGET_MS = 40000;
+function remainingMs(startedAt) {
+  return TOTAL_BUDGET_MS - (Date.now() - startedAt);
+}
 
 function buildModelQueue(preferred) {
   var first = normalizeModelId(preferred);
@@ -239,38 +241,72 @@ function buildModelQueue(preferred) {
   return queue;
 }
 
-function callGemini(apiKey, modelName, prompt) {
-  return callGeminiParts(apiKey, modelName, [{ text: prompt }], {
-    temperature: 0.3,
-    maxOutputTokens: 8192
-  });
+function callGemini(apiKey, modelName, prompt, timeoutMs) {
+  return callGeminiParts(
+    apiKey,
+    modelName,
+    [{ text: prompt }],
+    {
+      temperature: 0.3,
+      maxOutputTokens: 8192
+    },
+    timeoutMs
+  );
 }
 
-async function callGeminiParts(apiKey, modelName, parts, generationConfig) {
+async function callGeminiParts(apiKey, modelName, parts, generationConfig, timeoutMs) {
   var url =
     "https://generativelanguage.googleapis.com/v1beta/models/" +
     modelName +
     ":generateContent?key=" +
     encodeURIComponent(apiKey);
 
-  var upstream = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: parts }],
-      generationConfig: generationConfig || {
-        temperature: 0.3,
-        maxOutputTokens: 8192
+  var ctrl = typeof AbortController === "function" ? new AbortController() : null;
+  var timer = ctrl && timeoutMs > 0 ? setTimeout(function () { ctrl.abort(); }, timeoutMs) : null;
+  try {
+    var upstream = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: parts }],
+        generationConfig: generationConfig || {
+          temperature: 0.3,
+          maxOutputTokens: 8192
+        }
+      }),
+      signal: ctrl ? ctrl.signal : undefined
+    });
+
+    var upstreamJson = await upstream.json().catch(function () {
+      return null;
+    });
+
+    return { ok: upstream.ok, status: upstream.status, json: upstreamJson };
+  } catch (err) {
+    var aborted = err && (err.name === "AbortError" || String(err.message || "").indexOf("abort") !== -1);
+    return {
+      ok: false,
+      status: aborted ? 504 : 503,
+      json: {
+        error: {
+          status: "UNAVAILABLE",
+          message: aborted
+            ? "Timeout: " + modelName + " nao respondeu em " + Math.round(timeoutMs / 1000) + " s"
+            : "Falha de rede com " + modelName + ": " + ((err && err.message) || String(err))
+        }
       }
-    })
-  });
-
-  var upstreamJson = await upstream.json().catch(function () {
-    return null;
-  });
-
-  return { ok: upstream.ok, status: upstream.status, json: upstreamJson };
+    };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
+
+function callTimeout(startedAt) {
+  return Math.max(5000, Math.min(CALL_TIMEOUT_MS, remainingMs(startedAt) - 5000));
+}
+
+var OVERLOAD_MSG =
+  "A IA do Google (Gemini) está sobrecarregada no momento e nenhum modelo respondeu. Aguarde 1 ou 2 minutos e tente novamente.";
 
 function parseBrNum(v) {
   if (v == null || v === "") return 0;
@@ -396,15 +432,23 @@ async function handleExtractItens(req, res, apiKey, body) {
   var tried = [];
   var lastDetail = "";
   var startedAt = Date.now();
+  var overloaded = false;
 
   for (var m = 0; m < queue.length; m++) {
+    if (remainingMs(startedAt) < MIN_CALL_MS) break;
     var modelName = queue[m];
     tried.push(modelName);
-    var result = await callGeminiParts(apiKey, modelName, parts, {
-      temperature: 0.1,
-      maxOutputTokens: 8192,
-      responseMimeType: "application/json"
-    });
+    var result = await callGeminiParts(
+      apiKey,
+      modelName,
+      parts,
+      {
+        temperature: 0.1,
+        maxOutputTokens: 8192,
+        responseMimeType: "application/json"
+      },
+      callTimeout(startedAt)
+    );
     if (result.ok) {
       var raw = extractTextFromGeminiResponse(result.json);
       var obj = extractJsonObject(raw);
@@ -428,7 +472,10 @@ async function handleExtractItens(req, res, apiKey, body) {
         (result.json.error.message || JSON.stringify(result.json.error))) ||
       "Gemini HTTP " + result.status;
     if (isNotFoundPayload(result.json, result.status)) continue;
-    if (isOverloadedPayload(result.json, result.status) && Date.now() - startedAt < RETRY_BUDGET_MS) continue;
+    if (isOverloadedPayload(result.json, result.status)) {
+      overloaded = true;
+      continue;
+    }
     return send(res, 502, {
       error: "Gemini request failed",
       detail: lastDetail,
@@ -437,9 +484,10 @@ async function handleExtractItens(req, res, apiKey, body) {
     });
   }
 
-  return send(res, 502, {
+  return send(res, overloaded ? 503 : 502, {
     error: "No Gemini model returned items",
-    detail: lastDetail || "empty",
+    detail: overloaded ? OVERLOAD_MSG : lastDetail || "empty",
+    upstream: lastDetail,
     tried: tried
   });
 }
@@ -490,17 +538,13 @@ module.exports = async function handler(req, res) {
     var lastDetail = "";
     var usedModel = queue[0];
     var startedAt = Date.now();
-    var overloadRetried = false;
+    var overloaded = false;
 
     for (var i = 0; i < queue.length; i++) {
+      if (remainingMs(startedAt) < MIN_CALL_MS) break;
       var modelName = queue[i];
       tried.push(modelName);
-      var result = await callGemini(apiKey, modelName, prompt);
-      if (!result.ok && isOverloadedPayload(result.json, result.status) && !overloadRetried && Date.now() - startedAt < RETRY_BUDGET_MS) {
-        overloadRetried = true;
-        await sleep(2000);
-        result = await callGemini(apiKey, modelName, prompt);
-      }
+      var result = await callGemini(apiKey, modelName, prompt, callTimeout(startedAt));
 
       if (result.ok) {
         var respostaIA = extractTextFromGeminiResponse(result.json);
@@ -527,7 +571,10 @@ module.exports = async function handler(req, res) {
         ("Gemini HTTP " + result.status);
 
       if (isNotFoundPayload(result.json, result.status)) continue;
-      if (isOverloadedPayload(result.json, result.status) && Date.now() - startedAt < RETRY_BUDGET_MS) continue;
+      if (isOverloadedPayload(result.json, result.status)) {
+        overloaded = true;
+        continue;
+      }
 
       return send(res, 502, {
         error: "Gemini request failed",
@@ -538,9 +585,10 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    return send(res, 502, {
+    return send(res, overloaded ? 503 : 502, {
       error: "Gemini request failed",
-      detail: lastDetail || "Nenhum modelo Gemini disponivel",
+      detail: overloaded ? OVERLOAD_MSG : lastDetail || "Nenhum modelo Gemini disponivel",
+      upstream: lastDetail,
       model: usedModel,
       tried: tried,
       hint: "Na Vercel use GEMINI_MODEL=gemini-2.5-flash-lite",
