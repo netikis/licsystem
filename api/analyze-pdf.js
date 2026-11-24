@@ -206,6 +206,30 @@ function isNotFoundPayload(upstreamJson, status) {
   return msg.indexOf("not found") !== -1 || msg.indexOf("not supported") !== -1;
 }
 
+/** Sobrecarga temporária do Gemini (503 "high demand", 429, 500) — vale tentar outro modelo. */
+function isOverloadedPayload(upstreamJson, status) {
+  if (status === 429 || status === 500 || status === 503 || status === 504) return true;
+  var err = (upstreamJson && upstreamJson.error) || {};
+  var msg = String(err.message || "").toLowerCase();
+  var st = String(err.status || "").toUpperCase();
+  return (
+    st === "UNAVAILABLE" ||
+    st === "RESOURCE_EXHAUSTED" ||
+    msg.indexOf("high demand") !== -1 ||
+    msg.indexOf("overloaded") !== -1 ||
+    msg.indexOf("try again later") !== -1
+  );
+}
+
+function sleep(ms) {
+  return new Promise(function (resolve) {
+    setTimeout(resolve, ms);
+  });
+}
+
+/** Função da Vercel tem 60 s: só tenta de novo se ainda sobrar tempo. */
+var RETRY_BUDGET_MS = 40000;
+
 function buildModelQueue(preferred) {
   var first = normalizeModelId(preferred);
   var queue = [first];
@@ -371,6 +395,7 @@ async function handleExtractItens(req, res, apiKey, body) {
   var queue = buildModelQueue(process.env.GEMINI_MODEL || DEFAULT_MODEL);
   var tried = [];
   var lastDetail = "";
+  var startedAt = Date.now();
 
   for (var m = 0; m < queue.length; m++) {
     var modelName = queue[m];
@@ -403,6 +428,7 @@ async function handleExtractItens(req, res, apiKey, body) {
         (result.json.error.message || JSON.stringify(result.json.error))) ||
       "Gemini HTTP " + result.status;
     if (isNotFoundPayload(result.json, result.status)) continue;
+    if (isOverloadedPayload(result.json, result.status) && Date.now() - startedAt < RETRY_BUDGET_MS) continue;
     return send(res, 502, {
       error: "Gemini request failed",
       detail: lastDetail,
@@ -463,11 +489,18 @@ module.exports = async function handler(req, res) {
     var tried = [];
     var lastDetail = "";
     var usedModel = queue[0];
+    var startedAt = Date.now();
+    var overloadRetried = false;
 
     for (var i = 0; i < queue.length; i++) {
       var modelName = queue[i];
       tried.push(modelName);
       var result = await callGemini(apiKey, modelName, prompt);
+      if (!result.ok && isOverloadedPayload(result.json, result.status) && !overloadRetried && Date.now() - startedAt < RETRY_BUDGET_MS) {
+        overloadRetried = true;
+        await sleep(2000);
+        result = await callGemini(apiKey, modelName, prompt);
+      }
 
       if (result.ok) {
         var respostaIA = extractTextFromGeminiResponse(result.json);
@@ -494,6 +527,7 @@ module.exports = async function handler(req, res) {
         ("Gemini HTTP " + result.status);
 
       if (isNotFoundPayload(result.json, result.status)) continue;
+      if (isOverloadedPayload(result.json, result.status) && Date.now() - startedAt < RETRY_BUDGET_MS) continue;
 
       return send(res, 502, {
         error: "Gemini request failed",
