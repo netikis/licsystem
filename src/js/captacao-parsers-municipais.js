@@ -1,4 +1,4 @@
-/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID · Céu Azul · Piraquara · Sarandi · Tomazina · Marquinho · Terra Roxa · Ibaiti · Cornélio · Pato Branco · Clevelândia · Conselheiro Mairinck) */
+/* LICSYSTEM — parsers / municipais (Godoy · Ivaí · Cambé · Itapejara · SJP · TR/UNID · Céu Azul · Piraquara · Sarandi · Tomazina · Marquinho · Terra Roxa · Ibaiti · Cornélio · Pato Branco · Clevelândia · Conselheiro Mairinck · Xambrê) */
 (function (LICSYSTEM) {
   "use strict";
   var ctx = LICSYSTEM._ctx || (LICSYSTEM._ctx = {});
@@ -2634,6 +2634,174 @@
       return out;
     }
 
+    /**
+     * Xambrê — TR "Item ITEM - DESCRIÇÃO UNIDADE QUANT. VALOR UNITARIO VALOR TOTAL":
+     *   LAMPADA LED ALTA
+     *   POTENCIA 80W 6500K R$          <- "R$" do unitário no fim da linha de cima
+     *   28 Un. 50 R$ 3.499,50          <- item / unid / quant / total
+     *   BIVOLT (C/ SELO 69,99          <- número do unitário na linha de baixo
+     *   INMETRO E PROCEL)
+     * A célula da descrição é centralizada: linhas acima da linha "R$" = linhas abaixo da
+     * linha do unitário (contando só a mesma página). Os cortes entre itens são escolhidos
+     * para equilibrar isso em todos os itens.
+     */
+    function splitXambreBlocks(full) {
+      var t = limparPagina(full).replace(/\r\n?/g, "\n");
+      if (foldCeu(t).indexOf("xambre") < 0) return [];
+      var start = t.search(/Item\s+ITEM\s*-\s*DESCRI/i);
+      if (start < 0) return [];
+      var region = t.slice(start);
+      var end = region.search(/\n\s*TOTAL:\s*R\$/i);
+      if (end > 80) region = region.slice(0, end);
+
+      var UNID = "(Un\\.?|Und\\.?|Unid\\.?|Par|P[cç]\\.?|Pct\\.?|Cx\\.?|Kg|Kit|Rolo|Rl\\.?|M|Mt|Mts|Jg|Cj|Lt|Gl|Br|Barra|Pe[cç]a)";
+      var reRow = new RegExp(
+        "^(\\d{1,3})\\s+(?:(.*?)\\s+)??(?:" + UNID + "\\s+)?(\\d{1,6}(?:\\.\\d{3})*)\\s+R\\$\\s*(\\d{1,3}(?:\\.\\d{3})*,\\d{2})\\s*$",
+        "i"
+      );
+      var reUnidFim = new RegExp("\\s*\\b" + UNID + "\\s*$", "i");
+      var reJunk = /^(?:=====\s*PAGE|PREFEITURA\s+MUNICIPAL\s*$|DE\s+XAMBR|ESTADO\s+DO\s+PARAN|UNITARIO\s*$|Item\s+ITEM)/i;
+      var reVu = /(?:^|\s)(\d{1,3}(?:\.\d{3})*,\d{2})\s*$/;
+      var reRs = /(?:^|\s)R\$\s*$/;
+
+      var rows = [];
+      var rowPage = [];
+      var gaps = [[]];
+      var page = 0;
+      var inJunk = false;
+      var lines = region.split("\n");
+      for (var i = 0; i < lines.length; i++) {
+        var ln = String(lines[i] || "").replace(/\s+/g, " ").trim();
+        if (!ln) continue;
+        if (reJunk.test(ln)) {
+          if (!inJunk) page++;
+          inJunk = true;
+          continue;
+        }
+        inJunk = false;
+        var m = reRow.exec(ln);
+        if (m && parseInt(m[1], 10) === rows.length + 1) {
+          rows.push(m);
+          rowPage.push(page);
+          gaps.push([]);
+        } else {
+          gaps[gaps.length - 1].push({ t: ln, p: page });
+        }
+      }
+      if (rows.length < 10) return [];
+      var N = rows.length;
+
+      /* Separa em cada intervalo: linha do unitário (início), linha "R$" (fim) e o miolo. */
+      var parts = [];
+      for (var g = 0; g <= N; g++) {
+        var G = gaps[g];
+        var a = 0;
+        var b = G.length;
+        var vu = null;
+        var rs = null;
+        if (g > 0 && G.length && reVu.test(G[0].t)) {
+          vu = G[0];
+          a = 1;
+        }
+        if (g < N && b > a && reRs.test(G[b - 1].t)) {
+          rs = G[b - 1];
+          b--;
+        }
+        parts.push({ vu: vu, rs: rs, mid: G.slice(a, b) });
+      }
+
+      function countOnPage(arr, from, to, pg) {
+        var n = 0;
+        for (var c = from; c < to; c++) if (arr[c].p === pg) n++;
+        return n;
+      }
+      /* item r (0-based): acima = parts[r].mid[sPre..], abaixo = parts[r+1].mid[..sPost] */
+      function itemCost(r, sPre, sPost) {
+        var up = parts[r].mid;
+        var dn = parts[r + 1].mid;
+        var above = countOnPage(up, r === 0 ? 0 : sPre, up.length, rowPage[r]);
+        var below = countOnPage(dn, 0, r === N - 1 ? dn.length : sPost, rowPage[r]);
+        return Math.abs(above - below);
+      }
+      var best = [];
+      var back = [];
+      for (var k = 1; k < N; k++) {
+        var lenK = parts[k].mid.length;
+        best[k] = [];
+        back[k] = [];
+        for (var s = 0; s <= lenK; s++) {
+          var bv = Infinity;
+          var bp = -1;
+          if (k === 1) {
+            bv = itemCost(0, 0, s);
+          } else {
+            for (var q = 0; q <= parts[k - 1].mid.length; q++) {
+              var v = best[k - 1][q] + itemCost(k - 1, q, s);
+              if (v < bv) {
+                bv = v;
+                bp = q;
+              }
+            }
+          }
+          best[k][s] = bv;
+          back[k][s] = bp;
+        }
+      }
+      var splits = [];
+      if (N > 1) {
+        var pick = 0;
+        var pv = Infinity;
+        for (var z = 0; z <= parts[N - 1].mid.length; z++) {
+          var tot = best[N - 1][z] + itemCost(N - 1, z, 0);
+          if (tot < pv) {
+            pv = tot;
+            pick = z;
+          }
+        }
+        for (var kb = N - 1; kb >= 1; kb--) {
+          splits[kb] = pick;
+          pick = back[kb][pick];
+        }
+      }
+
+      function txt(arr) {
+        return arr.map(function (x) {
+          return x.t;
+        });
+      }
+      var out = [];
+      for (var r = 0; r < N; r++) {
+        var row = rows[r];
+        var up = parts[r];
+        var dn = parts[r + 1];
+        var pre = r === 0 ? up.mid : up.mid.slice(splits[r]);
+        var post = r === N - 1 ? dn.mid : dn.mid.slice(0, splits[r + 1]);
+        var und = row[3] || "";
+        var rsTxt = up.rs ? up.rs.t.replace(reRs, "").trim() : "";
+        if (!und && reUnidFim.test(rsTxt)) {
+          und = reUnidFim.exec(rsTxt)[1];
+          rsTxt = rsTxt.replace(reUnidFim, "");
+        }
+        var vuTxt = "";
+        var vuNum = 0;
+        if (dn.vu) {
+          vuNum = utils.parseBrNum(reVu.exec(dn.vu.t)[1]);
+          vuTxt = dn.vu.t.replace(reVu, "").trim();
+        }
+        var qtd = utils.parseBrNum(row[4]);
+        var vt = utils.parseBrNum(row[5]);
+        if (!(qtd > 0) || !(vt > 0)) continue;
+        if (!(vuNum > 0) || Math.abs(vuNum * qtd - vt) > Math.max(1, vt * 0.01)) vuNum = Math.round((vt / qtd) * 100) / 100;
+        var u = String(und || "UN").toUpperCase().replace(/\.$/, "");
+        if (u === "UNID" || u === "UND") u = "UN";
+        var descParts = txt(pre).concat(rsTxt ? [rsTxt] : [], row[2] ? [row[2]] : [], vuTxt ? [vuTxt] : [], txt(post));
+        var desc = cleanMunicipalDescription(descParts.join(" "), 1400);
+        var packed = packMunicipioRow(r + 1, qtd, u, desc, vuNum, vt);
+        if (utils.isLinhaProdutoEdital(packed)) out.push(packed);
+      }
+      return out;
+    }
+
     deps.packMunicipioRow = packMunicipioRow;
     deps.splitGodoyMoreiraBlocks = splitGodoyMoreiraBlocks;
     deps.splitSaoJoaoIvaiBlocks = splitSaoJoaoIvaiBlocks;
@@ -2653,6 +2821,7 @@
     deps.splitPatoBrancoTrBlocks = splitPatoBrancoTrBlocks;
     deps.splitClevelandiaBlocks = splitClevelandiaBlocks;
     deps.splitConselheiroMairinckBlocks = splitConselheiroMairinckBlocks;
+    deps.splitXambreBlocks = splitXambreBlocks;
 
     if (typeof bag.registerModelos === "function") {
       bag.registerModelos([
@@ -2922,6 +3091,18 @@
               /Lote:\s*\d+\s*-\s*Lote\s*\d+/i.test(raw) &&
               /Item\s+Especifica\S*\s+Quant\.?\s+Unid/i.test(raw)
             );
+          }
+        },
+        {
+          id: "xambre-tr",
+          label: "Xambrê — TR Item/Descrição/Unidade/Quant./Valor (unitário quebrado)",
+          family: "municipais",
+          split: "splitXambreBlocks",
+          minItems: 10,
+          priority: 23,
+          tryWithoutHint: true,
+          hint: function (raw) {
+            return foldCeu(raw).indexOf("xambre") >= 0 && /Item\s+ITEM\s*-\s*DESCRI/i.test(raw);
           }
         },
         {
